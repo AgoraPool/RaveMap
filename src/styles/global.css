@@ -1,0 +1,86 @@
+:root {
+  --font-display: "Black Ops One", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+html,
+body {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+  background-color: #c00;
+  position: relative;
+  scroll-behavior: smooth;
+  scroll-snap-type: y mandatory;
+  overflow-x: clip;
+  font-family: var(--font-body);
+}
+/* global */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+ul,
+ol {
+  margin: 0;
+  z-index: 1;
+  position: relative;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  box-shadow: 1 black;
+  font-family: var(--font-display);
+}
+p,
+li,
+a {
+  font-family: var(--font-body);
+}
+section {
+  min-height: 100vh; /* each fills viewport */
+  scroll-snap-align: start; /* snap to top */
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+section {
+  transform-origin: left center;
+  will-change: transform, opacity, filter;
+  transition:
+    transform 180ms linear,
+    opacity 120ms linear,
+    filter 120ms linear;
+}
+.grid-canvas {
+  position: absolute;
+  inset: 0;
+  min-height: 100%;
+  width: 100%;
+  pointer-events: none; /* grid never blocks clicks */
+  z-index: 0;
+}
+
+.grid-canvas .v,
+.grid-canvas .h {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.grid-canvas .v {
+  left: var(--x);
+  top: 0;
+  width: var(--w, 3px);
+  height: 100%;
+}
+
+.grid-canvas .h {
+  top: var(--y);
+  left: 0;
+  height: var(--w, 3px);
+  width: 100%;
+}

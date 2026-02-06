@@ -1,0 +1,108 @@
+<section class="faq" id="faq">
+    <div class="faq-bg"></div>
+    <h2 class="faq-title">FAQ</h2>
+    <div class="faq-table">
+        <div class="faq-item">
+            <p class="faq-name">1.</p>
+        </div>
+        <div class="faq-item">
+            <p class="faq-name">2.</p>
+        </div>
+        <div class="faq-item">
+            <p class="faq-name">3.</p>
+        </div>
+        <div class="faq-item">
+            <p class="faq-name">4.</p>
+        </div>
+        <div class="faq-item">
+            <p class="faq-name">5.</p>
+        </div>
+        <div class="faq-item">
+            <p class="faq-name">6.</p>
+        </div>
+        <div class="faq-item">
+            <p class="faq-name">7.</p>
+        </div>
+        <div class="faq-item">
+            <p class="faq-name">8.</p>
+        </div>
+        <div class="faq-item">
+            <p class="faq-name">9.</p>
+        </div>
+        <div class="faq-item">
+            <p class="faq-name">10.</p>
+        </div>
+    </div>
+    <img src="/bunkr.png" class="bunkr" />
+</section>
+
+<style>
+    .faq{
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        display: flex;
+    }
+    .faq-bg{
+        position: absolute;
+        width: 100svw;
+        height: 100svh;
+        opacity: 0.02;
+        background: url("/bg.jpeg");
+        z-index: 0; 
+        background-size: cover;
+    }
+    .faq-title{
+        font-size: 12rem;
+        writing-mode: vertical-rl;
+        text-orientation: upright;
+    }
+    .faq-table{
+        width: 70%;
+        height: 80%;
+        display: flex;
+        margin: auto 40px;
+        border: 3px solid black;
+        background-color: #c00;
+        flex-direction: column;
+    }
+    .faq-item{
+        max-width: 100%;
+        height: 100%;
+        padding: 8px 18px;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid black;
+        font-size: 2rem;
+        position: relative;
+        cursor: pointer;
+    }
+    .faq-item:hover{
+        color: #c00;
+        background-color: #000;
+    }
+    .faq-img{
+        max-width: 140px;
+        height: 100%;
+    }
+    .faq-name{
+        font-size: 2.6rem;
+    }
+    .faq-date{
+
+    }
+    .faq-location{
+
+    }
+    .bunkr{
+        position: absolute;
+        z-index: -1;
+        bottom: -60px;
+        left: -70px;
+        width: 450px;
+        opacity: 1;
+        transform: scaleX(-1);
+    }
+</style>

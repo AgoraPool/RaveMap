@@ -1,23 +1,80 @@
+---
+import "../styles/global.css";
+---
+
 <!doctype html>
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
+		<link rel="icon" type="image/png" href="/bunkr.png" />
+		<link rel="icon" href="/bunkr.png" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro Basics</title>
+		<title>Rave Map</title>
+
+		<!-- Fonts -->
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+		href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+		rel="stylesheet"
+		/>
 	</head>
 	<body>
+		<div class="grid-canvas">
+			<span class="v" style="--x: 8svw;  --w: 3px;"></span>
+			<span class="v" style="--x: 27svw; --w: 3px;"></span>
+			<span class="v" style="--x: 63svw; --w: 3px;"></span>
+			<span class="v" style="--x: 68%; --w: 3px;"></span>
+			<span class="v" style="--x: 88%; --w: 3px;"></span>
+
+			<span class="h" style="--y: 8%; --w: 3px;"></span>
+			<span class="h" style="--y: 14%; --w: 3px;"></span>
+			<span class="h" style="--y: 23%; --w: 3px;"></span>
+			<span class="h" style="--y: 24%; --w: 3px;"></span>
+			<span class="h" style="--y: 46%; --w: 3px;"></span>
+			<span class="h" style="--y: 50%; --w: 3px;"></span>
+			<span class="h" style="--y: 58%; --w: 3px;"></span>
+			<span class="h" style="--y: 68%; --w: 3px;"></span>
+			<span class="h" style="--y: 74%; --w: 3px;"></span>
+			<span class="h" style="--y: 75%; --w: 3px;"></span>
+			<span class="h" style="--y: 88%; --w: 3px;"></span>
+			<span class="h" style="--y: 96%; --w: 3px;"></span>
+    	</div>
 		<slot />
 	</body>
 </html>
 
-<style>
-	html,
-	body {
-		margin: 0;
-		width: 100%;
-		height: 100%;
-	}
-</style>
+<script>
+	const sections = [...document.querySelectorAll("section")];
+
+function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+function update() {
+  const vh = window.innerHeight;
+  const vc = vh / 2;
+
+  for (const s of sections) {
+    const r = s.getBoundingClientRect();
+    const sc = r.top + r.height / 2;
+    const t = clamp((sc - vc) / vh, -1, 1); // -1..1 around center
+
+    const rotY = t * 180;        // wheel tilt
+    const rotX = -t * 8;        // subtle pitch
+    const z = (1 - Math.abs(t)) * 180;  // pop forward near center
+    const scale = 1 - Math.abs(t) * 0.12;
+    const opacity = 1 - Math.abs(t) * 0.35;
+    const blur = Math.abs(t) * 3;
+
+    s.style.transform =
+      `translateZ(${z}px) rotateY(${rotY}deg) rotateX(${rotX}deg) scale(${scale})`;
+    s.style.opacity = opacity;
+    s.style.filter = `blur(${blur}px)`;
+  }
+}
+
+window.addEventListener("scroll", () => requestAnimationFrame(update), { passive: true });
+window.addEventListener("resize", update);
+update();
+
+</script>
