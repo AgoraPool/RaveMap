@@ -111,8 +111,8 @@
     }
     .nove-table {
       max-width: fit-content;
-      height: auto;
-      margin: auto;
+      height: fit-content;
+      margin: 25svh auto;
       margin-left: -20px;
     }
     .nove-item {
@@ -139,6 +139,11 @@
       right: -20px;
       top: -20px;
       opacity: 0.55;
+    }
+  }
+  @media (max-width: 368px) {
+    .nove-item{
+        flex-direction: column;
     }
   }
 </style>
