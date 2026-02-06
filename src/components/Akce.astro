@@ -147,14 +147,13 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       height: 100svh;
     }
     .akce-title {
-      position: absolute;
       font-size: 5.2rem;
     }
     .akce-table {
-      max-width: 92%;
+      max-width: fit-content;
       height: auto;
       max-height: 82svh;
-      margin: auto 12px;
+      margin: auto;
     }
     .akce-item {
       grid-template-columns: 56px 1fr;
@@ -165,6 +164,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       padding: 10px 12px;
       gap: 4px 10px;
       font-size: 0.95rem;
+      margin-right: 8px;
     }
     .akce-img {
       grid-area: img;
