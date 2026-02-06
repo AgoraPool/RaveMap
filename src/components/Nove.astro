@@ -15,7 +15,8 @@
 <style>
   .nove {
     width: 100vw;
-    min-height: 100vh;
+    min-height: 100svh;
+    height: 100svh;
     margin: 0;
     display: flex;
   }
@@ -35,9 +36,9 @@
   }
   .nove-table {
     width: 70%;
-    height: 80%;
+    height: fit-content;
     display: flex;
-    margin: auto 40px;
+    margin: 20% 40px;
     border: 3px solid black;
     background-color: #c00;
   }
@@ -106,10 +107,11 @@
 
   @media (max-width: 768px) {
     .nove-title {
-      font-size: 5.2rem;
+        position: absolute;
+        font-size: 5.2rem;
     }
     .nove-table {
-      width: calc(100% - 84px);
+      max-width: 92%;
       height: auto;
       margin: auto 12px;
       align-self: center;
@@ -118,10 +120,10 @@
       min-height: 76px;
       padding: 10px 12px;
       gap: 10px;
-      font-size: 0.95rem;
+      font-size: 0.85rem;
     }
     .nove-name {
-      font-size: 1rem;
+      font-size: 0.95rem;
       line-height: 1.2;
     }
     .nove-date {
@@ -140,4 +142,3 @@
     }
   }
 </style>
-
