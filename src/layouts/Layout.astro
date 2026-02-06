@@ -47,10 +47,24 @@ import "../styles/global.css";
 
 <script>
 	const sections = [...document.querySelectorAll("section")];
+const mobileQuery = window.matchMedia("(max-width: 768px)");
 
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 
+function resetSectionEffects() {
+  for (const s of sections) {
+    s.style.transform = "";
+    s.style.opacity = "";
+    s.style.filter = "";
+  }
+}
+
 function update() {
+  if (mobileQuery.matches) {
+    resetSectionEffects();
+    return;
+  }
+
   const vh = window.innerHeight;
   const vc = vh / 2;
 
@@ -75,6 +89,7 @@ function update() {
 
 window.addEventListener("scroll", () => requestAnimationFrame(update), { passive: true });
 window.addEventListener("resize", update);
+mobileQuery.addEventListener("change", update);
 update();
 
 </script>
