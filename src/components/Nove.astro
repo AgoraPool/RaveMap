@@ -1,79 +1,143 @@
 <section class="nove" id="nove">
-    <div class="nove-bg"></div>
-    <h2 class="nove-title">NOVÉ</h2>
-    <div class="nove-table">
-        <a class="nove-item">
-            
-        </a>
-    </div>
-    <img src="/bunkr.png" class="bunkr" />
+  <div class="nove-bg"></div>
+  <h2 class="nove-title">NOVÉ</h2>
+  <div class="nove-table">
+    <a class="nove-item" href="/admin">
+      <img class="nove-img" src="/bunkr.png" alt="Admin" />
+      <h3 class="nove-name">ADMIN: VYTVOŘIT AKCI</h3>
+      <div class="nove-date">/admin</div>
+      <div class="nove-location">POUZE PRO POŘADATELE</div>
+    </a>
+  </div>
+  <img src="/bunkr.png" class="bunkr" alt="Decorative bunker" />
 </section>
 
 <style>
-    .nove{
-        width: 100vw;
-        height: 100vh;
-        margin: 0;
-        display: flex;
-    }
-    .nove-bg{
-        position: absolute;
-        width: 100svw;
-        height: 100svh;
-        opacity: 0.02;
-        background: url("/bg.jpeg");
-        z-index: 0; 
-        background-size: cover;
-    }
-    .nove-title{
-        font-size: 12rem;
-        writing-mode: vertical-rl;
-        text-orientation: upright;
-    }
-    .nove-table{
-        width: 70%;
-        height: 80%;
-        display: flex;
-        margin: auto 40px;
-        border: 3px solid black;
-        background-color: #c00;
-    }
-    .nove-item{
-        width: 100%;
-        max-height: 68px;
-        padding: 8px 18px;
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1px solid black;
-        font-size: 2rem;
-        position: relative;
-        cursor: pointer;
-    }
-    .nove-item:hover{
-        color: #c00;
-        background-color: #000;
-    }
-    .nove-img{
-        max-width: 140px;
-        height: 100%;
-    }
-    .nove-name{
-        font-size: 2.6rem;
-    }
-    .nove-date{
+  .nove {
+    width: 100vw;
+    min-height: 100vh;
+    margin: 0;
+    display: flex;
+  }
+  .nove-bg {
+    position: absolute;
+    width: 100svw;
+    height: 100svh;
+    opacity: 0.02;
+    background: url("/bg.jpeg");
+    z-index: 0;
+    background-size: cover;
+  }
+  .nove-title {
+    font-size: 12rem;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+  }
+  .nove-table {
+    width: 70%;
+    height: 80%;
+    display: flex;
+    margin: auto 40px;
+    border: 3px solid black;
+    background-color: #c00;
+  }
+  .nove-item {
+    width: 100%;
+    min-height: 68px;
+    padding: 8px 18px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid black;
+    font-size: 1.3rem;
+    position: relative;
+    cursor: pointer;
+    text-decoration: none;
+    color: black;
+  }
+  .nove-item:hover {
+    color: #c00;
+    background-color: #000;
+  }
+  .nove-img {
+    max-width: 120px;
+    height: 100%;
+  }
+  .nove-name {
+    font-size: 2.1rem;
+    flex: 1;
+  }
+  .nove-date,
+  .nove-location {
+    white-space: nowrap;
+  }
+  .bunkr {
+    position: absolute;
+    z-index: -1;
+    top: -60px;
+    right: -50px;
+    width: 400px;
+    opacity: 0.8;
+  }
 
+  @media (max-width: 1024px) {
+    .nove-title {
+      font-size: 8rem;
     }
-    .nove-location{
+    .nove-table {
+      width: 78%;
+      margin: auto 20px;
+    }
+    .nove-name {
+      font-size: 1.3rem;
+    }
+    .nove-date {
+      font-size: 1rem;
+    }
+    .nove-location {
+      display: none;
+    }
+    .nove-img {
+      max-width: 84px;
+    }
+  }
 
+  @media (max-width: 768px) {
+    .nove-title {
+      font-size: 5.2rem;
     }
-    .bunkr{
-        position: absolute;
-        z-index: -1;
-        top: -60px;
-        right: -50px;
-        width: 400px;
-        opacity: 0.8;
+    .nove-table {
+      width: calc(100% - 84px);
+      height: auto;
+      margin: auto 12px;
+      align-self: center;
     }
+    .nove-item {
+      min-height: 76px;
+      padding: 10px 12px;
+      gap: 10px;
+      font-size: 0.95rem;
+    }
+    .nove-name {
+      font-size: 1rem;
+      line-height: 1.2;
+    }
+    .nove-date {
+      font-size: 0.85rem;
+    }
+    .nove-img {
+      max-width: 52px;
+      height: 44px;
+      object-fit: cover;
+    }
+    .bunkr {
+      width: 190px;
+      right: -20px;
+      top: -20px;
+      opacity: 0.55;
+    }
+  }
 </style>
+

@@ -1,0 +1,417 @@
+---
+export const prerender = false;
+
+import { and, eq } from "drizzle-orm";
+import Layout from "../../layouts/Layout.astro";
+import { db } from "../../db/client";
+import { events } from "../../db/schema";
+
+const slug = Astro.params.slug?.trim().toLowerCase() ?? "";
+const slugValid = /^[a-z0-9-]{3,120}$/.test(slug);
+
+const rows = slugValid
+  ? await db
+      .select({
+        slug: events.slug,
+        title: events.title,
+        summary: events.summary,
+        publicLocation: events.publicLocation,
+        startsAt: events.startsAt,
+      })
+      .from(events)
+      .where(and(eq(events.slug, slug), eq(events.isPublished, true)))
+      .limit(1)
+  : [];
+
+const event = rows[0] ?? null;
+if (!event) {
+  Astro.response.status = 404;
+}
+
+const formatter = new Intl.DateTimeFormat("cs-CZ", {
+  dateStyle: "full",
+  timeStyle: "short",
+});
+---
+
+<Layout>
+  <div class="akce" id="akce-page">
+    <div class="event-grid-canvas">
+      <span class="v" style="--x: 63%; --w: 3px;"></span>
+      <span class="h" style="--y: 50%; --w: 3px;"></span>
+    </div>
+    <div class="akce-bg"></div>
+    <h2 class="akce-title">AKCE</h2>
+    <img src="/bunkr.png" class="bunkr" alt="Decorative bunker" />
+
+    {
+      !event ? (
+        <div class="akce-page">
+          <div class="akce-public">
+            <h3 class="public-title">PUBLIC</h3>
+            <p class="public-info">Akce nebyla nalezena. <a href="/#akce">Zpět na seznam akcí</a>.</p>
+          </div>
+        </div>
+      ) : (
+        <div class="akce-page">
+          <div class="akce-public">
+            <h3 class="public-title">PUBLIC</h3>
+            <p class="public-main">{event.title}</p>
+            <p class="public-meta">{formatter.format(event.startsAt)}</p>
+            <p class="public-meta">{event.publicLocation}</p>
+            <p class="public-info">{event.summary}</p>
+          </div>
+
+          <div class="akce-secret">
+            <h3 class="secret-title">SECRET</h3>
+            <form id="unlock-form" data-slug={event.slug}>
+              <input
+                id="unlockCode"
+                class="secret-input"
+                name="unlockCode"
+                type="password"
+                placeholder="SECRET KOD"
+                minlength="8"
+                maxlength="128"
+                required
+              />
+              <button class="secret-button" type="submit">ODEMKNOUT</button>
+            </form>
+            <p id="unlock-message" role="status" aria-live="polite"></p>
+
+            <div id="secret-content" class="secret-content" hidden>
+              <h4 id="secret-location"></h4>
+              <p id="secret-info"></p>
+              <p id="secret-note"></p>
+              <iframe
+                id="secret-map"
+                title="Mapa tajné lokace"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+                width="100%"
+                height="280"
+              ></iframe>
+            </div>
+          </div>
+        </div>
+      )
+    }
+  </div>
+</Layout>
+
+<script>
+  const form = document.getElementById("unlock-form");
+  if (form instanceof HTMLFormElement) {
+    const input = document.getElementById("unlockCode");
+    const message = document.getElementById("unlock-message");
+    const content = document.getElementById("secret-content");
+    const locationEl = document.getElementById("secret-location");
+    const infoEl = document.getElementById("secret-info");
+    const noteEl = document.getElementById("secret-note");
+    const mapEl = document.getElementById("secret-map");
+
+    function buildMapUrl(lat, lon) {
+      const pad = 0.01;
+      const west = lon - pad;
+      const east = lon + pad;
+      const south = lat - pad;
+      const north = lat + pad;
+      return `https://www.openstreetmap.org/export/embed.html?bbox=${west}%2C${south}%2C${east}%2C${north}&layer=mapnik&marker=${lat}%2C${lon}`;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (message instanceof HTMLElement) message.textContent = "Ověřuji kód...";
+
+      const slug = form.dataset.slug;
+      const unlockCode = input instanceof HTMLInputElement ? input.value : "";
+
+      try {
+        const response = await fetch(`/api/events/${slug}/unlock`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ unlockCode }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result?.ok) {
+          if (message instanceof HTMLElement) {
+            message.textContent = result?.error?.message || "Kód je neplatný.";
+          }
+          return;
+        }
+
+        const secret = result.data;
+        if (locationEl instanceof HTMLElement) locationEl.textContent = secret.secretLocationName;
+        if (infoEl instanceof HTMLElement) infoEl.textContent = secret.secretInfo;
+        if (noteEl instanceof HTMLElement) noteEl.textContent = secret.secretMapNote || "";
+        if (mapEl instanceof HTMLIFrameElement) {
+          mapEl.src = buildMapUrl(secret.secretLatitude, secret.secretLongitude);
+        }
+        if (content instanceof HTMLElement) content.hidden = false;
+        if (message instanceof HTMLElement) message.textContent = "Tajné informace odemčeny.";
+      } catch {
+        if (message instanceof HTMLElement) {
+          message.textContent = "Nepodařilo se ověřit kód, zkuste to znovu.";
+        }
+      }
+    });
+  }
+</script>
+
+<style>
+  :global(.grid-canvas) {
+    display: none;
+  }
+
+  .akce {
+    width: 100vw;
+    min-height: 100vh;
+    height: auto;
+    margin: 0;
+    display: flex;
+    overflow: visible;
+  }
+  .event-grid-canvas {
+    position: absolute;
+    inset: 0;
+    min-height: 100%;
+    width: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .event-grid-canvas .v,
+  .event-grid-canvas .h {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+  }
+  .event-grid-canvas .v {
+    left: var(--x);
+    top: 0;
+    width: var(--w, 3px);
+    height: 100%;
+  }
+  .event-grid-canvas .h {
+    top: var(--y);
+    left: 0;
+    height: var(--w, 3px);
+    width: 100%;
+  }
+  .akce-bg {
+    position: absolute;
+    width: 100svw;
+    height: 100%;
+    opacity: 0.02;
+    background: url("/bg.jpeg");
+    z-index: 0;
+    background-size: cover;
+  }
+  .akce-title {
+    font-size: 12rem;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+  }
+  .bunkr {
+    position: absolute;
+    z-index: -1;
+    bottom: -60px;
+    right: -70px;
+    width: 450px;
+    opacity: 0.8;
+  }
+  .akce-page {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 100vh;
+    height: auto;
+  }
+  .akce-public {
+    padding: 16px 20px 0 40px;
+    font-size: 4rem;
+    height: 50svh;
+  }
+  .akce-secret {
+    padding: 16px 20px 24px 40px;
+    font-size: 4rem;
+  }
+  .secret-input {
+    width: 60%;
+    height: 60px;
+    margin-top: 30px;
+    border: 3px solid black;
+    background-color: #c00;
+    padding: 8px;
+    position: relative;
+    z-index: 50;
+    cursor: text;
+    font-size: 2rem;
+    box-sizing: border-box;
+  }
+  .secret-input::placeholder {
+    color: rgba(0, 0, 0, 0.75);
+    opacity: 1;
+  }
+  .secret-button {
+    height: 60px;
+    border: 3px solid black;
+    background: #000;
+    color: #c00;
+    font-size: 1.4rem;
+    font-family: var(--font-display);
+    padding: 0 20px;
+    margin-left: 10px;
+    cursor: pointer;
+    vertical-align: top;
+    margin-top: 30px;
+    position: relative;
+    z-index: 1;
+  }
+  .secret-button:hover {
+    transform: scale(1.02);
+  }
+  .public-main {
+    text-transform: uppercase;
+    font-size: 3rem;
+    max-width: 70%;
+    margin-top: 4px;
+  }
+  .public-meta {
+    text-transform: uppercase;
+    font-size: 1.5rem;
+    max-width: 70%;
+    margin-top: 6px;
+  }
+  .public-info {
+    text-transform: uppercase;
+    font-size: 2rem;
+    max-width: 75%;
+    margin-top: 16px;
+  }
+  .public-info a {
+    text-decoration: none;
+    color: black;
+  }
+  .public-info a:hover {
+    background-color: #000;
+    color: #c00;
+  }
+  #unlock-message {
+    margin-top: 10px;
+    font-size: 1.2rem;
+    min-height: 24px;
+  }
+  .secret-content {
+    margin-top: 12px;
+    max-width: 80%;
+    font-size: 1.3rem;
+    display: grid;
+    gap: 8px;
+  }
+  #secret-map {
+    position: relative;
+    z-index: 1;
+    border: 0;
+  }
+
+  @media (max-width: 1024px) {
+    .akce-title {
+      font-size: 8rem;
+    }
+    .public-main,
+    .public-meta,
+    .public-info,
+    .secret-content {
+      max-width: 86%;
+    }
+    .secret-input {
+      max-width: 72%;
+    }
+    .secret-button{
+      max-width: 72%;
+      min-width: fit-content;
+    }
+    .bunkr {
+      width: 260px;
+      right: -24px;
+      bottom: -30px;
+      opacity: 0.65;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .akce {
+      padding-bottom: 12px;
+    }
+    .akce-title {
+      font-size: 5.2rem;
+    }
+    .akce-page {
+      min-height: auto;
+      padding-top: 4px;
+    }
+    .akce-public{
+      margin: 40px 0 0 20px;
+      max-width: 40%;
+    }
+    .akce-public,
+    .akce-secret {
+      padding-left: 14px;
+      padding-right: 14px;
+      font-size: 2rem;
+    }
+    .public-main {
+      font-size: 1.4rem;
+      max-width: 100%;
+      line-height: 1.2;
+    }
+    .public-meta {
+      font-size: 0.95rem;
+      max-width: 100%;
+    }
+    .public-info {
+      font-size: 1rem;
+      max-width: 100%;
+      margin-top: 10px;
+      line-height: 1.35;
+    }
+    #unlock-form {
+      display: grid;
+      gap: 8px;
+      max-width: 100%;
+    }
+    .secret-input,
+    .secret-button {
+      width: 100%;
+      margin: 0;
+      height: 48px;
+      font-size: 1rem;
+    }
+    .secret-button {
+      padding: 0 12px;
+    }
+    #unlock-message {
+      font-size: 0.95rem;
+      min-height: 20px;
+    }
+    .secret-content {
+      max-width: 100%;
+      font-size: 0.95rem;
+    }
+    #secret-map {
+      height: 220px;
+      position: absolute;
+      bottom: 0;
+      left: 8px;
+      max-width: 97%;
+    }
+    .bunkr {
+      width: 180px;
+      right: -20px;
+      bottom: -20px;
+      opacity: 0.5;
+    }
+  }
+</style>
+

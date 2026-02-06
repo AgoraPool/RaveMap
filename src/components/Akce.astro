@@ -1,85 +1,188 @@
+---
+import { asc, eq } from "drizzle-orm";
+import { db } from "../db/client";
+import { events } from "../db/schema";
+
+const list = await db
+  .select({
+    slug: events.slug,
+    title: events.title,
+    startsAt: events.startsAt,
+    publicLocation: events.publicLocation,
+  })
+  .from(events)
+  .where(eq(events.isPublished, true))
+  .orderBy(asc(events.startsAt))
+  .limit(8);
+
+const formatter = new Intl.DateTimeFormat("cs-CZ", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+---
+
 <section class="akce" id="akce">
-    <div class="akce-bg"></div>
-    <h2 class="akce-title">AKCE</h2>
-    <div class="akce-table">
-        <a class="akce-item" href="/akce">
-            <img class="akce-img" src="/bunkr.png">
-            <h3 class="akce-name">NÁZEV AKCE</h3>
-            <div class="akce-date">DATUM AKCE</div>
-            <div class="akce-location">MÍSTO KONÁNÍ</div>
+  <div class="akce-bg"></div>
+  <h2 class="akce-title">AKCE</h2>
+  <div class="akce-table">
+    {list.length === 0 ? (
+      <div class="empty-state">Žádné akce zatím nejsou publikované.</div>
+    ) : (
+      list.map((item) => (
+        <a class="akce-item" href={`/akce/${item.slug}`}>
+          <img class="akce-img" src="/bunkr.png" alt="Event cover" />
+          <h3 class="akce-name">{item.title}</h3>
+          <div class="akce-date">{formatter.format(item.startsAt)}</div>
+          <div class="akce-location">{item.publicLocation}</div>
         </a>
-    </div>
-    <img src="/bunkr.png" class="bunkr" />
+      ))
+    )}
+  </div>
+  <img src="/bunkr.png" class="bunkr" alt="Decorative bunker" />
 </section>
 
 <style>
-    .akce{
-        width: 100vw;
-        height: 100vh;
-        margin: 0;
-        display: flex;
-        overflow: hidden;
-    }
-    .akce-bg{
-        position: absolute;
-        width: 100svw;
-        height: 100svh;
-        opacity: 0.02;
-        background: url("/bg.jpeg");
-        z-index: 0; 
-        background-size: cover;
-    }
-    .akce-title{
-        font-size: 12rem;
-        writing-mode: vertical-rl;
-        text-orientation: upright;
-    }
-    .akce-table{
-        width: 70%;
-        height: 80%;
-        display: flex;
-        margin: auto 40px;
-        border: 3px solid black;
-        background-color: #c00;
-    }
-    .akce-item{
-        width: 100%;
-        max-height: 100px;
-        padding: 8px 18px;
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1px solid black;
-        font-size: 2rem;
-        position: relative;
-        cursor: pointer;
-        text-decoration: none;
-        color: black;
-    }
-    .akce-item:hover{
-        color: #c00;
-        background-color: #000;
-    }
-    .akce-img{
-        max-width: 140px;
-        height: 100%;
-    }
-    .akce-name{
-        font-size: 2.6rem;
-    }
-    .akce-date{
+  .akce {
+    width: 100vw;
+    min-height: 100vh;
+    height: auto;
+    margin: 0;
+    display: flex;
+    overflow: hidden;
+  }
+  .akce-bg {
+    position: absolute;
+    width: 100svw;
+    height: 100svh;
+    opacity: 0.02;
+    background: url("/bg.jpeg");
+    z-index: 0;
+    background-size: cover;
+  }
+  .akce-title {
+    font-size: 12rem;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+  }
+  .akce-table {
+    width: 70%;
+    height: 80%;
+    display: flex;
+    flex-direction: column;
+    margin: auto 40px;
+    border: 3px solid black;
+    background-color: #c00;
+    overflow: auto;
+    overflow-x: clip;
+  }
+  .akce-item {
+    width: 100%;
+    min-height: 80px;
+    padding: 8px 18px;
+    display: grid;
+    grid-template-columns: 110px 1.5fr 1fr 1fr;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid black;
+    font-size: 1.1rem;
+    position: relative;
+    cursor: pointer;
+    text-decoration: none;
+    color: black;
+  }
+  .akce-item:hover {
+    color: #c00;
+    background-color: #000;
+  }
+  .akce-img {
+    max-width: 100px;
+    height: 64px;
+    object-fit: cover;
+  }
+  .akce-name {
+    font-size: 1.7rem;
+  }
+  .empty-state {
+    padding: 24px;
+    font-size: 1.4rem;
+  }
+  .bunkr {
+    position: absolute;
+    z-index: -1;
+    bottom: -60px;
+    right: -70px;
+    width: 450px;
+    opacity: 0.8;
+  }
 
+  @media (max-width: 1024px) {
+    .akce-title {
+      font-size: 8rem;
     }
-    .akce-location{
+    .akce-table {
+      width: 78%;
+      margin: auto 20px;
+    }
+    .akce-item {
+      grid-template-columns: 80px 1.2fr 1fr;
+      gap: 10px;
+    }
+    .akce-location {
+      display: none;
+    }
+    .akce-name {
+      font-size: 1.4rem;
+    }
+    .akce-img {
+      max-width: 72px;
+      height: 52px;
+    }
+  }
 
+  @media (max-width: 768px) {
+    .akce {
+      min-height: 100svh;
+      height: auto;
     }
-    .bunkr{
-        position: absolute;
-        z-index: -1;
-        bottom: -60px;
-        right: -70px;
-        width: 450px;
-        opacity: 0.8;
+    .akce-title {
+      font-size: 5.2rem;
     }
+    .akce-table {
+      width: calc(100% - 84px);
+      height: auto;
+      max-height: 82svh;
+      margin: auto 12px;
+    }
+    .akce-item {
+      grid-template-columns: 56px 1fr;
+      grid-template-areas:
+        "img name"
+        "img date";
+      min-height: 74px;
+      padding: 10px 12px;
+      gap: 4px 10px;
+      font-size: 0.95rem;
+    }
+    .akce-img {
+      grid-area: img;
+      max-width: 52px;
+      height: 44px;
+    }
+    .akce-name {
+      grid-area: name;
+      font-size: 1.05rem;
+      line-height: 1.2;
+    }
+    .akce-date {
+      grid-area: date;
+      font-size: 0.85rem;
+    }
+    .bunkr {
+      width: 210px;
+      right: -24px;
+      bottom: -30px;
+      opacity: 0.55;
+    }
+  }
 </style>
+

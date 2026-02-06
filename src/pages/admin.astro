@@ -1,0 +1,265 @@
+---
+export const prerender = false;
+
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout>
+  <div class="admin-page">
+    <h1>Admin: Vytvořit Akci</h1>
+    <p class="sub">MVP formulář pro vytvoření nové akce a jejího secret obsahu.</p>
+
+    <form id="create-event-form" class="card">
+      <label for="adminSecret">Admin Secret</label>
+      <input id="adminSecret" name="adminSecret" type="password" minlength="24" required autocomplete="off" />
+
+      <label for="title">Název akce</label>
+      <input id="title" name="title" type="text" minlength="3" maxlength="180" required />
+
+      <label for="summary">Public info</label>
+      <textarea id="summary" name="summary" minlength="10" maxlength="2000" required></textarea>
+
+      <label for="publicLocation">Public místo</label>
+      <input id="publicLocation" name="publicLocation" type="text" minlength="2" maxlength="180" required />
+
+      <label for="startsAt">Začátek (ISO datetime)</label>
+      <input id="startsAt" name="startsAt" type="datetime-local" required />
+
+      <label for="coverImageUrl">Obrázek (volitelné URL)</label>
+      <input id="coverImageUrl" name="coverImageUrl" type="url" placeholder="https://..." />
+
+      <label for="unlockCode">Secret kód</label>
+      <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" required />
+
+      <label for="secretInfo">Secret info</label>
+      <textarea id="secretInfo" name="secretInfo" minlength="1" maxlength="5000" required></textarea>
+
+      <label for="secretLocationName">Secret location name</label>
+      <input id="secretLocationName" name="secretLocationName" type="text" minlength="2" maxlength="180" required />
+
+      <label for="secretLatitude">Latitude</label>
+      <input id="secretLatitude" name="secretLatitude" type="number" step="0.000001" min="-90" max="90" required />
+
+      <label for="secretLongitude">Longitude</label>
+      <input id="secretLongitude" name="secretLongitude" type="number" step="0.000001" min="-180" max="180" required />
+
+      <label for="secretMapNote">Secret poznámka (volitelné)</label>
+      <textarea id="secretMapNote" name="secretMapNote" maxlength="500"></textarea>
+
+      <label class="checkbox-row" for="isPublished">
+        <input id="isPublished" name="isPublished" type="checkbox" checked />
+        Publikovat ihned
+      </label>
+
+      <button type="submit">Vytvořit akci</button>
+    </form>
+
+    <p id="result" class="result" role="status" aria-live="polite"></p>
+    <pre id="debug" class="debug" hidden></pre>
+  </div>
+</Layout>
+
+<script>
+  const form = document.getElementById("create-event-form");
+  const result = document.getElementById("result");
+  const debug = document.getElementById("debug");
+
+  function showDebug(payload) {
+    if (!(debug instanceof HTMLElement)) return;
+    debug.hidden = false;
+    debug.textContent = JSON.stringify(payload, null, 2);
+  }
+
+  if (form instanceof HTMLFormElement && result) {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      result.textContent = "Vytvářím akci...";
+      if (debug instanceof HTMLElement) {
+        debug.hidden = true;
+        debug.textContent = "";
+      }
+
+      const data = new FormData(form);
+      const adminSecret = String(data.get("adminSecret") || "").trim();
+
+      const startsAtLocal = String(data.get("startsAt") || "");
+      const startsAtIso = new Date(startsAtLocal).toISOString();
+
+      const payload = {
+        title: String(data.get("title") || ""),
+        summary: String(data.get("summary") || ""),
+        publicLocation: String(data.get("publicLocation") || ""),
+        startsAt: startsAtIso,
+        coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
+        isPublished: data.get("isPublished") === "on",
+        unlockCode: String(data.get("unlockCode") || ""),
+        secretInfo: String(data.get("secretInfo") || ""),
+        secretLocationName: String(data.get("secretLocationName") || ""),
+        secretLatitude: Number(data.get("secretLatitude")),
+        secretLongitude: Number(data.get("secretLongitude")),
+        secretMapNote: String(data.get("secretMapNote") || "").trim() || undefined,
+      };
+
+      try {
+        const response = await fetch("/api/admin/events", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-secret": adminSecret,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const json = await response.json();
+
+        if (!response.ok || !json?.ok) {
+          const err = json?.error || {};
+          result.textContent = err.message || "Vytvoření akce selhalo.";
+          showDebug({
+            status: response.status,
+            code: err.code,
+            debug: err.debug,
+            body: json,
+          });
+          return;
+        }
+
+        const slug = json.data?.slug;
+        result.textContent = slug
+          ? `Akce vytvořena. Detail: /akce/${slug}`
+          : "Akce vytvořena.";
+        form.reset();
+      } catch {
+        result.textContent = "Nepodařilo se kontaktovat server.";
+        showDebug({ error: "NETWORK_OR_RUNTIME_ERROR" });
+      }
+    });
+  }
+</script>
+
+<style>
+  .admin-page {
+    min-height: 100vh;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 80px 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  h1 {
+    font-size: clamp(2.2rem, 6vw, 5rem);
+    text-align: center;
+  }
+
+  .sub {
+    margin-top: 8px;
+    margin-bottom: 20px;
+    text-align: center;
+    font-size: clamp(1rem, 3vw, 2rem);
+  }
+
+  .card {
+    display: grid;
+    gap: 10px;
+    border: 3px solid #000;
+    background: #c00;
+    padding: 16px;
+  }
+
+  input,
+  textarea,
+  button {
+    width: 100%;
+    border: 2px solid #000;
+    font-size: 1rem;
+    padding: 10px 12px;
+    background: #fff;
+    color: #000;
+    box-sizing: border-box;
+  }
+
+  textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+
+  button {
+    background: #000;
+    color: #c00;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .checkbox-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-weight: 700;
+  }
+
+  .checkbox-row input {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+  }
+
+  .result {
+    margin-top: 14px;
+    font-weight: 700;
+    min-height: 24px;
+  }
+
+  .debug {
+    margin-top: 10px;
+    border: 2px solid #000;
+    background: #fff;
+    padding: 12px;
+    overflow: auto;
+    max-height: 280px;
+    font-size: 0.9rem;
+  }
+
+  @media (max-width: 768px) {
+    .admin-page {
+      padding: 56px 12px 24px;
+    }
+
+    h1 {
+      font-size: clamp(1.6rem, 8vw, 2.5rem);
+    }
+
+    .sub {
+      font-size: clamp(0.95rem, 4vw, 1.25rem);
+      margin-bottom: 14px;
+    }
+
+    .card {
+      gap: 8px;
+      padding: 12px;
+      border-width: 2px;
+    }
+
+    label {
+      font-size: 0.95rem;
+    }
+
+    input,
+    textarea,
+    button {
+      font-size: 0.95rem;
+      padding: 9px 10px;
+    }
+
+    .result {
+      font-size: 0.95rem;
+    }
+
+    .debug {
+      max-height: 180px;
+      font-size: 0.78rem;
+      padding: 10px;
+    }
+  }
+</style>
+
