@@ -16,6 +16,11 @@ pnpm-debug.log*
 # environment variables
 .env
 .env.production
+.env.local
+.env.development
+.env.test
+.env.staging
+.env*.local
 
 # macOS-specific files
 .DS_Store
@@ -25,3 +30,12 @@ pnpm-debug.log*
 
 # Local Netlify folder
 .netlify
+
+# private/internal security notes
+docs/private/
+
+# local secrets and certs
+*.pem
+*.key
+*.p12
+*.pfx
