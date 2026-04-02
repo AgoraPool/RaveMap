@@ -1,263 +1,134 @@
 # RaveMap
 
-RaveMap is an Astro + Netlify SSR application for publishing underground events with two visibility levels:
+RaveMap is a live product experiment for publishing underground events without exposing the exact location too early. It combines a public event feed with a gated unlock flow, so organizers can share the vibe, date, and rough meeting point publicly while keeping sensitive location details behind a code shared with attendees.
 
-- Public event information visible to everyone.
-- Secret event information protected behind a code/password distributed by organizers.
+This repository is positioned as both:
 
-The project is designed for simple operation with a security-first backend MVP.
+- a portfolio project focused on product thinking, backend safety, and shipping an opinionated niche experience
+- a real-world MVP exploring how privacy-aware event discovery could work in production
 
-## Current Product Scope
+## What The Product Does
 
-- Homepage with sections:
-  - `AKCE`: list of published events.
-  - `NOVÉ`: organizer entry point to `/admin`.
-  - `FAQ` and hero content.
-- Event detail pages at `/akce/[slug]`:
-  - Public details immediately visible.
-  - Secret details (including map location) unlocked by code.
-- Admin page at `/admin`:
-  - Organizer creates events and secret payload.
-  - Uses shared `ADMIN_SECRET` (MVP auth model).
+- Publishes event listings with title, summary, start time, and public location
+- Protects secret event details behind an attendee unlock code
+- Encrypts private payloads at rest before they ever hit the database
+- Gives organizers a lightweight admin flow for creating and publishing events
+- Applies brute-force protection to the unlock endpoint
 
-## Tech Stack
+## Why It Is Interesting
 
-- Framework: Astro (`output: server`)
-- Deployment target: Netlify (`@astrojs/netlify` adapter)
-- Database: PostgreSQL (tested with Supabase pooled connection)
-- ORM/query layer: Drizzle ORM + postgres driver
-- Validation: Zod
-- Crypto:
-  - `scrypt` for unlock code hashing
-  - `AES-256-GCM` for secret payload encryption
+Most event platforms optimize for reach. RaveMap explores the opposite constraint: keeping events discoverable enough to build interest, but private enough to reduce unwanted exposure.
 
-## Repository Structure
+That makes it a strong product experiment because it sits at the intersection of:
+
+- community tooling
+- trust and access control
+- security-minded backend design
+- clear MVP tradeoffs
+
+## Product Lens
+
+The core idea is a two-layer event model:
+
+1. Public layer: what anyone can browse
+2. Private layer: what only attendees with the code can unlock
+
+That split drives the whole system design. Public endpoints only return public metadata. Secret details are stored separately, encrypted, and revealed only after code verification succeeds.
+
+## Current MVP Scope
+
+- Landing page with event discovery, navigation, and FAQ sections
+- Event detail pages at `/akce/[slug]`
+- Unlock flow for private location data and secret notes
+- Admin page at `/admin` for event creation
+- Published/unpublished event control
+- Security-focused backend route structure for public and admin traffic
+
+## Engineering Highlights
+
+- Astro SSR app deployed with Netlify
+- PostgreSQL data layer with Drizzle ORM
+- Zod validation on API boundaries
+- `scrypt` hashing for unlock codes
+- `AES-256-GCM` encryption for secret event payloads
+- Rate-limiting keyed by event and hashed client IP
+- Security headers configured at the platform edge
+
+## Architecture Snapshot
+
+### Public data flow
+
+- homepage reads published events only
+- event detail pages expose public content only
+- secret content is never selected by public list/detail endpoints
+
+### Private unlock flow
+
+- attendee submits unlock code
+- API validates request shape and slug
+- server checks rate limits
+- server verifies the stored `scrypt` hash
+- encrypted payload is decrypted only on successful verification
+
+### Admin flow
+
+- organizer submits the admin form
+- backend validates the shared admin secret
+- event record, secret payload, and audit log are written in one transaction
+
+## Security Decisions
+
+- Secret event data is stored outside the public event record
+- Unlock codes are never stored in plaintext
+- Private payloads are encrypted before persistence
+- Admin actions are protected by a shared secret in this MVP
+- Database access is server-side only
+- Abuse protection is built into the unlock path
+
+The current auth model is intentionally simple for MVP speed. Multi-user organizer accounts, role separation, and richer audit controls would be the next step if the experiment expands.
+
+## Repo Guide
 
 ```text
 src/
-  components/
-    Hero.astro
-    Akce.astro        # event list on homepage
-    Nove.astro        # admin entry point on homepage
-    Faq.astro
-  pages/
-    index.astro
-    admin.astro       # event creation form
-    akce/[slug].astro # event detail + unlock UI
-    api/
-      admin/
-        events.ts
-        diagnostics.ts
-      events/
-        index.ts
-        [slug].ts
-        [slug]/unlock.ts
-  db/
-    client.ts
-    schema.ts
-  lib/server/
-    auth.ts
-    crypto.ts
-    env.ts
-    errors.ts
-    http.ts
-    request.ts
-    rate-limit.ts
-    schemas.ts
-    slug.ts
-    validation.ts
+  components/        UI sections and event list rendering
+  pages/             Astro pages and API routes
+  db/                schema and database client
+  lib/server/        auth, crypto, validation, rate limiting, request helpers
 
 docs/
-  admin-usage.md
-  backend-foundation.md
-  database-hardening.md
   architecture.md
   api-reference.md
+  backend-foundation.md
+  database-hardening.md
+  admin-usage.md
 
 drizzle/
-  0000_init.sql
-  0001_hardening.sql
-  0002_fix_runtime_access.sql
+  SQL migrations
 ```
 
-## Environment Variables
+## Documentation
 
-Create `.env` in project root:
+- Product/backend architecture: `docs/architecture.md`
+- API contract details: `docs/api-reference.md`
+- Security and database notes: `docs/database-hardening.md`
+- Admin workflow notes: `docs/admin-usage.md`
 
-```env
-DATABASE_URL="postgresql://..."
-ADMIN_SECRET="long-random-secret"
-ENCRYPTION_KEY="base64-32-byte-key"
-NODE_ENV="development"
-```
+## Runtime Notes
 
-### Requirements
+This project is already deployed. The repository is meant to present the product, the architecture, and the implementation decisions rather than walk through local deployment.
 
-- `DATABASE_URL`: server-side Postgres connection string (include `sslmode=require` where needed).
-- `ADMIN_SECRET`: minimum 24 characters, high entropy.
-- `ENCRYPTION_KEY`: base64 encoding of exactly 32 bytes.
+Sensitive runtime configuration is intentionally not committed. Production relies on private environment variables such as:
 
-Generate secure values:
+- `DATABASE_URL`
+- `ADMIN_SECRET`
+- `ENCRYPTION_KEY`
 
-```bash
-openssl rand -hex 32      # ADMIN_SECRET
-openssl rand -base64 32   # ENCRYPTION_KEY
-```
+## Portfolio Framing
 
-## Local Development
+RaveMap is a useful example of how I approach product engineering:
 
-1. Install dependencies:
-
-```bash
-npm install
-```
-
-2. Start dev server:
-
-```bash
-npm run dev
-```
-
-3. Build production bundle:
-
-```bash
-npm run build
-```
-
-## Database Setup
-
-### Option A (recommended here): run SQL migrations manually in Supabase SQL editor
-
-Apply in order:
-
-1. `drizzle/0000_init.sql`
-2. `drizzle/0001_hardening.sql`
-3. `drizzle/0002_fix_runtime_access.sql`
-
-### Option B: Drizzle push
-
-```bash
-npm run db:push
-```
-
-If `db:push` crashes on Node 24, use Node 20 (`nvm use 20`) and retry.
-
-## Backend Architecture Overview
-
-### Public/secret data split
-
-- `events` stores only public event information.
-- `event_secrets` stores hashed unlock credential and encrypted secret payload.
-
-This separation prevents accidental secret exposure through public endpoints.
-
-### API layers
-
-- Route handlers in `src/pages/api/...`
-- Shared validation and error shaping in `src/lib/server/...`
-- DB schema and access in `src/db/...`
-
-### Security controls
-
-- Strict request validation with Zod.
-- Shared admin secret gate for create-event endpoint.
-- Unlock endpoint brute-force control per event + hashed IP.
-- Secret payload encryption at rest.
-- Unlock code stored as `scrypt` hash.
-
-For full details, see `docs/architecture.md`.
-
-## API Overview
-
-### Admin
-
-- `POST /api/admin/events`
-  - Requires `x-admin-secret` header or `Authorization: Bearer ...`.
-  - Creates event + encrypted secret data + audit log in one transaction.
-
-- `GET /api/admin/diagnostics`
-  - Requires admin secret.
-  - Verifies DB identity/read/write status (for troubleshooting).
-
-### Public
-
-- `GET /api/events`
-  - Returns published events list (public fields only).
-
-- `GET /api/events/[slug]`
-  - Returns one published event (public fields only).
-
-- `POST /api/events/[slug]/unlock`
-  - Validates unlock code, applies rate limit, returns decrypted secret on success.
-
-Detailed request/response examples: `docs/api-reference.md`.
-
-## Security Model (MVP)
-
-### What is protected
-
-- Admin event creation behind shared secret.
-- Secret event payload encrypted at rest.
-- Unlock code never stored in plaintext.
-- Brute-force attempts throttled and temporarily blocked.
-
-### Network and headers
-
-`netlify.toml` sets:
-
-- `Content-Security-Policy`
-- `Strict-Transport-Security`
-- `X-Frame-Options`
-- `X-Content-Type-Options`
-- `Referrer-Policy`
-- `Permissions-Policy`
-
-### DB hardening
-
-- `anon` and `authenticated` roles have revoked direct table access.
-- RLS is intentionally disabled for MVP backend-only role flow to avoid policy lockout.
-- See `docs/database-hardening.md`.
-
-## Deployment (Netlify)
-
-1. Connect repo to Netlify.
-2. Set required environment variables in Netlify UI:
-   - `DATABASE_URL`
-   - `ADMIN_SECRET`
-   - `ENCRYPTION_KEY`
-3. Deploy.
-
-Build config is already in `netlify.toml`.
-
-## Operational Notes
-
-- If secrets were exposed anywhere, rotate all three immediately:
-  - DB password
-  - `ADMIN_SECRET`
-  - `ENCRYPTION_KEY`
-- Prefer Supabase pooled connection string for serverless environments.
-
-## Troubleshooting
-
-### `Missing required environment variables`
-
-One or more env vars are absent in runtime environment.
-
-### `Invalid URL` for `DATABASE_URL`
-
-`DATABASE_URL` malformed or contains unescaped special characters in credentials.
-
-### DB connect failures (`EHOSTUNREACH`, `ENOTFOUND`)
-
-Usually DNS/network routing issue or wrong host string. Use exact pooled URL from provider dashboard.
-
-### `POST /api/admin/events` returns 500
-
-Use `GET /api/admin/diagnostics` with admin secret to validate DB permissions and connectivity.
-
-## Future Improvements
-
-- Replace shared admin secret with multi-organizer auth/session model.
-- Add automated tests for unlock path and rate-limiting behavior.
-- Tighten CSP by removing inline scripts/styles.
-- Introduce dedicated least-privilege DB role.
+- start from a real user constraint, not just a generic CRUD app
+- shape the data model around trust boundaries
+- keep the MVP small, but make the risky parts deliberate
+- ship something opinionated enough to feel like a real product experiment

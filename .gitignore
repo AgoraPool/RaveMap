@@ -1,41 +1,61 @@
-# build output
-dist/
-
-# generated types
-.astro/
-
 # dependencies
 node_modules/
 
+# build and framework output
+dist/
+.astro/
+.netlify/
+
 # logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# environment variables
+# environment files
 .env
-.env.production
-.env.local
-.env.development
-.env.test
-.env.staging
-.env*.local
+.env.*
+!.env.example
 
-# macOS-specific files
-.DS_Store
-
-# jetbrains setting folder
-.idea/
-
-# Local Netlify folder
-.netlify
-
-# private/internal security notes
-docs/private/
-
-# local secrets and certs
+# local secret material
+.envrc
+.direnv/
 *.pem
 *.key
+*.crt
+*.csr
 *.p12
 *.pfx
+*.asc
+*.kdbx
+
+# local databases and dumps
+*.db
+*.sqlite
+*.sqlite3
+*.sql.gz
+*.dump
+
+# test and coverage output
+coverage/
+.nyc_output/
+
+# caches and temp files
+.cache/
+tmp/
+temp/
+
+# editor and workspace files
+.idea/
+.vscode/
+.codex
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# private/internal notes
+docs/private/
