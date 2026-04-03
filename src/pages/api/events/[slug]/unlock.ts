@@ -53,6 +53,7 @@ export const POST: APIRoute = async ({ params, request }) =>
 
     const rows = await db
       .select({
+        eventId: events.id,
         codeHash: eventSecrets.codeHash,
         encryptedPayload: eventSecrets.encryptedPayload,
       })
@@ -82,7 +83,7 @@ export const POST: APIRoute = async ({ params, request }) =>
 
     await clearUnlockFailures(slug, ipHash);
 
-    const secret = decryptSecretPayload(row.encryptedPayload);
+    const secret = decryptSecretPayload(row.encryptedPayload, { eventId: row.eventId });
 
     return jsonOk({
       secretInfo: secret.secretInfo,

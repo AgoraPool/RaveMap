@@ -5,6 +5,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   ADMIN_SECRET: z.string().min(24),
   ENCRYPTION_KEY: z.string().min(1),
+  RATE_LIMIT_SECRET: z.string().min(24),
   NODE_ENV: z.enum(["development", "test", "production"]).optional(),
 });
 
@@ -21,6 +22,7 @@ export function getEnv(): AppEnv {
     DATABASE_URL: import.meta.env.DATABASE_URL,
     ADMIN_SECRET: import.meta.env.ADMIN_SECRET,
     ENCRYPTION_KEY: import.meta.env.ENCRYPTION_KEY,
+    RATE_LIMIT_SECRET: import.meta.env.RATE_LIMIT_SECRET,
     NODE_ENV: import.meta.env.NODE_ENV,
   });
 

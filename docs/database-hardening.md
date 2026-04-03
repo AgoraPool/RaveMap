@@ -27,7 +27,8 @@ If credentials were ever pasted/shared:
 1. Rotate DB password.
 2. Rotate `ADMIN_SECRET`.
 3. Rotate `ENCRYPTION_KEY` (32-byte base64).
-4. Redeploy after updating env vars.
+4. Rotate `RATE_LIMIT_SECRET`.
+5. Redeploy after updating env vars.
 
 ## 4) Permissions model used by this project
 

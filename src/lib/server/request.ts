@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { getEnv } from "./env";
 
 export function getClientIp(request: Request): string {
@@ -9,5 +9,5 @@ export function getClientIp(request: Request): string {
 
 export function hashIpAddress(ip: string): string {
   const env = getEnv();
-  return createHash("sha256").update(`${ip}:${env.ADMIN_SECRET}`).digest("hex");
+  return createHmac("sha256", env.RATE_LIMIT_SECRET).update(ip, "utf-8").digest("hex");
 }

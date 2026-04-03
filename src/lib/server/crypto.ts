@@ -10,7 +10,7 @@ const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const SCRYPT_KEYLEN = 64;
 const SCRYPT_MAXMEM = 64 * 1024 * 1024;
-const ENCRYPTION_VERSION = 1;
+const ENCRYPTION_VERSION = 2;
 
 export type SecretPayload = {
   secretInfo: string;
@@ -19,6 +19,14 @@ export type SecretPayload = {
   secretLongitude: number;
   secretMapNote?: string;
 };
+
+type SecretPayloadContext = {
+  eventId: string;
+};
+
+function getPayloadAad(context: SecretPayloadContext): Buffer {
+  return Buffer.from(JSON.stringify({ eventId: context.eventId }), "utf-8");
+}
 
 function getEncryptionKey(): Buffer {
   const env = getEnv();
@@ -98,10 +106,11 @@ export async function verifyUnlockCode(code: string, storedHash: string): Promis
   return timingSafeEqual(computedHash, expectedHash);
 }
 
-export function encryptSecretPayload(payload: SecretPayload): string {
+export function encryptSecretPayload(payload: SecretPayload, context: SecretPayloadContext): string {
   const key = getEncryptionKey();
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(getPayloadAad(context));
 
   const plaintext = Buffer.from(JSON.stringify(payload), "utf-8");
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
@@ -115,10 +124,10 @@ export function encryptSecretPayload(payload: SecretPayload): string {
   ].join(":");
 }
 
-export function decryptSecretPayload(serialized: string): SecretPayload {
+export function decryptSecretPayload(serialized: string, context?: SecretPayloadContext): SecretPayload {
   const [version, ivB64, authTagB64, ciphertextB64] = serialized.split(":");
 
-  if (version !== `v${ENCRYPTION_VERSION}` || !ivB64 || !authTagB64 || !ciphertextB64) {
+  if ((!version || !/^v\d+$/.test(version)) || !ivB64 || !authTagB64 || !ciphertextB64) {
     throw new AppError("Encrypted payload format is invalid", {
       code: "ENCRYPTED_PAYLOAD_INVALID",
       status: 500,
@@ -132,6 +141,22 @@ export function decryptSecretPayload(serialized: string): SecretPayload {
     const ciphertext = Buffer.from(ciphertextB64, "base64");
 
     const decipher = createDecipheriv("aes-256-gcm", key, iv);
+    if (version === `v${ENCRYPTION_VERSION}`) {
+      if (!context) {
+        throw new AppError("Encrypted payload context is missing", {
+          code: "ENCRYPTED_PAYLOAD_CONTEXT_MISSING",
+          status: 500,
+        });
+      }
+
+      decipher.setAAD(getPayloadAad(context));
+    } else if (version !== "v1") {
+      throw new AppError("Encrypted payload version is unsupported", {
+        code: "ENCRYPTED_PAYLOAD_VERSION_UNSUPPORTED",
+        status: 500,
+      });
+    }
+
     decipher.setAuthTag(authTag);
 
     const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf-8");

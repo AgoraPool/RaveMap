@@ -40,7 +40,7 @@ That split drives the whole system design. Public endpoints only return public m
 - Landing page with event discovery, navigation, and FAQ sections
 - Event detail pages at `/akce/[slug]`
 - Unlock flow for private location data and secret notes
-- Admin page at `/admin` for event creation
+- Admin page at `/admin` for event creation and deletion
 - Published/unpublished event control
 - Security-focused backend route structure for public and admin traffic
 
@@ -51,7 +51,8 @@ That split drives the whole system design. Public endpoints only return public m
 - Zod validation on API boundaries
 - `scrypt` hashing for unlock codes
 - `AES-256-GCM` encryption for secret event payloads
-- Rate-limiting keyed by event and hashed client IP
+- Event-bound authenticated encryption for secret payloads
+- Rate-limiting keyed by event and HMAC-hashed client IP
 - Security headers configured at the platform edge
 
 ## Architecture Snapshot
@@ -81,6 +82,7 @@ That split drives the whole system design. Public endpoints only return public m
 - Secret event data is stored outside the public event record
 - Unlock codes are never stored in plaintext
 - Private payloads are encrypted before persistence
+- Encrypted secret payloads are bound to their event context
 - Admin actions are protected by a shared secret in this MVP
 - Database access is server-side only
 - Abuse protection is built into the unlock path
@@ -123,6 +125,7 @@ Sensitive runtime configuration is intentionally not committed. Production relie
 - `DATABASE_URL`
 - `ADMIN_SECRET`
 - `ENCRYPTION_KEY`
+- `RATE_LIMIT_SECRET`
 
 ## Portfolio Framing
 

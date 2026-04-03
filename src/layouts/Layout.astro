@@ -1,5 +1,8 @@
 ---
 import "../styles/global.css";
+
+const { bodyClass = "" } = Astro.props;
+const showGridCanvas = !bodyClass.split(/\s+/).includes("admin-body");
 ---
 
 <!doctype html>
@@ -20,76 +23,84 @@ import "../styles/global.css";
 		rel="stylesheet"
 		/>
 	</head>
-	<body>
-		<div class="grid-canvas">
-			<span class="v" style="--x: 8svw;  --w: 3px;"></span>
-			<span class="v" style="--x: 27svw; --w: 3px;"></span>
-			<span class="v" style="--x: 63svw; --w: 3px;"></span>
-			<span class="v" style="--x: 68%; --w: 3px;"></span>
-			<span class="v" style="--x: 88%; --w: 3px;"></span>
+	<body class={bodyClass}>
+		{
+			showGridCanvas && (
+				<div class="grid-canvas">
+					<span class="v" style="--x: 8svw;  --w: 3px;"></span>
+					<span class="v" style="--x: 27svw; --w: 3px;"></span>
+					<span class="v" style="--x: 63svw; --w: 3px;"></span>
+					<span class="v" style="--x: 68%; --w: 3px;"></span>
+					<span class="v" style="--x: 88%; --w: 3px;"></span>
 
-			<span class="h" style="--y: 8%; --w: 3px;"></span>
-			<span class="h" style="--y: 14%; --w: 3px;"></span>
-			<span class="h" style="--y: 23%; --w: 3px;"></span>
-			<span class="h" style="--y: 24%; --w: 3px;"></span>
-			<span class="h" style="--y: 46%; --w: 3px;"></span>
-			<span class="h" style="--y: 50%; --w: 3px;"></span>
-			<span class="h" style="--y: 58%; --w: 3px;"></span>
-			<span class="h" style="--y: 68%; --w: 3px;"></span>
-			<span class="h" style="--y: 74%; --w: 3px;"></span>
-			<span class="h" style="--y: 75%; --w: 3px;"></span>
-			<span class="h" style="--y: 88%; --w: 3px;"></span>
-			<span class="h" style="--y: 96%; --w: 3px;"></span>
-    	</div>
+					<span class="h" style="--y: 8%; --w: 3px;"></span>
+					<span class="h" style="--y: 14%; --w: 3px;"></span>
+					<span class="h" style="--y: 23%; --w: 3px;"></span>
+					<span class="h" style="--y: 24%; --w: 3px;"></span>
+					<span class="h" style="--y: 46%; --w: 3px;"></span>
+					<span class="h" style="--y: 50%; --w: 3px;"></span>
+					<span class="h" style="--y: 58%; --w: 3px;"></span>
+					<span class="h" style="--y: 68%; --w: 3px;"></span>
+					<span class="h" style="--y: 74%; --w: 3px;"></span>
+					<span class="h" style="--y: 75%; --w: 3px;"></span>
+					<span class="h" style="--y: 88%; --w: 3px;"></span>
+					<span class="h" style="--y: 96%; --w: 3px;"></span>
+	    		</div>
+			)
+		}
 		<slot />
 	</body>
 </html>
 
-<script>
-	const sections = [...document.querySelectorAll("section")];
-const mobileQuery = window.matchMedia("(max-width: 768px)");
+{
+	showGridCanvas && (
+		<script>
+			const sections = [...document.querySelectorAll("section")];
+			const mobileQuery = window.matchMedia("(max-width: 768px)");
 
-function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+			function clamp(v, a, b) {
+			  return Math.max(a, Math.min(b, v));
+			}
 
-function resetSectionEffects() {
-  for (const s of sections) {
-    s.style.transform = "";
-    s.style.opacity = "";
-    s.style.filter = "";
-  }
+			function resetSectionEffects() {
+			  for (const s of sections) {
+			    s.style.transform = "";
+			    s.style.opacity = "";
+			    s.style.filter = "";
+			  }
+			}
+
+			function update() {
+			  if (mobileQuery.matches) {
+			    resetSectionEffects();
+			    return;
+			  }
+
+			  const vh = window.innerHeight;
+			  const vc = vh / 2;
+
+			  for (const s of sections) {
+			    const r = s.getBoundingClientRect();
+			    const sc = r.top + r.height / 2;
+			    const t = clamp((sc - vc) / vh, -1, 1);
+
+			    const rotY = t * 180;
+			    const rotX = -t * 8;
+			    const z = (1 - Math.abs(t)) * 180;
+			    const scale = 1 - Math.abs(t) * 0.12;
+			    const opacity = 1 - Math.abs(t) * 0.35;
+			    const blur = Math.abs(t) * 3;
+
+			    s.style.transform = `translateZ(${z}px) rotateY(${rotY}deg) rotateX(${rotX}deg) scale(${scale})`;
+			    s.style.opacity = opacity;
+			    s.style.filter = `blur(${blur}px)`;
+			  }
+			}
+
+			window.addEventListener("scroll", () => requestAnimationFrame(update), { passive: true });
+			window.addEventListener("resize", update);
+			mobileQuery.addEventListener("change", update);
+			update();
+		</script>
+	)
 }
-
-function update() {
-  if (mobileQuery.matches) {
-    resetSectionEffects();
-    return;
-  }
-
-  const vh = window.innerHeight;
-  const vc = vh / 2;
-
-  for (const s of sections) {
-    const r = s.getBoundingClientRect();
-    const sc = r.top + r.height / 2;
-    const t = clamp((sc - vc) / vh, -1, 1); // -1..1 around center
-
-    const rotY = t * 180;        // wheel tilt
-    const rotX = -t * 8;        // subtle pitch
-    const z = (1 - Math.abs(t)) * 180;  // pop forward near center
-    const scale = 1 - Math.abs(t) * 0.12;
-    const opacity = 1 - Math.abs(t) * 0.35;
-    const blur = Math.abs(t) * 3;
-
-    s.style.transform =
-      `translateZ(${z}px) rotateY(${rotY}deg) rotateX(${rotX}deg) scale(${scale})`;
-    s.style.opacity = opacity;
-    s.style.filter = `blur(${blur}px)`;
-  }
-}
-
-window.addEventListener("scroll", () => requestAnimationFrame(update), { passive: true });
-window.addEventListener("resize", update);
-mobileQuery.addEventListener("change", update);
-update();
-
-</script>

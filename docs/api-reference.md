@@ -23,6 +23,36 @@ All responses are JSON.
 }
 ```
 
+## `GET /api/admin/events`
+
+Return all events for admin management.
+
+Authentication:
+
+- Header `x-admin-secret: <ADMIN_SECRET>`
+- or `Authorization: Bearer <ADMIN_SECRET>`
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "events": [
+      {
+        "id": "uuid",
+        "slug": "warehouse-night-2026-03-14",
+        "title": "Warehouse Night",
+        "publicLocation": "Brno",
+        "startsAt": "2026-03-14T20:00:00.000Z",
+        "isPublished": true,
+        "createdAt": "2026-03-01T17:12:00.000Z"
+      }
+    ]
+  }
+}
+```
+
 ## `POST /api/admin/events`
 
 Create a new event.
@@ -48,6 +78,41 @@ Request body:
   "secretLatitude": 49.1951,
   "secretLongitude": 16.6068,
   "secretMapNote": "Use side entrance"
+}
+```
+
+Notes:
+
+- `coverImageUrl` is optional, but if provided it must use `http` or `https`
+- unknown request fields are rejected
+
+## `DELETE /api/admin/events`
+
+Delete an event and its secret payload. Event secrets are removed through DB cascade rules.
+
+Authentication:
+
+- Header `x-admin-secret: <ADMIN_SECRET>`
+- or `Authorization: Bearer <ADMIN_SECRET>`
+
+Request body:
+
+```json
+{
+  "slug": "warehouse-night-2026-03-14",
+  "confirmSlug": "warehouse-night-2026-03-14"
+}
+```
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "id": "uuid",
+    "slug": "warehouse-night-2026-03-14"
+  }
 }
 ```
 

@@ -4,65 +4,329 @@ export const prerender = false;
 import Layout from "../layouts/Layout.astro";
 ---
 
-<Layout>
+<Layout bodyClass="admin-body">
   <div class="admin-page">
-    <h1>Admin: Vytvořit Akci</h1>
-    <p class="sub">MVP formulář pro vytvoření nové akce a jejího secret obsahu.</p>
+    <header class="admin-header">
+      <div class="hero-card intro-card">
+        <p class="eyebrow">Admin workspace</p>
+        <h1>RaveMap control room</h1>
+        <div class="hero-tags">
+          <span class="hero-tag">UNLOCK</span>
+          <span class="hero-tag">CREATE</span>
+          <span class="hero-tag">MANAGE</span>
+        </div>
+      </div>
 
-    <form id="create-event-form" class="card">
-      <label for="adminSecret">Admin Secret</label>
-      <input id="adminSecret" name="adminSecret" type="password" minlength="24" required autocomplete="off" />
+      <div class="hero-card support-card">
+        <p class="eyebrow">Admin</p>
+        <h2>Ready when you are</h2>
+      </div>
+    </header>
 
-      <label for="title">Název akce</label>
-      <input id="title" name="title" type="text" minlength="3" maxlength="180" required />
+    <div class="access-grid">
+      <form id="access-form" class="panel access-panel">
+        <div class="panel-head">
+          <div>
+            <p class="panel-kicker">Access</p>
+            <h2>Odemknout admin</h2>
+          </div>
+          <span id="auth-badge" class="status-badge neutral">Locked</span>
+        </div>
 
-      <label for="summary">Public info</label>
-      <textarea id="summary" name="summary" minlength="10" maxlength="2000" required></textarea>
+        <label class="field" for="adminSecret">
+          <span class="field-label">Admin secret</span>
+          <div class="secret-input-row">
+            <input
+              id="adminSecret"
+              name="adminSecret"
+              type="password"
+              minlength="24"
+              required
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Vlož ADMIN_SECRET"
+            />
+            <button id="toggle-secret" type="button" class="ghost-button compact-button">Zobrazit</button>
+          </div>
+        </label>
 
-      <label for="publicLocation">Public místo</label>
-      <input id="publicLocation" name="publicLocation" type="text" minlength="2" maxlength="180" required />
+        <div class="action-row">
+          <button id="unlock-button" type="submit" class="primary-button">Ověřit a načíst</button>
+          <button id="clear-secret" type="button" class="ghost-button compact-button">Vymazat</button>
+        </div>
 
-      <label for="startsAt">Začátek (ISO datetime)</label>
-      <input id="startsAt" name="startsAt" type="datetime-local" required />
+        <p id="auth-status" class="status-line neutral">Workspace čeká na ověření secretu.</p>
+      </form>
 
-      <label for="coverImageUrl">Obrázek (volitelné URL)</label>
-      <input id="coverImageUrl" name="coverImageUrl" type="url" placeholder="https://..." />
+      <aside class="panel summary-panel">
+        <div class="panel-head">
+          <div>
+            <p class="panel-kicker">Live summary</p>
+            <h2>Co právě chystáš</h2>
+          </div>
+        </div>
 
-      <label for="unlockCode">Secret kód</label>
-      <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" required />
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span class="summary-label">Přístup</span>
+            <strong id="summary-auth">Locked</strong>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Publikace</span>
+            <strong id="summary-publish">Publish</strong>
+          </div>
+          <div class="summary-item summary-wide">
+            <span class="summary-label">Název</span>
+            <strong id="summary-title">Nová akce bez názvu</strong>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Start</span>
+            <strong id="summary-date">Nevyplněno</strong>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Public místo</span>
+            <strong id="summary-public-location">Nevyplněno</strong>
+          </div>
+          <div class="summary-item summary-wide">
+            <span class="summary-label">Secret lokace</span>
+            <strong id="summary-secret-location">Nevyplněno</strong>
+          </div>
+        </div>
+      </aside>
+    </div>
 
-      <label for="secretInfo">Secret info</label>
-      <textarea id="secretInfo" name="secretInfo" minlength="1" maxlength="5000" required></textarea>
+    <div id="locked-state" class="panel locked-panel">
+      <p class="panel-kicker">Locked state</p>
+      <h2>Nejdřív odemkni přístup</h2>
 
-      <label for="secretLocationName">Secret location name</label>
-      <input id="secretLocationName" name="secretLocationName" type="text" minlength="2" maxlength="180" required />
+      <div class="locked-grid">
+        <div class="locked-item">
+          <strong>Vytvoření akce</strong>
+          <p>Public, secret, publish.</p>
+        </div>
+        <div class="locked-item">
+          <strong>Správa akcí</strong>
+          <p>Seznam, filtr, detail.</p>
+        </div>
+        <div class="locked-item">
+          <strong>Bezpečné smazání</strong>
+          <p>Slug confirmation.</p>
+        </div>
+      </div>
+    </div>
 
-      <label for="secretLatitude">Latitude</label>
-      <input id="secretLatitude" name="secretLatitude" type="number" step="0.000001" min="-90" max="90" required />
+    <div id="workspace" class="workspace-grid" hidden>
+      <form id="create-event-form" class="panel create-panel">
+        <div class="panel-head">
+          <div>
+            <p class="panel-kicker">Create</p>
+            <h2>Nová akce</h2>
+          </div>
+        </div>
 
-      <label for="secretLongitude">Longitude</label>
-      <input id="secretLongitude" name="secretLongitude" type="number" step="0.000001" min="-180" max="180" required />
+        <div class="step-block">
+          <div class="step-head">
+            <span class="step-number">01</span>
+            <div>
+              <h3>Public vrstva</h3>
+              <p>Tohle uvidí každý návštěvník webu.</p>
+            </div>
+          </div>
 
-      <label for="secretMapNote">Secret poznámka (volitelné)</label>
-      <textarea id="secretMapNote" name="secretMapNote" maxlength="500"></textarea>
+          <div class="field-stack">
+            <label class="field" for="title">
+              <span class="field-label">Název akce</span>
+              <input id="title" name="title" type="text" minlength="3" maxlength="180" required />
+            </label>
 
-      <label class="checkbox-row" for="isPublished">
-        <input id="isPublished" name="isPublished" type="checkbox" checked />
-        Publikovat ihned
-      </label>
+            <div class="field-pair">
+              <label class="field" for="startsAt">
+                <span class="field-label">Začátek</span>
+                <input id="startsAt" name="startsAt" type="datetime-local" required />
+              </label>
 
-      <button type="submit">Vytvořit akci</button>
-    </form>
+              <label class="field" for="publicLocation">
+                <span class="field-label">Public místo</span>
+                <input id="publicLocation" name="publicLocation" type="text" minlength="2" maxlength="180" required />
+              </label>
+            </div>
 
-    <p id="result" class="result" role="status" aria-live="polite"></p>
-    <pre id="debug" class="debug" hidden></pre>
+            <label class="field" for="summary">
+              <span class="field-label">Public info</span>
+              <textarea id="summary" name="summary" minlength="10" maxlength="2000" required></textarea>
+            </label>
+
+            <label class="field" for="coverImageUrl">
+              <span class="field-label">Cover image URL</span>
+              <input id="coverImageUrl" name="coverImageUrl" type="url" inputmode="url" placeholder="https://..." />
+            </label>
+          </div>
+        </div>
+
+        <div class="step-block secret-step">
+          <div class="step-head">
+            <span class="step-number">02</span>
+            <div>
+              <h3>Secret vrstva</h3>
+              <p>Tohle se odemkne až po správném kódu.</p>
+            </div>
+          </div>
+
+          <div class="field-stack">
+            <label class="field" for="unlockCode">
+              <span class="field-label">Unlock kód</span>
+              <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" required />
+            </label>
+
+            <label class="field" for="secretLocationName">
+              <span class="field-label">Secret location name</span>
+              <input
+                id="secretLocationName"
+                name="secretLocationName"
+                type="text"
+                minlength="2"
+                maxlength="180"
+                required
+              />
+            </label>
+
+            <div class="field-pair">
+              <label class="field" for="secretLatitude">
+                <span class="field-label">Latitude</span>
+                <input id="secretLatitude" name="secretLatitude" type="number" step="0.000001" min="-90" max="90" required />
+              </label>
+
+              <label class="field" for="secretLongitude">
+                <span class="field-label">Longitude</span>
+                <input
+                  id="secretLongitude"
+                  name="secretLongitude"
+                  type="number"
+                  step="0.000001"
+                  min="-180"
+                  max="180"
+                  required
+                />
+              </label>
+            </div>
+
+            <label class="field" for="secretInfo">
+              <span class="field-label">Secret info</span>
+              <textarea id="secretInfo" name="secretInfo" minlength="1" maxlength="5000" required></textarea>
+            </label>
+
+            <label class="field" for="secretMapNote">
+              <span class="field-label">Secret poznámka</span>
+              <textarea id="secretMapNote" name="secretMapNote" maxlength="500"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <div class="step-block publish-step">
+          <div class="step-head">
+            <span class="step-number">03</span>
+            <div>
+              <h3>Publikace</h3>
+              <p>Rozhodni, jestli má akce jít ven hned, nebo zůstat jako draft.</p>
+            </div>
+          </div>
+
+          <label class="publish-toggle" for="isPublished">
+            <input id="isPublished" name="isPublished" type="checkbox" checked />
+            <span>
+              <strong>Publikovat ihned</strong>
+              <small id="publish-helper">Akce bude po vytvoření veřejně viditelná.</small>
+            </span>
+          </label>
+        </div>
+
+        <div class="create-footer">
+          <p id="result" class="status-line neutral">Vyplň akci a odešli ji do systému.</p>
+          <div class="action-row">
+            <button id="reset-form" type="button" class="ghost-button compact-button">Vyčistit</button>
+            <button id="create-submit" type="submit" class="primary-button">Vytvořit akci</button>
+          </div>
+        </div>
+
+        <pre id="debug" class="debug" hidden></pre>
+      </form>
+
+      <aside class="workspace-side">
+        <div class="panel manage-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Manage</p>
+              <h2>Existující akce</h2>
+            </div>
+            <button id="reload-events" type="button" class="ghost-button compact-button">Obnovit</button>
+          </div>
+
+          <label class="field" for="event-filter">
+            <span class="field-label">Filtrovat akce</span>
+            <input id="event-filter" type="search" placeholder="Název, slug nebo public místo" />
+          </label>
+
+          <div class="stats-row">
+            <span class="stat-pill"><strong id="event-count">0</strong> celkem</span>
+            <span class="stat-pill"><strong id="filtered-count">0</strong> zobrazeno</span>
+          </div>
+
+          <p id="events-result" class="status-line neutral">Akce jsou připravené k načtení.</p>
+          <div id="events-list" class="events-list" hidden></div>
+        </div>
+      </aside>
+    </div>
   </div>
 </Layout>
 
 <script>
-  const form = document.getElementById("create-event-form");
+  const state = {
+    authenticated: false,
+    events: [],
+    filter: "",
+  };
+
+  const dateFormatter = new Intl.DateTimeFormat("cs-CZ", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  const accessForm = document.getElementById("access-form");
+  const adminSecretInput = document.getElementById("adminSecret");
+  const toggleSecretButton = document.getElementById("toggle-secret");
+  const clearSecretButton = document.getElementById("clear-secret");
+  const unlockButton = document.getElementById("unlock-button");
+  const authStatus = document.getElementById("auth-status");
+  const authBadge = document.getElementById("auth-badge");
+
+  const lockedState = document.getElementById("locked-state");
+  const workspace = document.getElementById("workspace");
+
+  const createForm = document.getElementById("create-event-form");
+  const createSubmitButton = document.getElementById("create-submit");
+  const resetFormButton = document.getElementById("reset-form");
   const result = document.getElementById("result");
   const debug = document.getElementById("debug");
+
+  const summaryAuth = document.getElementById("summary-auth");
+  const summaryPublish = document.getElementById("summary-publish");
+  const summaryTitle = document.getElementById("summary-title");
+  const summaryDate = document.getElementById("summary-date");
+  const summaryPublicLocation = document.getElementById("summary-public-location");
+  const summarySecretLocation = document.getElementById("summary-secret-location");
+
+  const reloadEventsButton = document.getElementById("reload-events");
+  const eventFilterInput = document.getElementById("event-filter");
+  const eventsResult = document.getElementById("events-result");
+  const eventsList = document.getElementById("events-list");
+  const eventCount = document.getElementById("event-count");
+  const filteredCount = document.getElementById("filtered-count");
+
+  function setStatus(target, message, tone = "neutral") {
+    if (!(target instanceof HTMLElement)) return;
+    target.textContent = message;
+    target.className = `status-line ${tone}`;
+  }
 
   function showDebug(payload) {
     if (!(debug instanceof HTMLElement)) return;
@@ -70,148 +334,1014 @@ import Layout from "../layouts/Layout.astro";
     debug.textContent = JSON.stringify(payload, null, 2);
   }
 
-  if (form instanceof HTMLFormElement && result) {
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      result.textContent = "Vytvářím akci...";
-      if (debug instanceof HTMLElement) {
-        debug.hidden = true;
-        debug.textContent = "";
+  function clearDebug() {
+    if (!(debug instanceof HTMLElement)) return;
+    debug.hidden = true;
+    debug.textContent = "";
+  }
+
+  function getAdminSecret() {
+    if (!(adminSecretInput instanceof HTMLInputElement)) return "";
+    return adminSecretInput.value.trim();
+  }
+
+  function getAuthHeaders(includeJson = false) {
+    const adminSecret = getAdminSecret();
+    if (!adminSecret) {
+      throw new Error("Vyplň nejdřív Admin Secret.");
+    }
+
+    const headers = {
+      Authorization: `Bearer ${adminSecret}`,
+    };
+
+    if (includeJson) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    return headers;
+  }
+
+  function toIsoDateTime(localValue) {
+    const parsedDate = new Date(localValue);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return null;
+    }
+
+    return parsedDate.toISOString();
+  }
+
+  async function parseJsonResponse(response) {
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  function setButtonBusy(button, busyLabel, idleLabel, isBusy) {
+    if (!(button instanceof HTMLButtonElement)) return;
+    button.disabled = isBusy;
+    button.textContent = isBusy ? busyLabel : idleLabel;
+  }
+
+  function setText(target, value) {
+    if (target instanceof HTMLElement) {
+      target.textContent = value;
+    }
+  }
+
+  function updateCounts(total, visible) {
+    setText(eventCount, String(total));
+    setText(filteredCount, String(visible));
+  }
+
+  function setAuthState(isAuthenticated, message, tone = "neutral") {
+    state.authenticated = isAuthenticated;
+
+    if (workspace instanceof HTMLElement) {
+      workspace.hidden = !isAuthenticated;
+    }
+
+    if (lockedState instanceof HTMLElement) {
+      lockedState.hidden = isAuthenticated;
+    }
+
+    if (authBadge instanceof HTMLElement) {
+      authBadge.textContent = isAuthenticated ? "Unlocked" : "Locked";
+      authBadge.className = `status-badge ${isAuthenticated ? "positive" : tone}`;
+    }
+
+    if (summaryAuth instanceof HTMLElement) {
+      summaryAuth.textContent = isAuthenticated ? "Unlocked" : "Locked";
+    }
+
+    setStatus(authStatus, message, tone);
+  }
+
+  function normalizeFilter(value) {
+    return value.trim().toLowerCase();
+  }
+
+  function getFilteredEvents() {
+    const filter = normalizeFilter(state.filter);
+
+    if (!filter) {
+      return state.events;
+    }
+
+    return state.events.filter((item) =>
+      [item.title, item.slug, item.publicLocation].some((value) => String(value).toLowerCase().includes(filter)),
+    );
+  }
+
+  function updateCreateSummary() {
+    if (!(createForm instanceof HTMLFormElement)) return;
+
+    const data = new FormData(createForm);
+    const title = String(data.get("title") || "").trim();
+    const publicLocation = String(data.get("publicLocation") || "").trim();
+    const secretLocation = String(data.get("secretLocationName") || "").trim();
+    const startsAtRaw = String(data.get("startsAt") || "");
+    const startsAtIso = startsAtRaw ? toIsoDateTime(startsAtRaw) : null;
+    const publishNow = data.get("isPublished") === "on";
+
+    setText(summaryTitle, title || "Nová akce bez názvu");
+    setText(summaryPublicLocation, publicLocation || "Nevyplněno");
+    setText(summarySecretLocation, secretLocation || "Nevyplněno");
+    setText(summaryPublish, publishNow ? "Publish" : "Draft");
+    setText(summaryDate, startsAtIso ? dateFormatter.format(new Date(startsAtIso)) : "Nevyplněno");
+
+    const publishHelper = document.getElementById("publish-helper");
+    if (publishHelper instanceof HTMLElement) {
+      publishHelper.textContent = publishNow
+        ? "Akce bude po vytvoření veřejně viditelná."
+        : "Akce zůstane jen v admin správě jako draft.";
+    }
+  }
+
+  async function copyText(value, successMessage) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus(eventsResult, successMessage, "positive");
+    } catch {
+      setStatus(eventsResult, "Nepodařilo se kopírovat do schránky.", "danger");
+    }
+  }
+
+  function buildMetaRow(label, value) {
+    const row = document.createElement("p");
+    row.className = "event-meta";
+    row.textContent = `${label}: ${value}`;
+    return row;
+  }
+
+  async function deleteEvent(slug, confirmSlug) {
+    const response = await fetch("/api/admin/events", {
+      method: "DELETE",
+      headers: getAuthHeaders(true),
+      body: JSON.stringify({ slug, confirmSlug }),
+    });
+
+    const json = await parseJsonResponse(response);
+
+    if (!response.ok || !json?.ok) {
+      const err = json?.error || {};
+      throw {
+        status: response.status,
+        message: err.message || "Smazání akce selhalo.",
+        code: err.code,
+        body: json,
+      };
+    }
+
+    return json.data;
+  }
+
+  function renderEvents() {
+    if (!(eventsList instanceof HTMLElement)) return;
+
+    eventsList.innerHTML = "";
+
+    const filteredItems = getFilteredEvents();
+    updateCounts(state.events.length, filteredItems.length);
+
+    if (filteredItems.length === 0) {
+      eventsList.hidden = false;
+      const emptyState = document.createElement("p");
+      emptyState.className = "empty-state";
+      emptyState.textContent = state.events.length === 0 ? "Zatím tu nejsou žádné uložené akce." : "Filtr nic nenašel.";
+      eventsList.append(emptyState);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    filteredItems.forEach((item) => {
+      const article = document.createElement("article");
+      article.className = "event-item";
+
+      const header = document.createElement("div");
+      header.className = "event-head";
+
+      const titleWrap = document.createElement("div");
+
+      const title = document.createElement("h3");
+      title.className = "event-title";
+      title.textContent = item.title;
+
+      const slugLine = document.createElement("p");
+      slugLine.className = "event-slug";
+      slugLine.textContent = item.slug;
+
+      titleWrap.append(title, slugLine);
+
+      const badgeRow = document.createElement("div");
+      badgeRow.className = "event-badges";
+
+      const stateBadge = document.createElement("span");
+      stateBadge.className = item.isPublished ? "pill live" : "pill draft";
+      stateBadge.textContent = item.isPublished ? "Publikováno" : "Draft";
+
+      const dateBadge = document.createElement("span");
+      dateBadge.className = "pill soft";
+      dateBadge.textContent = dateFormatter.format(new Date(item.startsAt));
+
+      badgeRow.append(stateBadge, dateBadge);
+      header.append(titleWrap, badgeRow);
+
+      const meta = document.createElement("div");
+      meta.className = "event-meta-list";
+      meta.append(
+        buildMetaRow("Public místo", item.publicLocation),
+        buildMetaRow("Vytvořeno", dateFormatter.format(new Date(item.createdAt))),
+      );
+
+      const actions = document.createElement("div");
+      actions.className = "event-actions";
+
+      const openLink = document.createElement("a");
+      openLink.className = "ghost-button compact-button";
+      openLink.href = `/akce/${item.slug}`;
+      openLink.target = "_blank";
+      openLink.rel = "noreferrer";
+      openLink.textContent = "Otevřít detail";
+
+      const copyButton = document.createElement("button");
+      copyButton.type = "button";
+      copyButton.className = "ghost-button compact-button";
+      copyButton.textContent = "Kopírovat slug";
+      copyButton.addEventListener("click", async () => {
+        await copyText(item.slug, `Slug ${item.slug} zkopírován.`);
+      });
+
+      actions.append(openLink, copyButton);
+
+      const dangerZone = document.createElement("details");
+      dangerZone.className = "danger-zone";
+
+      const summary = document.createElement("summary");
+      summary.textContent = "Danger zone";
+
+      const copy = document.createElement("p");
+      copy.className = "danger-copy";
+      copy.textContent = "Pro smazání opiš slug přesně. Secret payload se odstraní spolu s akcí.";
+
+      const deleteForm = document.createElement("form");
+      deleteForm.className = "delete-form";
+
+      const inputLabel = document.createElement("label");
+      inputLabel.className = "field";
+      inputLabel.setAttribute("for", `confirm-${item.id}`);
+
+      const labelText = document.createElement("span");
+      labelText.className = "field-label";
+      labelText.textContent = "Potvrď slug";
+
+      const deleteInput = document.createElement("input");
+      deleteInput.id = `confirm-${item.id}`;
+      deleteInput.name = "confirmSlug";
+      deleteInput.type = "text";
+      deleteInput.autocomplete = "off";
+      deleteInput.spellcheck = false;
+      deleteInput.placeholder = item.slug;
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "submit";
+      deleteButton.className = "danger-button compact-button";
+      deleteButton.textContent = "Trvale smazat";
+      deleteButton.disabled = true;
+
+      deleteInput.addEventListener("input", () => {
+        deleteButton.disabled = deleteInput.value.trim() !== item.slug;
+      });
+
+      deleteForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const confirmSlug = deleteInput.value.trim();
+        if (confirmSlug !== item.slug) {
+          setStatus(eventsResult, "Slug potvrzení nesouhlasí.", "danger");
+          return;
+        }
+
+        const approved = window.confirm(`Opravdu smazat akci ${item.title}?`);
+        if (!approved) {
+          return;
+        }
+
+        deleteButton.disabled = true;
+        setStatus(eventsResult, `Mažu akci ${item.slug}...`, "warning");
+        clearDebug();
+
+        try {
+          await deleteEvent(item.slug, confirmSlug);
+          setStatus(eventsResult, `Akce ${item.slug} byla smazána.`, "positive");
+          await loadEvents({ preserveMessage: true });
+        } catch (error) {
+          deleteButton.disabled = false;
+          setStatus(eventsResult, error?.message || "Smazání akce selhalo.", "danger");
+          showDebug(error);
+        }
+      });
+
+      inputLabel.append(labelText, deleteInput);
+      deleteForm.append(inputLabel, deleteButton);
+      dangerZone.append(summary, copy, deleteForm);
+
+      article.append(header, meta, actions, dangerZone);
+      fragment.append(article);
+    });
+
+    eventsList.hidden = false;
+    eventsList.append(fragment);
+  }
+
+  async function loadEvents(options = {}) {
+    const { preserveMessage = false } = options;
+
+    try {
+      if (!preserveMessage) {
+        setStatus(eventsResult, "Načítám akce...", "warning");
       }
 
-      const data = new FormData(form);
-      const adminSecret = String(data.get("adminSecret") || "").trim();
+      setButtonBusy(reloadEventsButton, "Obnovuji...", "Obnovit", true);
+      clearDebug();
 
-      const startsAtLocal = String(data.get("startsAt") || "");
-      const startsAtIso = new Date(startsAtLocal).toISOString();
+      const response = await fetch("/api/admin/events", {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
 
-      const payload = {
-        title: String(data.get("title") || ""),
-        summary: String(data.get("summary") || ""),
-        publicLocation: String(data.get("publicLocation") || ""),
-        startsAt: startsAtIso,
-        coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
-        isPublished: data.get("isPublished") === "on",
-        unlockCode: String(data.get("unlockCode") || ""),
-        secretInfo: String(data.get("secretInfo") || ""),
-        secretLocationName: String(data.get("secretLocationName") || ""),
-        secretLatitude: Number(data.get("secretLatitude")),
-        secretLongitude: Number(data.get("secretLongitude")),
-        secretMapNote: String(data.get("secretMapNote") || "").trim() || undefined,
-      };
+      const json = await parseJsonResponse(response);
+
+      if (!response.ok || !json?.ok) {
+        const err = json?.error || {};
+        setStatus(eventsResult, err.message || "Načtení akcí selhalo.", "danger");
+        showDebug({
+          status: response.status,
+          code: err.code,
+          body: json,
+        });
+        return false;
+      }
+
+      state.events = Array.isArray(json.data?.events) ? json.data.events : [];
+      renderEvents();
+
+      if (!preserveMessage) {
+        setStatus(eventsResult, `Načteno ${state.events.length} akcí.`, "positive");
+      }
+
+      return true;
+    } catch (error) {
+      setStatus(eventsResult, error instanceof Error ? error.message : "Nepodařilo se načíst akce.", "danger");
+      showDebug({ error: "LOAD_EVENTS_FAILED" });
+      return false;
+    } finally {
+      setButtonBusy(reloadEventsButton, "Obnovuji...", "Obnovit", false);
+    }
+  }
+
+  function resetAccessState() {
+    state.authenticated = false;
+    state.events = [];
+    state.filter = "";
+
+    if (workspace instanceof HTMLElement) {
+      workspace.hidden = true;
+    }
+
+    if (lockedState instanceof HTMLElement) {
+      lockedState.hidden = false;
+    }
+
+    if (eventsList instanceof HTMLElement) {
+      eventsList.hidden = true;
+      eventsList.innerHTML = "";
+    }
+
+    if (eventFilterInput instanceof HTMLInputElement) {
+      eventFilterInput.value = "";
+    }
+
+    updateCounts(0, 0);
+    setAuthState(false, "Workspace čeká na ověření secretu.", "neutral");
+    setStatus(eventsResult, "Akce se načtou až po odemknutí přístupu.", "neutral");
+  }
+
+  async function authenticateAdmin() {
+    clearDebug();
+
+    try {
+      setButtonBusy(unlockButton, "Ověřuji...", "Ověřit a načíst", true);
+      const ok = await loadEvents();
+
+      if (!ok) {
+        resetAccessState();
+        setAuthState(false, "Secret se nepodařilo ověřit.", "danger");
+        return;
+      }
+
+      setAuthState(true, "Admin byl odemčený a akce byly načtené.", "positive");
+      setStatus(result, "Workspace je připravený pro vytvoření nové akce.", "positive");
+
+      const titleInput = document.getElementById("title");
+      if (titleInput instanceof HTMLInputElement) {
+        titleInput.focus();
+      }
+    } finally {
+      setButtonBusy(unlockButton, "Ověřuji...", "Ověřit a načíst", false);
+    }
+  }
+
+  if (toggleSecretButton instanceof HTMLButtonElement && adminSecretInput instanceof HTMLInputElement) {
+    toggleSecretButton.addEventListener("click", () => {
+      const reveal = adminSecretInput.type === "password";
+      adminSecretInput.type = reveal ? "text" : "password";
+      toggleSecretButton.textContent = reveal ? "Skrýt" : "Zobrazit";
+    });
+  }
+
+  if (clearSecretButton instanceof HTMLButtonElement && adminSecretInput instanceof HTMLInputElement) {
+    clearSecretButton.addEventListener("click", () => {
+      adminSecretInput.value = "";
+      adminSecretInput.type = "password";
+      if (toggleSecretButton instanceof HTMLButtonElement) {
+        toggleSecretButton.textContent = "Zobrazit";
+      }
+      resetAccessState();
+    });
+  }
+
+  if (accessForm instanceof HTMLFormElement) {
+    accessForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await authenticateAdmin();
+    });
+  }
+
+  if (reloadEventsButton instanceof HTMLButtonElement) {
+    reloadEventsButton.addEventListener("click", async () => {
+      await loadEvents();
+    });
+  }
+
+  if (eventFilterInput instanceof HTMLInputElement) {
+    eventFilterInput.addEventListener("input", () => {
+      state.filter = eventFilterInput.value;
+      renderEvents();
+    });
+  }
+
+  if (createForm instanceof HTMLFormElement) {
+    createForm.addEventListener("input", updateCreateSummary);
+
+    createForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearDebug();
+
+      if (!state.authenticated) {
+        setStatus(result, "Nejdřív odemkni admin secret.", "danger");
+        return;
+      }
 
       try {
+        const startsAtInput = createForm.elements.namedItem("startsAt");
+        const startsAtLocal = startsAtInput instanceof HTMLInputElement ? startsAtInput.value : "";
+        const startsAtIso = toIsoDateTime(startsAtLocal);
+
+        if (!startsAtIso) {
+          setStatus(result, "Začátek akce není ve validním formátu.", "danger");
+          return;
+        }
+
+        setStatus(result, "Vytvářím akci...", "warning");
+        setButtonBusy(createSubmitButton, "Vytvářím...", "Vytvořit akci", true);
+
+        const data = new FormData(createForm);
+        const payload = {
+          title: String(data.get("title") || ""),
+          summary: String(data.get("summary") || ""),
+          publicLocation: String(data.get("publicLocation") || ""),
+          startsAt: startsAtIso,
+          coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
+          isPublished: data.get("isPublished") === "on",
+          unlockCode: String(data.get("unlockCode") || ""),
+          secretInfo: String(data.get("secretInfo") || ""),
+          secretLocationName: String(data.get("secretLocationName") || ""),
+          secretLatitude: Number(data.get("secretLatitude")),
+          secretLongitude: Number(data.get("secretLongitude")),
+          secretMapNote: String(data.get("secretMapNote") || "").trim() || undefined,
+        };
+
         const response = await fetch("/api/admin/events", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-admin-secret": adminSecret,
-          },
+          headers: getAuthHeaders(true),
           body: JSON.stringify(payload),
         });
 
-        const json = await response.json();
+        const json = await parseJsonResponse(response);
 
         if (!response.ok || !json?.ok) {
           const err = json?.error || {};
-          result.textContent = err.message || "Vytvoření akce selhalo.";
+          setStatus(result, err.message || "Vytvoření akce selhalo.", "danger");
           showDebug({
             status: response.status,
             code: err.code,
-            debug: err.debug,
             body: json,
           });
           return;
         }
 
         const slug = json.data?.slug;
-        result.textContent = slug
-          ? `Akce vytvořena. Detail: /akce/${slug}`
-          : "Akce vytvořena.";
-        form.reset();
-      } catch {
-        result.textContent = "Nepodařilo se kontaktovat server.";
-        showDebug({ error: "NETWORK_OR_RUNTIME_ERROR" });
+        setStatus(result, slug ? `Akce vytvořena. Detail: /akce/${slug}` : "Akce vytvořena.", "positive");
+        createForm.reset();
+        updateCreateSummary();
+        await loadEvents({ preserveMessage: true });
+      } catch (error) {
+        setStatus(result, error instanceof Error ? error.message : "Nepodařilo se kontaktovat server.", "danger");
+        showDebug({ error: "CREATE_EVENT_FAILED" });
+      } finally {
+        setButtonBusy(createSubmitButton, "Vytvářím...", "Vytvořit akci", false);
       }
     });
   }
+
+  if (resetFormButton instanceof HTMLButtonElement && createForm instanceof HTMLFormElement) {
+    resetFormButton.addEventListener("click", () => {
+      createForm.reset();
+      updateCreateSummary();
+      setStatus(result, "Formulář byl vyčištěn.", "neutral");
+    });
+  }
+
+  updateCreateSummary();
+  resetAccessState();
 </script>
 
 <style>
+  :global(body.admin-body) {
+    scroll-snap-type: none;
+    background:
+      radial-gradient(circle at top left, rgba(255, 233, 182, 0.22), transparent 28%),
+      linear-gradient(180deg, #920000 0%, #b40808 38%, #c00 100%);
+  }
+
   .admin-page {
-    min-height: 100vh;
-    max-width: 900px;
+    max-width: 1320px;
     margin: 0 auto;
-    padding: 80px 20px;
+    padding: 36px 20px 72px;
     position: relative;
     z-index: 1;
-  }
-
-  h1 {
-    font-size: clamp(2.2rem, 6vw, 5rem);
-    text-align: center;
-  }
-
-  .sub {
-    margin-top: 8px;
-    margin-bottom: 20px;
-    text-align: center;
-    font-size: clamp(1rem, 3vw, 2rem);
-  }
-
-  .card {
     display: grid;
-    gap: 10px;
+    gap: 24px;
+  }
+
+  .admin-header,
+  .access-grid,
+  .workspace-grid {
+    display: grid;
+    gap: 20px;
+  }
+
+  .admin-header,
+  .access-grid {
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.8fr);
+  }
+
+  .workspace-grid {
+    grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+    align-items: start;
+  }
+
+  .hero-card,
+  .panel {
     border: 3px solid #000;
-    background: #c00;
-    padding: 16px;
+    box-shadow: 14px 14px 0 #000;
+  }
+
+  .hero-card {
+    padding: 24px;
+  }
+
+  .intro-card {
+    background:
+      linear-gradient(135deg, rgba(14, 14, 14, 0.96), rgba(55, 10, 10, 0.96)),
+      #111;
+    color: #fff7e5;
+    display: grid;
+    gap: 14px;
+  }
+
+  .support-card {
+    background:
+      linear-gradient(180deg, rgba(255, 238, 199, 0.95), rgba(247, 209, 130, 0.96)),
+      #f7d182;
+    display: grid;
+    align-content: center;
+    text-align: center;
+  }
+
+  .eyebrow,
+  .panel-kicker {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .intro-card h1 {
+    font-size: clamp(2.8rem, 6vw, 5.4rem);
+    line-height: 0.92;
+    max-width: 9ch;
+  }
+
+  .panel-copy,
+  .locked-item p,
+  .step-head p,
+  .danger-copy {
+    line-height: 1.55;
+  }
+
+  .hero-tags,
+  .locked-grid,
+  .summary-grid,
+  .events-list,
+  .field-stack {
+    display: grid;
+    gap: 12px;
+  }
+
+  .hero-tags {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .hero-tag {
+    border: 2px solid #fff7e5;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .locked-item,
+  .summary-item,
+  .step-block,
+  .event-item,
+  .empty-state {
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .highlight-index,
+  .step-number {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+  }
+
+  .panel {
+    background: rgba(255, 246, 228, 0.94);
+    padding: 22px;
+    display: grid;
+    gap: 16px;
+  }
+
+  .access-panel {
+    background:
+      linear-gradient(135deg, rgba(15, 15, 15, 0.97), rgba(43, 9, 9, 0.97)),
+      #111;
+    color: #fff8eb;
+  }
+
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .panel h2,
+  .support-card h2 {
+    font-size: clamp(1.7rem, 3vw, 2.5rem);
+    line-height: 1;
+  }
+
+  .status-badge,
+  .pill,
+  .stat-pill {
+    border: 2px solid currentColor;
+    padding: 7px 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .status-badge.neutral {
+    color: #f7d182;
+  }
+
+  .status-badge.positive {
+    color: #8ef1b0;
+  }
+
+  .status-badge.danger {
+    color: #ffafaf;
+  }
+
+  .field,
+  .delete-form {
+    display: grid;
+    gap: 8px;
+  }
+
+  .field-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+  }
+
+  .secret-input-row,
+  .action-row,
+  .field-pair,
+  .event-actions,
+  .event-badges,
+  .stats-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .secret-input-row > :first-child,
+  .field-pair > :first-child,
+  .field-pair > :last-child {
+    flex: 1 1 280px;
   }
 
   input,
   textarea,
-  button {
+  button,
+  a.ghost-button {
     width: 100%;
     border: 2px solid #000;
-    font-size: 1rem;
-    padding: 10px 12px;
-    background: #fff;
+    padding: 11px 12px;
+    background: #fffef8;
     color: #000;
     box-sizing: border-box;
+    font-family: var(--font-body);
+    font-size: 1rem;
   }
 
   textarea {
-    min-height: 100px;
+    min-height: 112px;
     resize: vertical;
   }
 
-  button {
-    background: #000;
-    color: #c00;
-    font-weight: 700;
+  button,
+  a.ghost-button {
     cursor: pointer;
-  }
-
-  .checkbox-row {
-    display: flex;
-    gap: 10px;
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-flex;
     align-items: center;
-    font-weight: 700;
+    justify-content: center;
   }
 
-  .checkbox-row input {
-    width: 18px;
-    height: 18px;
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  input:focus,
+  textarea:focus,
+  button:focus,
+  a.ghost-button:focus,
+  details summary:focus {
+    outline: 3px solid #000;
+    outline-offset: 2px;
+  }
+
+  .primary-button {
+    background: #000;
+    color: #f7d182;
+  }
+
+  .ghost-button {
+    background: transparent;
+    color: inherit;
+  }
+
+  .compact-button {
+    width: auto;
+  }
+
+  .summary-panel {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 233, 182, 0.92)),
+      #fff;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-item {
+    padding: 14px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .summary-wide {
+    grid-column: 1 / -1;
+  }
+
+  .summary-label {
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+  }
+
+  .locked-panel {
+    background:
+      linear-gradient(180deg, rgba(255, 243, 214, 0.96), rgba(255, 224, 164, 0.96)),
+      #ffe0a4;
+  }
+
+  .locked-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .locked-item {
+    padding: 16px;
+  }
+
+  .create-panel {
+    align-content: start;
+  }
+
+  .step-block {
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .secret-step {
+    background: rgba(255, 228, 228, 0.82);
+  }
+
+  .publish-step {
+    background: rgba(255, 241, 205, 0.82);
+  }
+
+  .step-head {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .step-head h3 {
+    font-size: 1.3rem;
+  }
+
+  .publish-toggle {
+    display: flex;
+    align-items: start;
+    gap: 14px;
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.68);
+    padding: 14px;
+  }
+
+  .publish-toggle input {
+    width: 20px;
+    height: 20px;
+    margin: 0;
     padding: 0;
+    flex: 0 0 auto;
   }
 
-  .result {
-    margin-top: 14px;
+  .publish-toggle span {
+    display: grid;
+    gap: 4px;
+  }
+
+  .create-footer {
+    border-top: 2px solid #000;
+    padding-top: 16px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .status-line {
+    border: 2px solid #000;
+    padding: 12px 14px;
     font-weight: 700;
-    min-height: 24px;
+  }
+
+  .status-line.neutral {
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .status-line.positive {
+    background: #d6ffd9;
+  }
+
+  .status-line.warning {
+    background: #fff0b8;
+  }
+
+  .status-line.danger {
+    background: #ffd7d7;
+  }
+
+  .manage-panel {
+    align-content: start;
+  }
+
+  .stat-pill,
+  .pill.soft {
+    background: rgba(255, 255, 255, 0.72);
+    color: #000;
+  }
+
+  .pill.live {
+    background: #c00;
+    color: #000;
+  }
+
+  .pill.draft {
+    background: #f7d182;
+    color: #000;
+  }
+
+  .event-item {
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .event-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .event-title {
+    font-size: 1.25rem;
+    margin-bottom: 4px;
+  }
+
+  .event-slug {
+    font-family: monospace;
+    overflow-wrap: anywhere;
+    opacity: 0.75;
+  }
+
+  .event-meta-list {
+    display: grid;
+    gap: 6px;
+  }
+
+  .danger-zone {
+    border: 2px solid #000;
+    background: rgba(255, 218, 218, 0.86);
+  }
+
+  .danger-zone summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 12px 14px;
+    font-weight: 700;
+  }
+
+  .danger-zone summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .danger-zone[open] summary {
+    border-bottom: 2px solid #000;
+  }
+
+  .danger-copy,
+  .delete-form {
+    margin: 0;
+    padding: 14px;
+  }
+
+  .danger-button {
+    background: #1e0000;
+    color: #fff3f3;
   }
 
   .debug {
-    margin-top: 10px;
     border: 2px solid #000;
     background: #fff;
     padding: 12px;
@@ -220,46 +1350,66 @@ import Layout from "../layouts/Layout.astro";
     font-size: 0.9rem;
   }
 
+  .empty-state {
+    padding: 16px;
+  }
+
+  @media (max-width: 1080px) {
+    .admin-header,
+    .access-grid,
+    .workspace-grid,
+    .locked-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .intro-card h1 {
+      max-width: none;
+    }
+  }
+
   @media (max-width: 768px) {
     .admin-page {
-      padding: 56px 12px 24px;
+      padding: 24px 12px 48px;
+      gap: 18px;
     }
 
-    h1 {
-      font-size: clamp(1.6rem, 8vw, 2.5rem);
+    .hero-card,
+    .panel {
+      padding: 16px;
+      box-shadow: 8px 8px 0 #000;
     }
 
-    .sub {
-      font-size: clamp(0.95rem, 4vw, 1.25rem);
-      margin-bottom: 14px;
+    .summary-grid {
+      grid-template-columns: 1fr;
     }
 
-    .card {
-      gap: 8px;
-      padding: 12px;
-      border-width: 2px;
+    .summary-wide {
+      grid-column: auto;
     }
 
-    label {
-      font-size: 0.95rem;
+    .panel-head,
+    .event-head,
+    .field-pair,
+    .secret-input-row {
+      flex-direction: column;
+      align-items: stretch;
     }
 
     input,
     textarea,
-    button {
+    button,
+    a.ghost-button {
       font-size: 0.95rem;
-      padding: 9px 10px;
+      padding: 10px 11px;
     }
 
-    .result {
-      font-size: 0.95rem;
+    .compact-button {
+      width: 100%;
     }
 
     .debug {
       max-height: 180px;
       font-size: 0.78rem;
-      padding: 10px;
     }
   }
 </style>
-

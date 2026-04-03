@@ -9,6 +9,7 @@ const list = await db
     title: events.title,
     startsAt: events.startsAt,
     publicLocation: events.publicLocation,
+    coverImageUrl: events.coverImageUrl,
   })
   .from(events)
   .where(eq(events.isPublished, true))
@@ -30,7 +31,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     ) : (
       list.map((item) => (
         <a class="akce-item" href={`/akce/${item.slug}`}>
-          <img class="akce-img" src="/bunkr.png" alt="Event cover" />
+          <img class="akce-img" src={item.coverImageUrl || "/bunkr.png"} alt={item.title} />
           <h3 class="akce-name">{item.title}</h3>
           <div class="akce-date">{formatter.format(item.startsAt)}</div>
           <div class="akce-location">{item.publicLocation}</div>

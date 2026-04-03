@@ -1,126 +1,180 @@
+---
+const items = [
+  {
+    question: "Co je Kam Na Rave?",
+    answer:
+      "RaveMap je jednoduchý rozcestník pro underground akce. Veřejně ukáže vibe, termín a meeting point, ale přesnou lokaci nechá zamčenou pro lidi s kódem.",
+  },
+  {
+    question: "Kde najdu přesnou lokaci akce?",
+    answer:
+      "Přesná lokace se odemyká až na detailu konkrétní akce po zadání secret kódu. Bez něj zůstává veřejná jen základní orientace a čas.",
+  },
+  {
+    question: "Jak získám unlock kód?",
+    answer:
+      "Kód typicky sdílí organizátor přes svůj komunitní kanál, zprávu nebo ticket flow. Tahle demo verze počítá s tím, že distribuce kódu probíhá mimo web.",
+  },
+  {
+    question: "Co když zadám špatný kód?",
+    answer:
+      "Web špatné pokusy omezuje, aby nešlo kódy jednoduše hádat. Když se párkrát spletete za sebou, odemykání se na chvíli zablokuje.",
+  },
+  {
+    question: "Jsou všechny akce veřejně viditelné?",
+    answer:
+      "Ne. Organizátor může akci nechat rozpracovanou a publikovat ji až ve chvíli, kdy je připravená jít ven.",
+  },
+  {
+    question: "Je tohle hotový produkční systém?",
+    answer:
+      "Zatím ne. Je to bezpečnostně zaměřené MVP, které ukazuje princip oddělení public a secret dat, admin tvorbu akcí a chráněné odemykání lokace.",
+  },
+];
+---
+
 <section class="faq" id="faq">
-    <div class="faq-bg"></div>
-    <h2 class="faq-title">FAQ</h2>
-    <div class="faq-table">
-        <div class="faq-item">
-            <p class="faq-name">1.</p>
-        </div>
-        <div class="faq-item">
-            <p class="faq-name">2.</p>
-        </div>
-        <div class="faq-item">
-            <p class="faq-name">3.</p>
-        </div>
-        <div class="faq-item">
-            <p class="faq-name">4.</p>
-        </div>
-        <div class="faq-item">
-            <p class="faq-name">5.</p>
-        </div>
-        <div class="faq-item">
-            <p class="faq-name">6.</p>
-        </div>
-        <div class="faq-item">
-            <p class="faq-name">7.</p>
-        </div>
-        <div class="faq-item">
-            <p class="faq-name">8.</p>
-        </div>
-        <div class="faq-item">
-            <p class="faq-name">9.</p>
-        </div>
-        <div class="faq-item">
-            <p class="faq-name">10.</p>
-        </div>
-    </div>
-    <img src="/bunkr.png" class="bunkr" />
+  <div class="faq-bg"></div>
+  <h2 class="faq-title">FAQ</h2>
+  <div class="faq-table">
+    {items.map((item, index) => (
+      <details class="faq-item">
+        <summary class="faq-summary">
+          <span class="faq-index">{String(index + 1).padStart(2, "0")}.</span>
+          <span class="faq-question">{item.question}</span>
+        </summary>
+        <p class="faq-answer">{item.answer}</p>
+      </details>
+    ))}
+  </div>
+  <img src="/bunkr.png" class="bunkr" alt="Decorative bunker" />
 </section>
 
 <style>
-    .faq{
-        width: 100vw;
-        height: 100vh;
-        margin: 0;
-        display: flex;
+  .faq {
+    width: 100vw;
+    min-height: 100svh;
+    margin: 0;
+    display: flex;
+    overflow: hidden;
+  }
+  .faq-bg {
+    position: absolute;
+    width: 100svw;
+    height: 100svh;
+    opacity: 0.02;
+    background: url("/bg.jpeg");
+    z-index: 0;
+    background-size: cover;
+  }
+  .faq-title {
+    font-size: 12rem;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+  }
+  .faq-table {
+    width: 70%;
+    max-height: 82svh;
+    display: flex;
+    margin: auto 40px;
+    border: 3px solid black;
+    background-color: #c00;
+    flex-direction: column;
+    overflow: auto;
+    position: relative;
+    z-index: 1;
+  }
+  .faq-item {
+    border-bottom: 1px solid black;
+  }
+  .faq-item:last-child {
+    border-bottom: 0;
+  }
+  .faq-summary {
+    list-style: none;
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 16px;
+    align-items: center;
+    cursor: pointer;
+    font-size: 1.45rem;
+  }
+  .faq-summary::-webkit-details-marker {
+    display: none;
+  }
+  .faq-item[open] .faq-summary,
+  .faq-summary:hover {
+    color: #c00;
+    background-color: #000;
+  }
+  .faq-index {
+    font-size: 2rem;
+  }
+  .faq-question {
+    font-size: 1.45rem;
+    line-height: 1.2;
+  }
+  .faq-answer {
+    margin: 0;
+    padding: 0 18px 18px 104px;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  .bunkr {
+    position: absolute;
+    z-index: -1;
+    bottom: -60px;
+    left: -70px;
+    width: 450px;
+    opacity: 1;
+    transform: scaleX(-1);
+  }
+  @media (max-width: 1024px) {
+    .faq-title {
+      font-size: 8rem;
     }
-    .faq-bg{
-        position: absolute;
-        width: 100svw;
-        height: 100svh;
-        opacity: 0.02;
-        background: url("/bg.jpeg");
-        z-index: 0; 
-        background-size: cover;
+    .faq-table {
+      width: 78%;
+      margin: auto 20px;
     }
-    .faq-title{
-        font-size: 12rem;
-        writing-mode: vertical-rl;
-        text-orientation: upright;
+  }
+  @media (max-width: 768px) {
+    .faq {
+      min-height: 100svh;
     }
-    .faq-table{
-        width: 70%;
-        height: 80%;
-        display: flex;
-        margin: auto 40px;
-        border: 3px solid black;
-        background-color: #c00;
-        flex-direction: column;
+    .faq-title {
+      font-size: 6rem;
     }
-    .faq-item{
-        max-width: 100%;
-        height: 100%;
-        padding: 8px 18px;
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1px solid black;
-        font-size: 2rem;
-        position: relative;
-        cursor: pointer;
+    .faq-table {
+      width: 72svw;
+      max-height: 82svh;
+      margin: 10px auto;
+      margin-left: -15px;
     }
-    .faq-item:hover{
-        color: #c00;
-        background-color: #000;
+    .faq-summary {
+      grid-template-columns: 48px 1fr;
+      gap: 10px;
+      padding: 12px;
     }
-    .faq-img{
-        max-width: 140px;
-        height: 100%;
+    .faq-index {
+      font-size: 1.2rem;
     }
-    .faq-name{
-        font-size: 2.6rem;
+    .faq-question {
+      font-size: 1rem;
     }
-    .faq-date{
-
+    .faq-answer {
+      padding: 0 12px 14px 70px;
+      font-size: 0.9rem;
     }
-    .faq-location{
-
+    .bunkr {
+      position: absolute;
+      z-index: -1;
+      bottom: 0;
+      left: -20px;
+      width: 150px;
+      opacity: 1;
+      transform: scaleX(-1);
     }
-    .bunkr{
-        position: absolute;
-        z-index: -1;
-        bottom: -60px;
-        left: -70px;
-        width: 450px;
-        opacity: 1;
-        transform: scaleX(-1);
-    }
-    @media (max-width: 768px) {
-        .faq-title{
-            font-size: 6rem;
-        }
-        .faq-table{
-            margin-left: -15px;
-            height: fit-content;
-        }
-        .bunkr{
-        position: absolute;
-        z-index: -1;
-        bottom: 0px;
-        left: -20px;
-        width: 150px;
-        opacity: 1;
-        transform: scaleX(-1);
-    }
-    }
+  }
 </style>

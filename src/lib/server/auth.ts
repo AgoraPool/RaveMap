@@ -1,16 +1,13 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { AppError } from "./errors";
 import { getEnv } from "./env";
 
+function hashSecret(value: string): Buffer {
+  return createHash("sha256").update(value, "utf-8").digest();
+}
+
 function safeEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a, "utf-8");
-  const right = Buffer.from(b, "utf-8");
-
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return timingSafeEqual(left, right);
+  return timingSafeEqual(hashSecret(a), hashSecret(b));
 }
 
 export function requireAdmin(request: Request): void {

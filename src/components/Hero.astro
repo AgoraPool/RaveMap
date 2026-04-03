@@ -1,5 +1,4 @@
 <section class="hero-section">
-    
     <div class="hero-bg"></div>
     <div class="hero-title">
         <h1 class="kam">KAM</h1>
@@ -8,8 +7,8 @@
     </div>
     <ul class="hero-nav">
         <li class="nav-item"><a href="#akce">AKCE</a></li>
-        <li class="nav-item"><a href="#nove">NOVÉ</a></li>
         <li class="nav-item"><a href="#faq">FAQ</a></li>
+        <li class="nav-item"><a href="/admin">ADMIN</a></li>
     </ul>
     <div class="techno">TECHNO</div>
     <div class="dnb">DNB</div>
@@ -84,6 +83,37 @@
         color: #c00;
         background-color: #000;
     }
+    .nav-item-admin a{
+        border: 3px solid #000;
+        display: inline-flex;
+    }
+    .admin-entry{
+        position: absolute;
+        z-index: 2;
+        right: 170px;
+        top: 110px;
+        display: grid;
+        gap: 6px;
+        width: 220px;
+        padding: 14px 16px;
+        border: 3px solid #000;
+        text-decoration: none;
+        color: #000;
+        background: rgba(255, 245, 214, 0.8);
+    }
+    .admin-entry:hover{
+        background: #000;
+        color: #c00;
+    }
+    .admin-entry-kicker{
+        font-size: 0.8rem;
+        letter-spacing: 0.18em;
+    }
+    .admin-entry-title{
+        font-size: 1.4rem;
+        font-family: var(--font-display);
+        line-height: 1;
+    }
     .techno{
         position: absolute;
         z-index: 1;
@@ -136,6 +166,11 @@
         .hero-nav{
             margin-left: 0;
         }
+        .admin-entry{
+            right: 24px;
+            top: 96px;
+            width: 180px;
+        }
     @media (max-width: 768px) {
         .bunkr{
             left: auto;
@@ -169,6 +204,20 @@
         .hero-nav{
             margin-left: -40px;
             line-height: 4.8rem;
+        }
+        .nav-item a{
+            font-size: 3.1rem;
+            padding: 0.6rem 1.4rem;
+        }
+        .admin-entry{
+            top: auto;
+            right: 12px;
+            bottom: 30px;
+            width: 150px;
+            padding: 10px 12px;
+        }
+        .admin-entry-title{
+            font-size: 1rem;
         }
     }
     }
