@@ -116,17 +116,6 @@ drizzle/
 - Security and database notes: `docs/database-hardening.md`
 - Admin workflow notes: `docs/admin-usage.md`
 
-## Runtime Notes
-
-This project is already deployed. The repository is meant to present the product, the architecture, and the implementation decisions rather than walk through local deployment.
-
-Sensitive runtime configuration is intentionally not committed. Production relies on private environment variables such as:
-
-- `DATABASE_URL`
-- `ADMIN_SECRET`
-- `ENCRYPTION_KEY`
-- `RATE_LIMIT_SECRET`
-
 ## Portfolio Framing
 
 RaveMap is a useful example of how I approach product engineering:
