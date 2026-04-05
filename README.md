@@ -1,11 +1,13 @@
-# RaveMap
+# Kam Na Rave
 
-RaveMap is a live product experiment for publishing underground events without exposing the exact location too early. It combines a public event feed with a gated unlock flow, so organizers can share the vibe, date, and rough meeting point publicly while keeping sensitive location details behind a code shared with attendees.
+Kam Na Rave is a live product experiment for publishing underground events without exposing the exact location too early. It combines a public event feed with a gated unlock flow, so organizers can share the vibe, date, and rough meeting point publicly while keeping sensitive location details behind a code shared with attendees.
 
 This repository is positioned as both:
 
 - a portfolio project focused on product thinking, backend safety, and shipping an opinionated niche experience
 - a real-world MVP exploring how privacy-aware event discovery could work in production
+
+![Home](public/screenshot-home.png)
 
 ## What The Product Does
 
@@ -17,7 +19,7 @@ This repository is positioned as both:
 
 ## Why It Is Interesting
 
-Most event platforms optimize for reach. RaveMap explores the opposite constraint: keeping events discoverable enough to build interest, but private enough to reduce unwanted exposure.
+Most event platforms optimize for reach. Kam Na Rave explores the opposite constraint: keeping events discoverable enough to build interest, but private enough to reduce unwanted exposure.
 
 That makes it a strong product experiment because it sits at the intersection of:
 
@@ -118,7 +120,7 @@ drizzle/
 
 ## Portfolio Framing
 
-RaveMap is a useful example of how I approach product engineering:
+Kam Na Rave is a useful example of how I approach product engineering:
 
 - start from a real user constraint, not just a generic CRUD app
 - shape the data model around trust boundaries
