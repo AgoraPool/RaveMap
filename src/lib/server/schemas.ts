@@ -158,7 +158,7 @@ const signedNostrEventSchema = z
     created_at: z.number().int().positive(),
     kind: z.number().int(),
     tags: z.array(nostrTagSchema).max(100),
-    content: z.string().max(5000),
+    content: z.string().max(4400),
     sig: z.string().regex(/^[0-9a-f]{128}$/),
   })
   .strict();

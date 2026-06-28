@@ -1,7 +1,7 @@
 ---
 import { getNostrEventRepository } from "../lib/server/nostr-repository";
 
-const { limit = 8 } = Astro.props as { limit?: number };
+const { limit = 80 } = Astro.props as { limit?: number };
 const list = await getNostrEventRepository().listPublishedEvents(limit);
 
 const formatter = new Intl.DateTimeFormat("cs-CZ", {
@@ -36,7 +36,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 
 <style>
   .akce {
-    width: 100vw;
+    width: 100%;
     min-height: 100svh;
     margin: 0;
     display: flex;
@@ -47,7 +47,8 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   }
   .akce-bg {
     position: absolute;
-    width: 100svw;
+    inset: 0;
+    width: 100%;
     height: 100svh;
     opacity: 0.02;
     background: url("/bg.jpeg");
@@ -82,6 +83,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     position: relative;
     z-index: 1;
     width: 70%;
+    min-width: 0;
     max-height: min(78svh, 760px);
     display: flex;
     flex-direction: column;
@@ -95,6 +97,8 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   }
   .akce-item {
     width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
     min-height: 80px;
     padding: 8px 18px;
     display: grid;
@@ -122,6 +126,13 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   }
   .akce-name {
     font-size: 1.7rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .akce-date,
+  .akce-location {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .akce-location {
     display: grid;
@@ -178,9 +189,19 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   @media (max-width: 768px) {
     .akce {
       min-height: 100svh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      align-items: stretch;
+      gap: 10px;
+      padding: 48px 10px 24px;
+      overflow: hidden;
     }
     .akce-title {
-      font-size: 5.2rem;
+      font-size: clamp(2.8rem, 18vw, 4.4rem);
+      writing-mode: horizontal-tb;
+      text-orientation: mixed;
+      line-height: 0.9;
+      padding: 0;
     }
     .submit-link {
       top: 10px;
@@ -189,11 +210,12 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       padding: 7px 8px;
     }
     .akce-table {
-      max-width: fit-content;
-      min-width: 70svw;
-      max-height: 82svh;
-      margin: 10px auto;
-      margin-left: -15px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      max-height: none;
+      margin: 0;
+      box-sizing: border-box;
     }
     .akce-item {
       grid-template-columns: 56px 1fr;
@@ -204,7 +226,6 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       padding: 10px 12px;
       gap: 4px 10px;
       font-size: 0.95rem;
-      margin-right: 8px;
     }
     .akce-item-no-image {
       grid-template-columns: 1fr;
