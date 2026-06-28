@@ -151,25 +151,43 @@ export const eventActionSchema = z
   .strict();
 
 const nostrTagSchema = z.array(z.string().max(2048)).min(1).max(8);
+const signedNostrEventSchema = z
+  .object({
+    id: z.string().regex(/^[0-9a-f]{64}$/),
+    pubkey: z.string().regex(/^[0-9a-f]{64}$/),
+    created_at: z.number().int().positive(),
+    kind: z.number().int(),
+    tags: z.array(nostrTagSchema).max(100),
+    content: z.string().max(5000),
+    sig: z.string().regex(/^[0-9a-f]{128}$/),
+  })
+  .strict();
 
 export const createCommentSchema = z
   .object({
     content: z.string().trim().min(1).max(1200),
     nickname: optionalTrimmedString(40),
-    signedEvent: z
-      .object({
-        id: z.string().regex(/^[0-9a-f]{64}$/),
-        pubkey: z.string().regex(/^[0-9a-f]{64}$/),
-        created_at: z.number().int().positive(),
-        kind: z.number().int(),
-        tags: z.array(nostrTagSchema).max(100),
-        content: z.string().max(1200),
-        sig: z.string().regex(/^[0-9a-f]{128}$/),
-      })
-      .optional(),
+    signedEvent: signedNostrEventSchema.optional(),
+  })
+  .strict();
+
+export const publicSubmitEventSchema = z
+  .object({
+    title: z.string().trim().min(3).max(180),
+    summary: z.string().trim().min(10).max(2000),
+    publicLocation: z.string().trim().min(2).max(180),
+    startsAt: z.string().trim().datetime({ offset: true }),
+    endAt: z.string().trim().datetime({ offset: true }).optional(),
+    coverImageUrl: optionalHttpUrlSchema,
+    externalUrl: optionalHttpUrlSchema,
+    genres: stringListSchema,
+    lineup: stringListSchema,
+    tags: stringListSchema,
+    signedEvent: signedNostrEventSchema.optional(),
   })
   .strict();
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type DeleteEventInput = z.infer<typeof deleteEventSchema>;
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
+export type PublicSubmitEventInput = z.infer<typeof publicSubmitEventSchema>;

@@ -12,6 +12,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 
 <section class="akce" id="akce">
   <div class="akce-bg"></div>
+  <a class="submit-link" href="/submit">Přidat akci</a>
   <h2 class="akce-title">AKCE</h2>
   <div class="akce-table">
     {list.length === 0 ? (
@@ -57,6 +58,25 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     font-size: 12rem;
     writing-mode: vertical-rl;
     text-orientation: upright;
+  }
+  .submit-link {
+    position: absolute;
+    z-index: 2;
+    top: 24px;
+    right: 24px;
+    border: 2px solid #000;
+    background: #fff6df;
+    color: #000;
+    padding: 9px 11px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+    font-weight: 900;
+  }
+  .submit-link:hover {
+    background: #000;
+    color: #c00;
   }
   .akce-table {
     position: relative;
@@ -161,6 +181,12 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     }
     .akce-title {
       font-size: 5.2rem;
+    }
+    .submit-link {
+      top: 10px;
+      right: 10px;
+      font-size: 0.7rem;
+      padding: 7px 8px;
     }
     .akce-table {
       max-width: fit-content;

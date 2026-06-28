@@ -12,8 +12,7 @@ const event = slugValid ? await repository.getPublishedEvent(slug) : null;
 if (!event) {
   Astro.response.status = 404;
 }
-const publisherPubkey = repository.getPublisherPubkey();
-const commentCoordinate = event ? `31923:${publisherPubkey}:${event.slug}` : "";
+const commentCoordinate = event ? `31923:${event.authorPubkey}:${event.slug}` : "";
 const comments = event ? await repository.listComments(event.slug).catch(() => []) : [];
 
 const formatter = new Intl.DateTimeFormat("cs-CZ", {

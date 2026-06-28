@@ -1,0 +1,411 @@
+---
+export const prerender = false;
+
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout bodyClass="submit-body">
+  <main class="submit-shell">
+    <div class="submit-bg"></div>
+    <a class="back-link" href="/akce">Zpět na akce</a>
+
+    <section class="submit-panel">
+      <div class="panel-head">
+        <div>
+          <p class="kicker">PUBLIC EVENT</p>
+          <h1>Přidat akci</h1>
+        </div>
+        <span id="submit-mode" class="mode-pill">App signed</span>
+      </div>
+
+      <form id="submit-form" class="submit-form">
+        <label class="title-field">
+          <span>Název</span>
+          <input id="title" name="title" type="text" minlength="3" maxlength="180" required />
+        </label>
+
+        <div class="field-row">
+          <label>
+            <span>Start</span>
+            <input id="startsAt" name="startsAt" type="datetime-local" required />
+          </label>
+          <label>
+            <span>Konec</span>
+            <input id="endAt" name="endAt" type="datetime-local" />
+          </label>
+        </div>
+
+        <label>
+          <span>Lokalita</span>
+          <input id="publicLocation" name="publicLocation" type="text" minlength="2" maxlength="180" required />
+        </label>
+
+        <label>
+          <span>Popis</span>
+          <textarea id="summary" name="summary" minlength="10" maxlength="2000" required></textarea>
+        </label>
+
+        <div class="field-row">
+          <label>
+            <span>Genres</span>
+            <input id="genres" name="genres" type="text" placeholder="tekno, freetekno" />
+          </label>
+          <label>
+            <span>Lineup</span>
+            <input id="lineup" name="lineup" type="text" placeholder="artist, crew" />
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label>
+            <span>Poster URL</span>
+            <input id="coverImageUrl" name="coverImageUrl" type="url" inputmode="url" placeholder="https://..." />
+          </label>
+          <label>
+            <span>Odkaz</span>
+            <input id="externalUrl" name="externalUrl" type="url" inputmode="url" placeholder="https://..." />
+          </label>
+        </div>
+
+        <label>
+          <span>Tagy</span>
+          <input id="tags" name="tags" type="text" placeholder="festival, crew, venue" />
+        </label>
+
+        <div class="action-row">
+          <button id="submit-event" type="submit">Publish event</button>
+          <button id="use-signer" type="button">Use my account</button>
+        </div>
+
+        <p id="submit-status" class="submit-status" role="status" aria-live="polite">Ready.</p>
+      </form>
+    </section>
+  </main>
+</Layout>
+
+<script>
+  const form = document.getElementById("submit-form");
+  const statusEl = document.getElementById("submit-status");
+  const modeEl = document.getElementById("submit-mode");
+  const signerButton = document.getElementById("use-signer");
+  const submitButton = document.getElementById("submit-event");
+  let signerMode = false;
+
+  function setStatus(message, tone = "neutral") {
+    if (!(statusEl instanceof HTMLElement)) return;
+    statusEl.textContent = message;
+    statusEl.dataset.tone = tone;
+  }
+
+  function listFromInput(value) {
+    return String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function toIsoFromLocal(value) {
+    if (!value) return undefined;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  }
+
+  function slugify(value) {
+    return String(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 72);
+  }
+
+  function slugFromPayload(payload) {
+    const date = payload.startsAt ? payload.startsAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    return `${slugify(payload.title) || "event"}-${date}`;
+  }
+
+  async function parseResponse(response) {
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error?.message || "Could not publish event.");
+    }
+    return payload.data;
+  }
+
+  function payloadFromForm() {
+    if (!(form instanceof HTMLFormElement)) throw new Error("Form is unavailable.");
+    const data = new FormData(form);
+    return {
+      title: String(data.get("title") || "").trim(),
+      summary: String(data.get("summary") || "").trim(),
+      publicLocation: String(data.get("publicLocation") || "").trim(),
+      startsAt: toIsoFromLocal(data.get("startsAt")),
+      endAt: toIsoFromLocal(data.get("endAt")),
+      coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
+      externalUrl: String(data.get("externalUrl") || "").trim() || undefined,
+      genres: listFromInput(data.get("genres")),
+      lineup: listFromInput(data.get("lineup")),
+      tags: listFromInput(data.get("tags")),
+    };
+  }
+
+  async function signedEventFromPayload(payload) {
+    const nostr = /** @type {any} */ (window).nostr;
+    if (!nostr?.signEvent) {
+      throw new Error("No browser signer found. Normal publishing still works.");
+    }
+
+    const slug = slugFromPayload(payload);
+    const tags = [
+      ["d", slug],
+      ["title", payload.title],
+      ["summary", payload.summary],
+      ["location", payload.publicLocation],
+      ["start", String(Math.floor(new Date(payload.startsAt).getTime() / 1000))],
+      ["access", "public"],
+      ["client", "RaveMap"],
+      ["submission", "public"],
+      ["t", "ravemap"],
+    ];
+    if (payload.endAt) tags.push(["end", String(Math.floor(new Date(payload.endAt).getTime() / 1000))]);
+    if (payload.coverImageUrl) tags.push(["image", payload.coverImageUrl]);
+    if (payload.externalUrl) tags.push(["external", payload.externalUrl], ["r", payload.externalUrl]);
+    for (const genre of payload.genres) tags.push(["genre", genre]);
+    for (const artist of payload.lineup) tags.push(["artist", artist]);
+    for (const tag of payload.tags) tags.push(["tag", tag], ["t", tag]);
+
+    return nostr.signEvent({
+      kind: 31923,
+      created_at: Math.floor(Date.now() / 1000),
+      tags,
+      content: payload.summary,
+    });
+  }
+
+  signerButton?.addEventListener("click", async () => {
+    try {
+      const nostr = /** @type {any} */ (window).nostr;
+      if (!nostr?.getPublicKey || !nostr?.signEvent) {
+        setStatus("No browser signer found. Normal publishing still works.", "warning");
+        return;
+      }
+
+      await nostr.getPublicKey();
+      signerMode = true;
+      if (modeEl instanceof HTMLElement) modeEl.textContent = "Your account";
+      setStatus("Publishing with your account.", "positive");
+    } catch {
+      setStatus("Could not connect to your account. Normal publishing still works.", "warning");
+    }
+  });
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+    setStatus("Publishing...", "warning");
+
+    try {
+      const payload = payloadFromForm();
+      const signedEvent = signerMode ? await signedEventFromPayload(payload) : undefined;
+      const response = await fetch("/api/events/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, signedEvent }),
+      });
+      const result = await parseResponse(response);
+      setStatus("Event published.", "positive");
+      window.location.href = `/akce/${result.slug}`;
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not publish event.", "danger");
+    } finally {
+      if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
+    }
+  });
+</script>
+
+<style>
+  :global(body.submit-body) {
+    scroll-snap-type: none;
+  }
+
+  :global(.grid-canvas) {
+    display: none;
+  }
+
+  .submit-shell {
+    position: relative;
+    min-height: 100vh;
+    padding: 28px 16px 64px;
+    box-sizing: border-box;
+  }
+
+  .submit-bg {
+    position: absolute;
+    inset: 0;
+    opacity: 0.04;
+    background: url("/bg.jpeg");
+    background-size: cover;
+    pointer-events: none;
+  }
+
+  .back-link,
+  .mode-pill {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    border: 2px solid #000;
+    background: #fff6df;
+    color: #000;
+    padding: 8px 10px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+    font-weight: 900;
+  }
+
+  .back-link:hover {
+    background: #000;
+    color: #c00;
+  }
+
+  .submit-panel {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 22px auto 0;
+    border: 3px solid #000;
+    background: rgba(255, 244, 221, 0.94);
+    box-shadow: 12px 12px 0 #000;
+    padding: 18px;
+  }
+
+  .panel-head,
+  .field-row,
+  .action-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .panel-head {
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 16px;
+  }
+
+  .kicker,
+  label span {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.76rem;
+    font-weight: 900;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(2.5rem, 8vw, 5rem);
+    line-height: 0.92;
+  }
+
+  .submit-form,
+  label {
+    display: grid;
+    gap: 7px;
+  }
+
+  .submit-form {
+    gap: 12px;
+  }
+
+  .field-row {
+    flex-wrap: wrap;
+  }
+
+  .field-row > label {
+    flex: 1 1 240px;
+  }
+
+  input,
+  textarea,
+  button {
+    border: 2px solid #000;
+    background: #fffef8;
+    color: #000;
+    padding: 10px;
+    font: inherit;
+    border-radius: 0;
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .title-field input {
+    font-size: 1.2rem;
+    font-weight: 900;
+  }
+
+  textarea {
+    min-height: 140px;
+    resize: vertical;
+  }
+
+  .action-row {
+    align-items: stretch;
+  }
+
+  button {
+    cursor: pointer;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  #submit-event {
+    background: #000;
+    color: #c00;
+  }
+
+  #use-signer {
+    background: #fffef8;
+  }
+
+  button:hover {
+    background: #c00;
+    color: #000;
+  }
+
+  button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .submit-status {
+    min-height: 22px;
+    margin: 0;
+    font-weight: 900;
+  }
+
+  .submit-status[data-tone="positive"] {
+    color: #087c2f;
+  }
+
+  .submit-status[data-tone="warning"] {
+    color: #8a5d00;
+  }
+
+  .submit-status[data-tone="danger"] {
+    color: #9b0000;
+  }
+
+  @media (max-width: 760px) {
+    .submit-panel {
+      padding: 14px;
+      box-shadow: 8px 8px 0 #000;
+    }
+
+    .panel-head,
+    .field-row,
+    .action-row {
+      flex-direction: column;
+    }
+  }
+</style>

@@ -26,6 +26,7 @@ import {
   type NostrFilter,
   type NostrUnsignedEvent,
   type PublicEventDto,
+  type PublicSubmitEventCommand,
   type RelayReadResult,
   type RelayWriteResult,
 } from "./nostr-types";
@@ -165,9 +166,10 @@ function publicFieldsFromCommand(input: CreateEventCommand, createdAt = new Date
   };
 }
 
-function publicDtoFromFields(fields: DraftBundle["public"], id: string): PublicEventDto {
+function publicDtoFromFields(fields: DraftBundle["public"], id: string, authorPubkey = ""): PublicEventDto {
   return {
     id,
+    authorPubkey,
     slug: fields.slug,
     title: fields.title,
     summary: fields.summary,
@@ -218,6 +220,7 @@ function parsePublicEvent(event: NostrEvent): PublicEventDto | null {
 
   return {
     id: event.id,
+    authorPubkey: event.pubkey,
     slug,
     title,
     summary: tagValue(event, "summary") || event.content,
@@ -241,6 +244,10 @@ function parsePublicEvent(event: NostrEvent): PublicEventDto | null {
     accessType: accessTypeFromTag(tagValue(event, "access")),
     createdAt: new Date(event.created_at * 1000),
   };
+}
+
+function isPublicSubmission(event: NostrEvent): boolean {
+  return tagValue(event, "client") === "RaveMap" && tagValue(event, "submission") === "public";
 }
 
 function publicEventTemplate(input: CreateEventCommand): NostrUnsignedEvent {
@@ -298,6 +305,14 @@ function publicEventTemplate(input: CreateEventCommand): NostrUnsignedEvent {
     created_at: nowSeconds(),
     tags,
     content: input.summary,
+  };
+}
+
+function publicSubmissionTemplate(input: CreateEventCommand): NostrUnsignedEvent {
+  const event = publicEventTemplate(input);
+  return {
+    ...event,
+    tags: [...event.tags, ["client", "RaveMap"], ["submission", "public"], ["t", "ravemap"]],
   };
 }
 
@@ -538,6 +553,27 @@ export class NostrEventRepository {
     return bySlug;
   }
 
+  private latestPublishedByD(events: NostrEvent[]): Map<string, NostrEvent> {
+    const bySlug = new Map<string, NostrEvent>();
+
+    for (const event of events) {
+      const slug = tagValue(event, "d");
+      const allowed = event.pubkey === this.pubkey || isPublicSubmission(event);
+      if (!slug || !allowed) {
+        continue;
+      }
+
+      const existing = bySlug.get(slug);
+      const existingIsApp = existing?.pubkey === this.pubkey;
+      const eventIsApp = event.pubkey === this.pubkey;
+      if (!existing || (eventIsApp && !existingIsApp) || (eventIsApp === existingIsApp && event.created_at > existing.created_at)) {
+        bySlug.set(slug, event);
+      }
+    }
+
+    return bySlug;
+  }
+
   async listTombstonedSlugs(slugs?: string[]): Promise<Set<string>> {
     const filters: NostrFilter[] = [
       {
@@ -559,10 +595,15 @@ export class NostrEventRepository {
         kinds: [PUBLIC_EVENT_KIND],
         limit: limit ?? 200,
       },
+      {
+        kinds: [PUBLIC_EVENT_KIND],
+        "#t": ["ravemap"],
+        limit: limit ?? 200,
+      },
     ]);
     const tombstones = await this.listTombstonedSlugs();
 
-    return [...this.latestByD(events).values()]
+    return [...this.latestPublishedByD(events).values()]
       .map(parsePublicEvent)
       .filter((event): event is PublicEventDto => Boolean(event && !tombstones.has(event.slug)))
       .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime())
@@ -582,9 +623,15 @@ export class NostrEventRepository {
         "#d": [slug],
         limit: 20,
       },
+      {
+        kinds: [PUBLIC_EVENT_KIND],
+        "#d": [slug],
+        "#t": ["ravemap"],
+        limit: 20,
+      },
     ]);
 
-    const latest = this.latestByD(events).get(slug);
+    const latest = this.latestPublishedByD(events).get(slug);
     return latest ? parsePublicEvent(latest) : null;
   }
 
@@ -598,7 +645,7 @@ export class NostrEventRepository {
       });
     }
 
-    const coordinate = eventCoordinate(this.pubkey, slug);
+    const coordinate = eventCoordinate(event.authorPubkey, slug);
     const events = await this.fetchEvents([
       {
         kinds: [COMMENT_EVENT_KIND],
@@ -615,7 +662,8 @@ export class NostrEventRepository {
   }
 
   async createAnonymousComment(input: CreateCommentCommand): Promise<{ id: string; writes: RelayWriteResult[] }> {
-    if (!(await this.getPublishedEvent(input.slug))) {
+    const event = await this.getPublishedEvent(input.slug);
+    if (!event) {
       throw new AppError("Event not found", {
         code: "EVENT_NOT_FOUND",
         status: 404,
@@ -628,10 +676,10 @@ export class NostrEventRepository {
       kind: COMMENT_EVENT_KIND,
       created_at: nowSeconds(),
       tags: [
-        ["A", eventCoordinate(this.pubkey, input.slug)],
+        ["A", eventCoordinate(event.authorPubkey, input.slug)],
         ["K", String(PUBLIC_EVENT_KIND)],
-        ["P", this.pubkey],
-        ["a", eventCoordinate(this.pubkey, input.slug)],
+        ["P", event.authorPubkey],
+        ["a", eventCoordinate(event.authorPubkey, input.slug)],
         ["ravemap-event", input.slug],
         ["anonymous", "true"],
         ["client", "RaveMap"],
@@ -647,7 +695,8 @@ export class NostrEventRepository {
   }
 
   async publishSignedComment(slug: string, event: NostrEvent): Promise<{ id: string; writes: RelayWriteResult[] }> {
-    if (!(await this.getPublishedEvent(slug))) {
+    const target = await this.getPublishedEvent(slug);
+    if (!target) {
       throw new AppError("Event not found", {
         code: "EVENT_NOT_FOUND",
         status: 404,
@@ -655,7 +704,7 @@ export class NostrEventRepository {
       });
     }
 
-    const coordinate = eventCoordinate(this.pubkey, slug);
+    const coordinate = eventCoordinate(target.authorPubkey, slug);
     if (
       event.kind !== COMMENT_EVENT_KIND ||
       event.content.trim().length === 0 ||
@@ -675,6 +724,70 @@ export class NostrEventRepository {
     return {
       id: event.id,
       writes: await this.publish(event),
+    };
+  }
+
+  async createPublicSubmission(input: CreateEventCommand): Promise<CreatedEventResult> {
+    const publicEvent = await this.signer.sign(publicSubmissionTemplate({ ...input, accessType: "public", isPublished: true }));
+    const publicWrites = await this.publish(publicEvent);
+
+    return {
+      id: publicEvent.id,
+      slug: input.slug,
+      writes: publicWrites,
+    };
+  }
+
+  async publishSignedPublicSubmission(input: PublicSubmitEventCommand): Promise<CreatedEventResult> {
+    const event = input.signedEvent;
+    if (!event) {
+      throw new AppError("Signed event is missing", {
+        code: "SIGNED_EVENT_MISSING",
+        status: 400,
+        expose: true,
+      });
+    }
+
+    const slug = tagValue(event, "d");
+    const startsAt = parseDateFromSeconds(tagValue(event, "start"));
+    const access = tagValue(event, "access");
+    const parsed = parsePublicEvent(event);
+    if (
+      event.kind !== PUBLIC_EVENT_KIND ||
+      !parsed ||
+      !slug ||
+      !/^[a-z0-9-]{3,120}$/.test(slug) ||
+      !startsAt ||
+      access !== "public" ||
+      tagValue(event, "client") !== "RaveMap" ||
+      tagValue(event, "submission") !== "public" ||
+      !tagValues(event, "t").includes("ravemap") ||
+      event.content.trim().length < 10 ||
+      event.content.length > 2000 ||
+      event.created_at > nowSeconds() + 10 * 60 ||
+      !verifyEvent(event)
+    ) {
+      throw new AppError("Signed event is invalid", {
+        code: "INVALID_SIGNED_EVENT",
+        status: 400,
+        expose: true,
+      });
+    }
+
+    const existing = await this.getPublishedEvent(slug);
+    if (existing && existing.authorPubkey !== event.pubkey) {
+      throw new AppError("This event URL is already taken", {
+        code: "SLUG_TAKEN",
+        status: 409,
+        expose: true,
+      });
+    }
+
+    const writes = await this.publish(event);
+    return {
+      id: event.id,
+      slug,
+      writes,
     };
   }
 
@@ -708,7 +821,7 @@ export class NostrEventRepository {
           coordinate: nostrCoordinate(DRAFT_EVENT_KIND, this.pubkey, slug),
         });
         return {
-          ...publicDtoFromFields(draft.public, event.id),
+          ...publicDtoFromFields(draft.public, event.id, event.pubkey),
           isPublished: false,
         };
       })

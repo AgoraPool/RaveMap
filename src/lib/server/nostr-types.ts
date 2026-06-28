@@ -32,6 +32,7 @@ export type NostrFilter = {
   "#d"?: string[];
   "#e"?: string[];
   "#a"?: string[];
+  "#t"?: string[];
 };
 
 export type EventAccessType = "public" | "gated";
@@ -45,6 +46,7 @@ export type EventSource = {
 
 export type PublicEventDto = {
   id: string;
+  authorPubkey: string;
   slug: string;
   title: string;
   summary: string;
@@ -60,6 +62,20 @@ export type PublicEventDto = {
   galleryImageUrls: string[];
   accessType: EventAccessType;
   createdAt: Date;
+};
+
+export type PublicSubmitEventCommand = {
+  title: string;
+  summary: string;
+  publicLocation: string;
+  startsAt: Date;
+  endAt?: Date;
+  coverImageUrl?: string;
+  externalUrl?: string;
+  genres?: string[];
+  lineup?: string[];
+  tags?: string[];
+  signedEvent?: NostrEvent;
 };
 
 export type AdminEventDto = PublicEventDto & {
