@@ -10,7 +10,6 @@ body {
   background-color: #c00;
   position: relative;
   scroll-behavior: smooth;
-  scroll-snap-type: y mandatory;
   overflow-x: clip;
   font-family: var(--font-body);
 }
@@ -42,19 +41,40 @@ li,
 a {
   font-family: var(--font-body);
 }
-section {
-  min-height: 100vh; /* each fills viewport */
-  scroll-snap-align: start; /* snap to top */
+body.home-body {
+  scroll-snap-type: y proximity;
+}
+
+body.home-body section {
+  min-height: 100vh;
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
   perspective: 1200px;
   transform-style: preserve-3d;
 }
-section {
+
+body.home-body section {
   transform-origin: left center;
   will-change: transform, opacity, filter;
-  transition:
-    transform 180ms linear,
-    opacity 120ms linear,
-    filter 120ms linear;
+  backface-visibility: hidden;
+  transition: filter 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    scroll-behavior: auto;
+  }
+
+  body.home-body {
+    scroll-snap-type: none;
+  }
+
+  body.home-body section {
+    transform: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
 }
 .grid-canvas {
   position: absolute;

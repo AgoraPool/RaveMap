@@ -1,0 +1,10 @@
+---
+export const prerender = false;
+
+import Akce from "../../components/Akce.astro";
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout bodyClass="event-list-body">
+  <Akce limit={80} />
+</Layout>

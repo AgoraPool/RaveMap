@@ -20,12 +20,44 @@ export type SecretPayload = {
   secretMapNote?: string;
 };
 
+export type SecretBundle = {
+  codeHash: string;
+  secret: SecretPayload;
+};
+
+export type DraftBundle = {
+  public: {
+    slug: string;
+    title: string;
+    summary: string;
+    publicLocation: string;
+    startsAt: string;
+    endAt?: string;
+    coverImageUrl?: string;
+    externalUrl?: string;
+    source?: {
+      name: string;
+      url: string;
+      id?: string;
+      contentHash?: string;
+    };
+    genres?: string[];
+    lineup?: string[];
+    tags?: string[];
+    galleryImageUrls?: string[];
+    accessType?: "public" | "gated";
+    createdAt: string;
+  };
+  codeHash?: string;
+  secret?: SecretPayload;
+};
+
 type SecretPayloadContext = {
-  eventId: string;
+  coordinate: string;
 };
 
 function getPayloadAad(context: SecretPayloadContext): Buffer {
-  return Buffer.from(JSON.stringify({ eventId: context.eventId }), "utf-8");
+  return Buffer.from(JSON.stringify({ coordinate: context.coordinate }), "utf-8");
 }
 
 function getEncryptionKey(): Buffer {
@@ -106,7 +138,7 @@ export async function verifyUnlockCode(code: string, storedHash: string): Promis
   return timingSafeEqual(computedHash, expectedHash);
 }
 
-export function encryptSecretPayload(payload: SecretPayload, context: SecretPayloadContext): string {
+function encryptJsonPayload(payload: unknown, context: SecretPayloadContext): string {
   const key = getEncryptionKey();
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
@@ -124,7 +156,7 @@ export function encryptSecretPayload(payload: SecretPayload, context: SecretPayl
   ].join(":");
 }
 
-export function decryptSecretPayload(serialized: string, context?: SecretPayloadContext): SecretPayload {
+function decryptJsonPayload<T>(serialized: string, context?: SecretPayloadContext): T {
   const [version, ivB64, authTagB64, ciphertextB64] = serialized.split(":");
 
   if ((!version || !/^v\d+$/.test(version)) || !ivB64 || !authTagB64 || !ciphertextB64) {
@@ -166,11 +198,27 @@ export function decryptSecretPayload(serialized: string, context?: SecretPayload
       throw new Error("Invalid decrypted payload object");
     }
 
-    return parsed as SecretPayload;
+    return parsed as T;
   } catch {
     throw new AppError("Encrypted payload could not be decrypted", {
       code: "ENCRYPTED_PAYLOAD_DECRYPT_FAILED",
       status: 500,
     });
   }
+}
+
+export function encryptSecretBundle(payload: SecretBundle, context: SecretPayloadContext): string {
+  return encryptJsonPayload(payload, context);
+}
+
+export function decryptSecretBundle(serialized: string, context: SecretPayloadContext): SecretBundle {
+  return decryptJsonPayload<SecretBundle>(serialized, context);
+}
+
+export function encryptDraftBundle(payload: DraftBundle, context: SecretPayloadContext): string {
+  return encryptJsonPayload(payload, context);
+}
+
+export function decryptDraftBundle(serialized: string, context: SecretPayloadContext): DraftBundle {
+  return decryptJsonPayload<DraftBundle>(serialized, context);
 }

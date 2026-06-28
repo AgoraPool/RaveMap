@@ -1,20 +1,8 @@
 ---
-import { asc, eq } from "drizzle-orm";
-import { db } from "../db/client";
-import { events } from "../db/schema";
+import { getNostrEventRepository } from "../lib/server/nostr-repository";
 
-const list = await db
-  .select({
-    slug: events.slug,
-    title: events.title,
-    startsAt: events.startsAt,
-    publicLocation: events.publicLocation,
-    coverImageUrl: events.coverImageUrl,
-  })
-  .from(events)
-  .where(eq(events.isPublished, true))
-  .orderBy(asc(events.startsAt))
-  .limit(8);
+const { limit = 8 } = Astro.props as { limit?: number };
+const list = await getNostrEventRepository().listPublishedEvents(limit);
 
 const formatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "medium",
@@ -30,11 +18,14 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       <div class="empty-state">Žádné akce zatím nejsou publikované.</div>
     ) : (
       list.map((item) => (
-        <a class="akce-item" href={`/akce/${item.slug}`}>
-          <img class="akce-img" src={item.coverImageUrl || "/bunkr.png"} alt={item.title} />
+        <a class:list={["akce-item", !item.coverImageUrl && "akce-item-no-image"]} href={`/akce/${item.slug}`}>
+          {item.coverImageUrl && <img class="akce-img" src={item.coverImageUrl} alt={item.title} />}
           <h3 class="akce-name">{item.title}</h3>
           <div class="akce-date">{formatter.format(item.startsAt)}</div>
-          <div class="akce-location">{item.publicLocation}</div>
+          <div class="akce-location">
+            <span>{item.publicLocation}</span>
+            <small>{item.accessType === "gated" ? "code gated" : item.source ? "import" : "public"}</small>
+          </div>
         </a>
       ))
     )}
@@ -46,9 +37,11 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   .akce {
     width: 100vw;
     min-height: 100svh;
-    height: 100svh;
     margin: 0;
     display: flex;
+    align-items: center;
+    padding: clamp(24px, 4svh, 48px) 0;
+    box-sizing: border-box;
     overflow: hidden;
   }
   .akce-bg {
@@ -69,7 +62,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     position: relative;
     z-index: 1;
     width: 70%;
-    height: 80%;
+    max-height: min(78svh, 760px);
     display: flex;
     flex-direction: column;
     margin: auto 40px;
@@ -77,6 +70,8 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     background-color: #c00;
     overflow: auto;
     overflow-x: clip;
+    overscroll-behavior: contain;
+    scrollbar-color: #000 #c00;
   }
   .akce-item {
     width: 100%;
@@ -93,6 +88,9 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     text-decoration: none;
     color: black;
   }
+  .akce-item-no-image {
+    grid-template-columns: 1.5fr 1fr 1fr;
+  }
   .akce-item:hover {
     color: #c00;
     background-color: #000;
@@ -104,6 +102,18 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   }
   .akce-name {
     font-size: 1.7rem;
+  }
+  .akce-location {
+    display: grid;
+    gap: 3px;
+  }
+  .akce-location small {
+    width: fit-content;
+    border: 1px solid currentColor;
+    padding: 2px 5px;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    font-weight: 700;
   }
   .empty-state {
     padding: 24px;
@@ -130,6 +140,9 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       grid-template-columns: 80px 1.2fr 1fr;
       gap: 10px;
     }
+    .akce-item-no-image {
+      grid-template-columns: 1.2fr 1fr;
+    }
     .akce-location {
       display: none;
     }
@@ -145,7 +158,6 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   @media (max-width: 768px) {
     .akce {
       min-height: 100svh;
-      height: 100svh;
     }
     .akce-title {
       font-size: 5.2rem;
@@ -153,7 +165,6 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     .akce-table {
       max-width: fit-content;
       min-width: 70svw;
-      height: auto;
       max-height: 82svh;
       margin: 10px auto;
       margin-left: -15px;
@@ -168,6 +179,12 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       gap: 4px 10px;
       font-size: 0.95rem;
       margin-right: 8px;
+    }
+    .akce-item-no-image {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "name"
+        "date";
     }
     .akce-img {
       grid-area: img;

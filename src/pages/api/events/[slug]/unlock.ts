@@ -1,14 +1,12 @@
 import type { APIRoute } from "astro";
-import { and, eq } from "drizzle-orm";
-import { db } from "../../../../db/client";
-import { eventSecrets, events } from "../../../../db/schema";
-import { decryptSecretPayload, verifyUnlockCode } from "../../../../lib/server/crypto";
+import { z } from "zod";
+import { verifyUnlockCode } from "../../../../lib/server/crypto";
 import { AppError } from "../../../../lib/server/errors";
 import { jsonOk, withApiErrorHandling } from "../../../../lib/server/http";
+import { getNostrEventRepository } from "../../../../lib/server/nostr-repository";
 import { getClientIp, hashIpAddress } from "../../../../lib/server/request";
 import { clearUnlockFailures, enforceUnlockRateLimit, recordUnlockFailure } from "../../../../lib/server/rate-limit";
 import { parseJsonBody } from "../../../../lib/server/validation";
-import { z } from "zod";
 
 const unlockSchema = z.object({
   unlockCode: z.string().trim().min(1).max(128),
@@ -26,7 +24,6 @@ export const POST: APIRoute = async ({ params, request }) =>
     }
 
     const { unlockCode } = await parseJsonBody(request, unlockSchema);
-
     const clientIp = getClientIp(request);
     const ipHash = hashIpAddress(clientIp);
 
@@ -51,19 +48,9 @@ export const POST: APIRoute = async ({ params, request }) =>
       );
     }
 
-    const rows = await db
-      .select({
-        eventId: events.id,
-        codeHash: eventSecrets.codeHash,
-        encryptedPayload: eventSecrets.encryptedPayload,
-      })
-      .from(eventSecrets)
-      .innerJoin(events, eq(eventSecrets.eventId, events.id))
-      .where(and(eq(events.slug, slug), eq(events.isPublished, true)))
-      .limit(1);
-
-    const row = rows[0];
-    if (!row) {
+    const event = await getNostrEventRepository().getPublishedEvent(slug);
+    const secretBundle = event ? await getNostrEventRepository().getSecretBundle(slug) : null;
+    if (!event || !secretBundle) {
       throw new AppError("Event not found", {
         code: "EVENT_NOT_FOUND",
         status: 404,
@@ -71,7 +58,7 @@ export const POST: APIRoute = async ({ params, request }) =>
       });
     }
 
-    const isValidCode = await verifyUnlockCode(unlockCode, row.codeHash);
+    const isValidCode = await verifyUnlockCode(unlockCode, secretBundle.codeHash);
     if (!isValidCode) {
       await recordUnlockFailure(slug, ipHash);
       throw new AppError("Unlock code is invalid", {
@@ -83,13 +70,11 @@ export const POST: APIRoute = async ({ params, request }) =>
 
     await clearUnlockFailures(slug, ipHash);
 
-    const secret = decryptSecretPayload(row.encryptedPayload, { eventId: row.eventId });
-
     return jsonOk({
-      secretInfo: secret.secretInfo,
-      secretLocationName: secret.secretLocationName,
-      secretLatitude: secret.secretLatitude,
-      secretLongitude: secret.secretLongitude,
-      secretMapNote: secret.secretMapNote,
+      secretInfo: secretBundle.secret.secretInfo,
+      secretLocationName: secretBundle.secret.secretLocationName,
+      secretLatitude: secretBundle.secret.secretLatitude,
+      secretLongitude: secretBundle.secret.secretLongitude,
+      secretMapNote: secretBundle.secret.secretMapNote,
     });
   });

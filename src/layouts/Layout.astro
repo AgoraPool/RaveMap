@@ -3,10 +3,11 @@ import "../styles/global.css";
 
 const { bodyClass = "" } = Astro.props;
 const showGridCanvas = !bodyClass.split(/\s+/).includes("admin-body");
+const htmlClass = bodyClass.split(/\s+/).includes("admin-body") ? "admin-html" : "";
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" class={htmlClass}>
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
@@ -55,11 +56,17 @@ const showGridCanvas = !bodyClass.split(/\s+/).includes("admin-body");
 {
 	showGridCanvas && (
 		<script>
-			const sections = [...document.querySelectorAll("section")];
+			const sections = [...document.querySelectorAll("body.home-body section")];
 			const mobileQuery = window.matchMedia("(max-width: 768px)");
+			const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+			let frame = 0;
 
 			function clamp(v, a, b) {
 			  return Math.max(a, Math.min(b, v));
+			}
+
+			function easeOutCubic(v) {
+			  return 1 - Math.pow(1 - v, 3);
 			}
 
 			function resetSectionEffects() {
@@ -71,7 +78,9 @@ const showGridCanvas = !bodyClass.split(/\s+/).includes("admin-body");
 			}
 
 			function update() {
-			  if (mobileQuery.matches) {
+			  frame = 0;
+
+			  if (mobileQuery.matches || reducedMotionQuery.matches || sections.length === 0) {
 			    resetSectionEffects();
 			    return;
 			  }
@@ -82,24 +91,36 @@ const showGridCanvas = !bodyClass.split(/\s+/).includes("admin-body");
 			  for (const s of sections) {
 			    const r = s.getBoundingClientRect();
 			    const sc = r.top + r.height / 2;
-			    const t = clamp((sc - vc) / vh, -1, 1);
+			    const t = clamp((sc - vc) / Math.max(vh * 0.92, 1), -1, 1);
+			    const distance = Math.abs(t);
+			    const eased = easeOutCubic(distance);
 
-			    const rotY = t * 180;
-			    const rotX = -t * 8;
-			    const z = (1 - Math.abs(t)) * 180;
-			    const scale = 1 - Math.abs(t) * 0.12;
-			    const opacity = 1 - Math.abs(t) * 0.35;
-			    const blur = Math.abs(t) * 3;
+			    const rotY = -t * 14;
+			    const rotX = t * 2.5;
+			    const z = -eased * 90;
+			    const y = -t * 18;
+			    const scale = 1 - eased * 0.045;
+			    const opacity = 1 - eased * 0.16;
+			    const blur = eased * 0.9;
 
-			    s.style.transform = `translateZ(${z}px) rotateY(${rotY}deg) rotateX(${rotX}deg) scale(${scale})`;
+			    s.style.transform = `translate3d(0, ${y}px, ${z}px) rotateY(${rotY}deg) rotateX(${rotX}deg) scale(${scale})`;
 			    s.style.opacity = opacity;
 			    s.style.filter = `blur(${blur}px)`;
 			  }
 			}
 
-			window.addEventListener("scroll", () => requestAnimationFrame(update), { passive: true });
-			window.addEventListener("resize", update);
-			mobileQuery.addEventListener("change", update);
+			function scheduleUpdate() {
+			  if (frame) {
+			    return;
+			  }
+
+			  frame = requestAnimationFrame(update);
+			}
+
+			window.addEventListener("scroll", scheduleUpdate, { passive: true });
+			window.addEventListener("resize", scheduleUpdate);
+			mobileQuery.addEventListener("change", scheduleUpdate);
+			reducedMotionQuery.addEventListener("change", scheduleUpdate);
 			update();
 		</script>
 	)

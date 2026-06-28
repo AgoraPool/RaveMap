@@ -1,25 +1,20 @@
 import type { APIRoute } from "astro";
-import { desc, eq } from "drizzle-orm";
-import { db } from "../../../db/client";
-import { auditLogs, eventSecrets, events } from "../../../db/schema";
 import { requireAdmin } from "../../../lib/server/auth";
-import { encryptSecretPayload, hashUnlockCode } from "../../../lib/server/crypto";
 import { AppError } from "../../../lib/server/errors";
 import { jsonOk, withApiErrorHandling } from "../../../lib/server/http";
-import { createEventSchema, deleteEventSchema } from "../../../lib/server/schemas";
-import { slugify, randomSlugSuffix } from "../../../lib/server/slug";
+import { getNostrEventRepository } from "../../../lib/server/nostr-repository";
+import { createEventSchema, deleteEventSchema, eventActionSchema } from "../../../lib/server/schemas";
+import { randomSlugSuffix, slugify } from "../../../lib/server/slug";
 import { parseJsonBody } from "../../../lib/server/validation";
 
-function isPostgresLikeError(error: unknown): error is { code?: string; message?: string; detail?: string } {
-  return typeof error === "object" && error !== null && ("code" in error || "message" in error);
-}
-
 async function createUniqueSlug(base: string): Promise<string> {
+  const repository = getNostrEventRepository();
+
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const candidate = attempt === 0 ? base : `${base}-${randomSlugSuffix(6)}`;
-    const existing = await db.select({ id: events.id }).from(events).where(eq(events.slug, candidate)).limit(1);
+    const exists = await repository.slugExists(candidate);
 
-    if (existing.length === 0) {
+    if (!exists) {
       return candidate;
     }
   }
@@ -31,54 +26,12 @@ async function createUniqueSlug(base: string): Promise<string> {
   });
 }
 
-function throwMappedDatabaseError(action: "GET" | "POST" | "DELETE", error: unknown): never {
-  if (import.meta.env.DEV) {
-    console.error(`${action} /api/admin/events failed`, error);
-  }
-
-  if (error instanceof AppError) {
-    throw error;
-  }
-
-  if (isPostgresLikeError(error)) {
-    const dbCode = error.code ?? "DB_ERROR";
-    throw new AppError(
-      import.meta.env.DEV
-        ? `Database error (${dbCode}): ${error.message ?? "unknown"}`
-        : "Database operation failed",
-      {
-        code: dbCode,
-        status: 500,
-        expose: import.meta.env.DEV,
-      },
-    );
-  }
-
-  throw error;
-}
-
 export const GET: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
     requireAdmin(request);
 
-    try {
-      const list = await db
-        .select({
-          id: events.id,
-          slug: events.slug,
-          title: events.title,
-          publicLocation: events.publicLocation,
-          startsAt: events.startsAt,
-          isPublished: events.isPublished,
-          createdAt: events.createdAt,
-        })
-        .from(events)
-        .orderBy(desc(events.startsAt), desc(events.createdAt));
-
-      return jsonOk({ events: list });
-    } catch (error) {
-      throwMappedDatabaseError("GET", error);
-    }
+    const events = await getNostrEventRepository().listAdminEvents();
+    return jsonOk({ events });
   });
 
 export const POST: APIRoute = async ({ request }) =>
@@ -86,7 +39,6 @@ export const POST: APIRoute = async ({ request }) =>
     requireAdmin(request);
 
     const input = await parseJsonBody(request, createEventSchema);
-
     const startsAt = new Date(input.startsAt);
     if (Number.isNaN(startsAt.getTime())) {
       throw new AppError("Event start date is invalid", {
@@ -96,67 +48,45 @@ export const POST: APIRoute = async ({ request }) =>
       });
     }
 
-    const baseSlug = input.slug ?? `${slugify(input.title)}-${startsAt.toISOString().slice(0, 10)}`;
-    const slug = await createUniqueSlug(baseSlug);
-
-    let created;
-    try {
-      created = await db.transaction(async (tx) => {
-        const codeHash = await hashUnlockCode(input.unlockCode);
-
-        const insertedEvent = await tx
-          .insert(events)
-          .values({
-            slug,
-            title: input.title,
-            summary: input.summary,
-            publicLocation: input.publicLocation,
-            startsAt,
-            coverImageUrl: input.coverImageUrl,
-            isPublished: input.isPublished ?? true,
-          })
-          .returning({ id: events.id, slug: events.slug });
-
-        const event = insertedEvent[0];
-        if (!event) {
-          throw new AppError("Event creation failed", { code: "EVENT_CREATE_FAILED", status: 500 });
-        }
-
-        const encryptedPayload = encryptSecretPayload(
-          {
-            secretInfo: input.secretInfo,
-            secretLocationName: input.secretLocationName,
-            secretLatitude: input.secretLatitude,
-            secretLongitude: input.secretLongitude,
-            secretMapNote: input.secretMapNote,
-          },
-          { eventId: event.id },
-        );
-
-        await tx.insert(eventSecrets).values({
-          eventId: event.id,
-          codeHash,
-          codeHashAlgo: "scrypt",
-          encryptedPayload,
-          encryptionVersion: 2,
-        });
-
-        await tx.insert(auditLogs).values({
-          actor: "admin",
-          action: "event.create",
-          entityType: "event",
-          entityId: event.id,
-          metadata: {
-            slug: event.slug,
-            title: input.title,
-          },
-        });
-
-        return event;
+    const endAt = input.endAt ? new Date(input.endAt) : undefined;
+    if (endAt && Number.isNaN(endAt.getTime())) {
+      throw new AppError("Event end date is invalid", {
+        code: "INVALID_END_DATE",
+        status: 400,
+        expose: true,
       });
-    } catch (error) {
-      throwMappedDatabaseError("POST", error);
     }
+
+    const slug = input.slug ?? (await createUniqueSlug(`${slugify(input.title)}-${startsAt.toISOString().slice(0, 10)}`));
+    const accessType = input.accessType ?? (input.unlockCode ? "gated" : "public");
+    const created = await getNostrEventRepository().createEvent({
+      slug,
+      title: input.title,
+      summary: input.summary,
+      publicLocation: input.publicLocation,
+      startsAt,
+      endAt,
+      coverImageUrl: input.coverImageUrl,
+      externalUrl: input.externalUrl,
+      source: input.sourceUrl
+        ? {
+            name: input.sourceName || "Imported",
+            url: input.sourceUrl,
+          }
+        : undefined,
+      genres: input.genres,
+      lineup: input.lineup,
+      tags: input.tags,
+      galleryImageUrls: input.galleryImageUrls.filter((url): url is string => Boolean(url)),
+      accessType,
+      isPublished: input.isPublished ?? true,
+      unlockCode: input.unlockCode,
+      secretInfo: input.secretInfo,
+      secretLocationName: input.secretLocationName,
+      secretLatitude: input.secretLatitude,
+      secretLongitude: input.secretLongitude,
+      secretMapNote: input.secretMapNote,
+    });
 
     return jsonOk(
       {
@@ -167,66 +97,35 @@ export const POST: APIRoute = async ({ request }) =>
     );
   });
 
+export const PATCH: APIRoute = async ({ request }) =>
+  withApiErrorHandling(async () => {
+    requireAdmin(request);
+
+    const input = await parseJsonBody(request, eventActionSchema);
+    if (input.action !== "publish") {
+      throw new AppError("Unsupported event action", {
+        code: "UNSUPPORTED_ACTION",
+        status: 400,
+        expose: true,
+      });
+    }
+
+    const published = await getNostrEventRepository().publishDraft(input.slug);
+    return jsonOk({
+      id: published.id,
+      slug: published.slug,
+    });
+  });
+
 export const DELETE: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
     requireAdmin(request);
 
     const input = await parseJsonBody(request, deleteEventSchema);
+    const deleted = await getNostrEventRepository().deleteEvent(input.slug);
 
-    try {
-      const deleted = await db.transaction(async (tx) => {
-        const existing = await tx
-          .select({
-            id: events.id,
-            slug: events.slug,
-            title: events.title,
-          })
-          .from(events)
-          .where(eq(events.slug, input.slug))
-          .limit(1);
-
-        const event = existing[0];
-        if (!event) {
-          throw new AppError("Event not found", {
-            code: "EVENT_NOT_FOUND",
-            status: 404,
-            expose: true,
-          });
-        }
-
-        const removedRows = await tx.delete(events).where(eq(events.id, event.id)).returning({
-          id: events.id,
-          slug: events.slug,
-          title: events.title,
-        });
-
-        const removed = removedRows[0];
-        if (!removed) {
-          throw new AppError("Event deletion failed", {
-            code: "EVENT_DELETE_FAILED",
-            status: 500,
-          });
-        }
-
-        await tx.insert(auditLogs).values({
-          actor: "admin",
-          action: "event.delete",
-          entityType: "event",
-          entityId: removed.id,
-          metadata: {
-            slug: removed.slug,
-            title: removed.title,
-          },
-        });
-
-        return removed;
-      });
-
-      return jsonOk({
-        id: deleted.id,
-        slug: deleted.slug,
-      });
-    } catch (error) {
-      throwMappedDatabaseError("DELETE", error);
-    }
+    return jsonOk({
+      id: deleted.id,
+      slug: deleted.slug,
+    });
   });

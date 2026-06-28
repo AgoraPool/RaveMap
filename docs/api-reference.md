@@ -1,68 +1,53 @@
 # API Reference
 
-All responses are JSON.
-
-## Common Success Format
+All responses use:
 
 ```json
-{
-  "ok": true,
-  "data": {}
-}
+{ "ok": true, "data": {} }
 ```
 
-## Common Error Format
+Errors use:
 
 ```json
-{
-  "ok": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Safe message"
-  }
-}
+{ "ok": false, "error": { "code": "ERROR_CODE", "message": "Safe message" } }
 ```
+
+## Admin Auth
+
+Admin endpoints require one of:
+
+- `x-admin-secret: <ADMIN_SECRET>`
+- `Authorization: Bearer <ADMIN_SECRET>`
 
 ## `GET /api/admin/events`
 
-Return all events for admin management.
+Returns live events and unpublished drafts.
 
-Authentication:
-
-- Header `x-admin-secret: <ADMIN_SECRET>`
-- or `Authorization: Bearer <ADMIN_SECRET>`
-
-Success `200`:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "events": [
-      {
-        "id": "uuid",
-        "slug": "warehouse-night-2026-03-14",
-        "title": "Warehouse Night",
-        "publicLocation": "Brno",
-        "startsAt": "2026-03-14T20:00:00.000Z",
-        "isPublished": true,
-        "createdAt": "2026-03-01T17:12:00.000Z"
-      }
-    ]
-  }
-}
-```
+Each event includes `slug`, `title`, `summary`, `publicLocation`, `startsAt`, optional `endAt`, optional `coverImageUrl`, optional `externalUrl`, optional `source`, `genres`, `lineup`, `accessType`, `isPublished`, and `createdAt`.
 
 ## `POST /api/admin/events`
 
-Create a new event.
+Creates or replaces the latest event/draft for a slug.
 
-Authentication:
+Public-only example:
 
-- Header `x-admin-secret: <ADMIN_SECRET>`
-- or `Authorization: Bearer <ADMIN_SECRET>`
+```json
+{
+  "title": "Free Tekno Night",
+  "summary": "Public calendar info",
+  "publicLocation": "Czech Republic",
+  "startsAt": "2026-03-14T21:00:00+01:00",
+  "accessType": "public",
+  "isPublished": false,
+  "externalUrl": "https://example.com/event",
+  "sourceName": "Jiri Petrak freetekno calendar",
+  "sourceUrl": "https://example.com/event",
+  "genres": ["tekno", "freetekno"],
+  "lineup": ["Crew"]
+}
+```
 
-Request body:
+Code-gated example:
 
 ```json
 {
@@ -70,7 +55,7 @@ Request body:
   "summary": "Public event info",
   "publicLocation": "Brno",
   "startsAt": "2026-03-14T21:00:00+01:00",
-  "coverImageUrl": "https://example.com/cover.jpg",
+  "accessType": "gated",
   "isPublished": true,
   "unlockCode": "my-strong-code",
   "secretInfo": "Secret organizer instructions",
@@ -81,166 +66,61 @@ Request body:
 }
 ```
 
-Notes:
+## `PATCH /api/admin/events`
 
-- `coverImageUrl` is optional, but if provided it must use `http` or `https`
-- unknown request fields are rejected
+Publishes a draft.
+
+```json
+{
+  "slug": "free-tekno-night-2026-03-14",
+  "action": "publish"
+}
+```
 
 ## `DELETE /api/admin/events`
 
-Delete an event and its secret payload. Event secrets are removed through DB cascade rules.
-
-Authentication:
-
-- Header `x-admin-secret: <ADMIN_SECRET>`
-- or `Authorization: Bearer <ADMIN_SECRET>`
-
-Request body:
+Writes a tombstone and best-effort Nostr delete request.
 
 ```json
 {
-  "slug": "warehouse-night-2026-03-14",
-  "confirmSlug": "warehouse-night-2026-03-14"
-}
-```
-
-Success `200`:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "uuid",
-    "slug": "warehouse-night-2026-03-14"
-  }
-}
-```
-
-Success `201`:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "uuid",
-    "slug": "warehouse-night-2026-03-14"
-  }
+  "slug": "free-tekno-night-2026-03-14",
+  "confirmSlug": "free-tekno-night-2026-03-14"
 }
 ```
 
 ## `GET /api/admin/diagnostics`
 
-Admin-only diagnostic endpoint for DB health checks.
+Returns relay diagnostics, publisher pubkey, latest event summary, and write quorum configuration.
 
-Authentication:
+## `GET /api/admin/imports/jiripetrak/preview`
 
-- same as `POST /api/admin/events`
+Fetches `MIRROR_SOURCE_URL`, parses source events, and returns normalized import candidates without writing to relays.
 
-Success `200` (shape abbreviated):
+## `POST /api/admin/imports/jiripetrak/sync`
 
-```json
-{
-  "ok": true,
-  "data": {
-    "checks": {
-      "identity": [],
-      "rls": [],
-      "eventsSelect": { "ok": true, "rows": 0 },
-      "auditInsert": { "ok": true },
-      "auditCleanup": { "ok": true }
-    }
-  }
-}
-```
+Fetches source events and writes review drafts. Existing imported events are matched by `sourceUrl` and replaced under the same slug.
+
+## `POST /api/mirror/jiripetrak/sync`
+
+Scheduler-facing sync endpoint. Requires:
+
+- `x-mirror-sync-secret: <MIRROR_SYNC_SECRET>`
 
 ## `GET /api/events`
 
-Returns published events list.
-
-Success `200`:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "events": [
-      {
-        "slug": "warehouse-night-2026-03-14",
-        "title": "Warehouse Night",
-        "summary": "Public event info",
-        "publicLocation": "Brno",
-        "startsAt": "2026-03-14T20:00:00.000Z",
-        "coverImageUrl": "https://example.com/cover.jpg"
-      }
-    ]
-  }
-}
-```
+Returns published public events.
 
 ## `GET /api/events/[slug]`
 
-Returns one published event by slug.
-
-Success `200`:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "event": {
-      "slug": "warehouse-night-2026-03-14",
-      "title": "Warehouse Night",
-      "summary": "Public event info",
-      "publicLocation": "Brno",
-      "startsAt": "2026-03-14T20:00:00.000Z",
-      "coverImageUrl": "https://example.com/cover.jpg"
-    }
-  }
-}
-```
-
-Possible errors:
-
-- `400 INVALID_SLUG`
-- `404 EVENT_NOT_FOUND`
+Returns one published public event.
 
 ## `POST /api/events/[slug]/unlock`
 
-Verify unlock code and return decrypted secret payload.
-
-Request body:
-
-```json
-{
-  "unlockCode": "my-strong-code"
-}
-```
-
-Success `200`:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "secretInfo": "Secret organizer instructions",
-    "secretLocationName": "Industrial Hall",
-    "secretLatitude": 49.1951,
-    "secretLongitude": 16.6068,
-    "secretMapNote": "Use side entrance"
-  }
-}
-```
+Only applies to `accessType: "gated"` events. Verifies the unlock code and returns decrypted secret payload.
 
 Possible errors:
 
 - `400 INVALID_SLUG`
 - `401 INVALID_UNLOCK_CODE`
 - `404 EVENT_NOT_FOUND`
-- `429 TOO_MANY_ATTEMPTS` with `Retry-After` header
-
-## Rate-limit behavior (`unlock` endpoint)
-
-- Window: 15 minutes
-- Max failures in window: 5
-- Block duration after threshold: 30 minutes
-- Tracking key: (`event_slug`, hashed client IP)
+- `429 TOO_MANY_ATTEMPTS`

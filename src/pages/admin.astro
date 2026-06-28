@@ -5,322 +5,332 @@ import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout bodyClass="admin-body">
-  <div class="admin-page">
-    <header class="admin-header">
-      <div class="hero-card intro-card">
-        <p class="eyebrow">Admin workspace</p>
-        <h1>RaveMap control room</h1>
-        <div class="hero-tags">
-          <span class="hero-tag">UNLOCK</span>
-          <span class="hero-tag">CREATE</span>
-          <span class="hero-tag">MANAGE</span>
-        </div>
+  <main class="admin-shell">
+    <section id="access-gate" class="access-gate">
+      <div class="gate-card">
+        <p class="kicker">Admin access</p>
+        <h1>RaveMap Control</h1>
+        <p class="gate-copy">Nostr event operations stay hidden until the admin passcode is verified.</p>
+
+        <form id="access-form" class="access-form">
+          <input id="adminSecret" name="adminSecret" type="password" minlength="24" placeholder="Admin passcode" required />
+          <button id="unlock-button" type="submit">Unlock</button>
+        </form>
+
+        <p id="auth-status" class="status-line neutral">Enter the admin passcode to open the cockpit.</p>
       </div>
+    </section>
 
-      <div class="hero-card support-card">
-        <p class="eyebrow">Admin</p>
-        <h2>Ready when you are</h2>
-      </div>
-    </header>
-
-    <div class="access-grid">
-      <form id="access-form" class="panel access-panel">
-        <div class="panel-head">
-          <div>
-            <p class="panel-kicker">Access</p>
-            <h2>Odemknout admin</h2>
-          </div>
-          <span id="auth-badge" class="status-badge neutral">Locked</span>
+    <section id="workspace" class="workspace" hidden>
+      <header class="admin-topbar">
+        <div>
+          <p class="kicker">Nostr cockpit</p>
+          <h1>RaveMap Admin</h1>
         </div>
+        <p class="topbar-note">Signed relay publishing. Public-only and code-gated events.</p>
+      </header>
 
-        <label class="field" for="adminSecret">
-          <span class="field-label">Admin secret</span>
-          <div class="secret-input-row">
-            <input
-              id="adminSecret"
-              name="adminSecret"
-              type="password"
-              minlength="24"
-              required
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="Vlož ADMIN_SECRET"
-            />
-            <button id="toggle-secret" type="button" class="ghost-button compact-button">Zobrazit</button>
-          </div>
-        </label>
-
-        <div class="action-row">
-          <button id="unlock-button" type="submit" class="primary-button">Ověřit a načíst</button>
-          <button id="clear-secret" type="button" class="ghost-button compact-button">Vymazat</button>
+      <section class="status-grid">
+        <div class="metric">
+          <span>Auth</span>
+          <strong id="auth-state">Locked</strong>
         </div>
-
-        <p id="auth-status" class="status-line neutral">Workspace čeká na ověření secretu.</p>
-      </form>
-
-      <aside class="panel summary-panel">
-        <div class="panel-head">
-          <div>
-            <p class="panel-kicker">Live summary</p>
-            <h2>Co právě chystáš</h2>
-          </div>
+        <div class="metric">
+          <span>Events</span>
+          <strong id="event-count">0</strong>
         </div>
-
-        <div class="summary-grid">
-          <div class="summary-item">
-            <span class="summary-label">Přístup</span>
-            <strong id="summary-auth">Locked</strong>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Publikace</span>
-            <strong id="summary-publish">Publish</strong>
-          </div>
-          <div class="summary-item summary-wide">
-            <span class="summary-label">Název</span>
-            <strong id="summary-title">Nová akce bez názvu</strong>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Start</span>
-            <strong id="summary-date">Nevyplněno</strong>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Public místo</span>
-            <strong id="summary-public-location">Nevyplněno</strong>
-          </div>
-          <div class="summary-item summary-wide">
-            <span class="summary-label">Secret lokace</span>
-            <strong id="summary-secret-location">Nevyplněno</strong>
-          </div>
+        <div class="metric">
+          <span>Relays</span>
+          <strong id="relay-state">Not checked</strong>
         </div>
-      </aside>
-    </div>
-
-    <div id="locked-state" class="panel locked-panel">
-      <p class="panel-kicker">Locked state</p>
-      <h2>Nejdřív odemkni přístup</h2>
-
-      <div class="locked-grid">
-        <div class="locked-item">
-          <strong>Vytvoření akce</strong>
-          <p>Public, secret, publish.</p>
+        <div class="metric">
+          <span>Import</span>
+          <strong id="import-state">Idle</strong>
         </div>
-        <div class="locked-item">
-          <strong>Správa akcí</strong>
-          <p>Seznam, filtr, detail.</p>
-        </div>
-        <div class="locked-item">
-          <strong>Bezpečné smazání</strong>
-          <p>Slug confirmation.</p>
-        </div>
-      </div>
-    </div>
+      </section>
 
-    <div id="workspace" class="workspace-grid" hidden>
-      <form id="create-event-form" class="panel create-panel">
-        <div class="panel-head">
-          <div>
-            <p class="panel-kicker">Create</p>
-            <h2>Nová akce</h2>
-          </div>
-        </div>
+      <p id="global-status" class="status-line neutral">Workspace loaded.</p>
 
-        <div class="step-block">
-          <div class="step-head">
-            <span class="step-number">01</span>
-            <div>
-              <h3>Public vrstva</h3>
-              <p>Tohle uvidí každý návštěvník webu.</p>
-            </div>
-          </div>
-
-          <div class="field-stack">
-            <label class="field" for="title">
-              <span class="field-label">Název akce</span>
-              <input id="title" name="title" type="text" minlength="3" maxlength="180" required />
-            </label>
-
-            <div class="field-pair">
-              <label class="field" for="startsAt">
-                <span class="field-label">Začátek</span>
-                <input id="startsAt" name="startsAt" type="datetime-local" required />
-              </label>
-
-              <label class="field" for="publicLocation">
-                <span class="field-label">Public místo</span>
-                <input id="publicLocation" name="publicLocation" type="text" minlength="2" maxlength="180" required />
-              </label>
-            </div>
-
-            <label class="field" for="summary">
-              <span class="field-label">Public info</span>
-              <textarea id="summary" name="summary" minlength="10" maxlength="2000" required></textarea>
-            </label>
-
-            <label class="field" for="coverImageUrl">
-              <span class="field-label">Cover image URL</span>
-              <input id="coverImageUrl" name="coverImageUrl" type="url" inputmode="url" placeholder="https://..." />
-            </label>
-          </div>
-        </div>
-
-        <div class="step-block secret-step">
-          <div class="step-head">
-            <span class="step-number">02</span>
-            <div>
-              <h3>Secret vrstva</h3>
-              <p>Tohle se odemkne až po správném kódu.</p>
-            </div>
-          </div>
-
-          <div class="field-stack">
-            <label class="field" for="unlockCode">
-              <span class="field-label">Unlock kód</span>
-              <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" required />
-            </label>
-
-            <label class="field" for="secretLocationName">
-              <span class="field-label">Secret location name</span>
-              <input
-                id="secretLocationName"
-                name="secretLocationName"
-                type="text"
-                minlength="2"
-                maxlength="180"
-                required
-              />
-            </label>
-
-            <div class="field-pair">
-              <label class="field" for="secretLatitude">
-                <span class="field-label">Latitude</span>
-                <input id="secretLatitude" name="secretLatitude" type="number" step="0.000001" min="-90" max="90" required />
-              </label>
-
-              <label class="field" for="secretLongitude">
-                <span class="field-label">Longitude</span>
-                <input
-                  id="secretLongitude"
-                  name="secretLongitude"
-                  type="number"
-                  step="0.000001"
-                  min="-180"
-                  max="180"
-                  required
-                />
-              </label>
-            </div>
-
-            <label class="field" for="secretInfo">
-              <span class="field-label">Secret info</span>
-              <textarea id="secretInfo" name="secretInfo" minlength="1" maxlength="5000" required></textarea>
-            </label>
-
-            <label class="field" for="secretMapNote">
-              <span class="field-label">Secret poznámka</span>
-              <textarea id="secretMapNote" name="secretMapNote" maxlength="500"></textarea>
-            </label>
-          </div>
-        </div>
-
-        <div class="step-block publish-step">
-          <div class="step-head">
-            <span class="step-number">03</span>
-            <div>
-              <h3>Publikace</h3>
-              <p>Rozhodni, jestli má akce jít ven hned, nebo zůstat jako draft.</p>
-            </div>
-          </div>
-
-          <label class="publish-toggle" for="isPublished">
-            <input id="isPublished" name="isPublished" type="checkbox" checked />
-            <span>
-              <strong>Publikovat ihned</strong>
-              <small id="publish-helper">Akce bude po vytvoření veřejně viditelná.</small>
-            </span>
-          </label>
-        </div>
-
-        <div class="create-footer">
-          <p id="result" class="status-line neutral">Vyplň akci a odešli ji do systému.</p>
-          <div class="action-row">
-            <button id="reset-form" type="button" class="ghost-button compact-button">Vyčistit</button>
-            <button id="create-submit" type="submit" class="primary-button">Vytvořit akci</button>
-          </div>
-        </div>
-
-        <pre id="debug" class="debug" hidden></pre>
-      </form>
-
-      <aside class="workspace-side">
-        <div class="panel manage-panel">
+      <div class="cockpit-grid">
+        <div class="panel form-panel">
           <div class="panel-head">
             <div>
-              <p class="panel-kicker">Manage</p>
-              <h2>Existující akce</h2>
+              <p class="kicker">Editor</p>
+              <h2>Create or update event</h2>
             </div>
-            <button id="reload-events" type="button" class="ghost-button compact-button">Obnovit</button>
+            <button id="reset-form" type="button">New</button>
           </div>
 
-          <label class="field" for="event-filter">
-            <span class="field-label">Filtrovat akce</span>
-            <input id="event-filter" type="search" placeholder="Název, slug nebo public místo" />
-          </label>
+          <form id="event-form" class="event-form">
+            <input id="slug" name="slug" type="hidden" />
 
-          <div class="stats-row">
-            <span class="stat-pill"><strong id="event-count">0</strong> celkem</span>
-            <span class="stat-pill"><strong id="filtered-count">0</strong> zobrazeno</span>
-          </div>
+            <div class="editor-mode-row">
+              <div class="segmented" role="group" aria-label="Event access type">
+                <label>
+                  <input type="radio" name="accessType" value="public" checked />
+                  <span>Public only</span>
+                </label>
+                <label>
+                  <input type="radio" name="accessType" value="gated" />
+                  <span>Code gated</span>
+                </label>
+              </div>
 
-          <p id="events-result" class="status-line neutral">Akce jsou připravené k načtení.</p>
-          <div id="events-list" class="events-list" hidden></div>
+              <label class="publish-check">
+                <input id="isPublished" name="isPublished" type="checkbox" />
+                <span>Publish</span>
+              </label>
+            </div>
+
+            <fieldset class="form-section">
+              <legend>Core</legend>
+              <label class="title-field">
+                <span>Title</span>
+                <input id="title" name="title" type="text" minlength="3" maxlength="180" required />
+              </label>
+
+              <div class="field-row">
+                <label>
+                  <span>Start</span>
+                  <input id="startsAt" name="startsAt" type="datetime-local" required />
+                </label>
+                <label>
+                  <span>End</span>
+                  <input id="endAt" name="endAt" type="datetime-local" />
+                </label>
+              </div>
+
+              <label>
+                <span>Public location</span>
+                <input id="publicLocation" name="publicLocation" type="text" minlength="2" maxlength="180" required />
+              </label>
+            </fieldset>
+
+            <fieldset class="form-section">
+              <legend>Public content</legend>
+              <label>
+                <span>Summary</span>
+                <textarea id="summary" name="summary" minlength="10" maxlength="2000" required></textarea>
+              </label>
+
+              <div class="field-row">
+                <label>
+                  <span>Genres</span>
+                  <input id="genres" name="genres" type="text" placeholder="tekno, freetekno" />
+                </label>
+                <label>
+                  <span>Lineup</span>
+                  <input id="lineup" name="lineup" type="text" placeholder="artist, crew" />
+                </label>
+              </div>
+
+              <label>
+                <span>Cover image URL</span>
+                <input id="coverImageUrl" name="coverImageUrl" type="url" inputmode="url" placeholder="https://..." />
+              </label>
+            </fieldset>
+
+            <fieldset class="form-section">
+              <legend>Source</legend>
+              <div class="field-row">
+                <label>
+                  <span>External URL</span>
+                  <input id="externalUrl" name="externalUrl" type="url" inputmode="url" placeholder="https://..." />
+                </label>
+                <label>
+                  <span>Source URL</span>
+                  <input id="sourceUrl" name="sourceUrl" type="url" inputmode="url" placeholder="https://..." />
+                </label>
+              </div>
+
+              <label>
+                <span>Source name</span>
+                <input id="sourceName" name="sourceName" type="text" maxlength="80" placeholder="Jiri Petrak freetekno calendar" />
+              </label>
+
+              <div class="field-row">
+                <label>
+                  <span>Source tags</span>
+                  <input id="tags" name="tags" type="text" placeholder="festival, crew, venue" />
+                </label>
+                <label>
+                  <span>Gallery URLs</span>
+                  <input id="galleryImageUrls" name="galleryImageUrls" type="text" placeholder="https://..., https://..." />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset id="gated-fields" class="form-section gated-fields" hidden>
+              <legend>Secret layer</legend>
+              <div class="field-row">
+                <label>
+                  <span>Unlock code</span>
+                  <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" />
+                </label>
+                <label>
+                  <span>Secret location name</span>
+                  <input id="secretLocationName" name="secretLocationName" type="text" maxlength="180" />
+                </label>
+              </div>
+              <div class="field-row">
+                <label>
+                  <span>Latitude</span>
+                  <input id="secretLatitude" name="secretLatitude" type="number" step="0.000001" min="-90" max="90" />
+                </label>
+                <label>
+                  <span>Longitude</span>
+                  <input id="secretLongitude" name="secretLongitude" type="number" step="0.000001" min="-180" max="180" />
+                </label>
+              </div>
+              <label>
+                <span>Secret info</span>
+                <textarea id="secretInfo" name="secretInfo" maxlength="5000"></textarea>
+              </label>
+              <label>
+                <span>Secret map note</span>
+                <textarea id="secretMapNote" name="secretMapNote" maxlength="500"></textarea>
+              </label>
+            </fieldset>
+
+            <div class="action-row editor-actions">
+              <button id="save-event" type="submit">Save draft</button>
+              <p id="form-status" class="status-line neutral">Ready.</p>
+            </div>
+          </form>
         </div>
+
+      <aside class="side-column">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="kicker">Mirror</p>
+              <h2>Jiri Petrak import</h2>
+            </div>
+          </div>
+          <div class="action-row">
+            <button id="preview-import" type="button">Preview</button>
+            <button id="sync-import" type="button">Sync drafts</button>
+          </div>
+          <p id="import-status" class="status-line neutral">Imports create public-only drafts.</p>
+          <div id="import-preview" class="preview-list" hidden></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="kicker">Relays</p>
+              <h2>Diagnostics</h2>
+            </div>
+            <button id="reload-diagnostics" type="button">Check</button>
+          </div>
+          <div id="diagnostics" class="diagnostics">Not loaded.</div>
+        </section>
       </aside>
-    </div>
-  </div>
+      </div>
+
+      <section class="panel events-panel">
+        <div class="panel-head">
+          <div>
+            <p class="kicker">Inventory</p>
+            <h2>Events</h2>
+          </div>
+          <div class="table-tools">
+            <input id="event-filter" type="search" placeholder="Filter title, slug, source, city" />
+            <select id="status-filter" aria-label="Publication status">
+              <option value="all">All status</option>
+              <option value="draft">Drafts</option>
+              <option value="live">Published</option>
+            </select>
+            <select id="access-filter" aria-label="Access type">
+              <option value="all">All access</option>
+              <option value="public">Public only</option>
+              <option value="gated">Code gated</option>
+            </select>
+            <select id="source-filter" aria-label="Source type">
+              <option value="all">All sources</option>
+              <option value="imported">Imported</option>
+              <option value="manual">Manual</option>
+            </select>
+            <select id="time-filter" aria-label="Event time">
+              <option value="all">All dates</option>
+              <option value="upcoming">Upcoming</option>
+              <option value="past">Past</option>
+              <option value="missing-image">No poster</option>
+            </select>
+            <button id="reload-events" type="button">Reload</button>
+          </div>
+        </div>
+        <div class="bulk-bar">
+          <label class="select-filtered">
+            <input id="select-filtered" type="checkbox" />
+            <span>Select filtered</span>
+          </label>
+          <strong id="inventory-count">0 shown</strong>
+          <strong id="selected-count">0 selected</strong>
+          <button id="bulk-publish" type="button" disabled>Publish selected drafts</button>
+          <button id="bulk-delete" type="button" disabled>Delete selected</button>
+          <button id="clear-selection" type="button" disabled>Clear</button>
+        </div>
+        <div id="events-table" class="events-table" role="table"></div>
+      </section>
+    </section>
+  </main>
 </Layout>
 
 <script>
   const state = {
     authenticated: false,
     events: [],
-    filter: "",
+    selectedSlugs: new Set(),
+    filters: {
+      query: "",
+      status: "all",
+      access: "all",
+      source: "all",
+      time: "all",
+    },
   };
 
-  const dateFormatter = new Intl.DateTimeFormat("cs-CZ", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const dateFormatter = new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium", timeStyle: "short" });
 
   const accessForm = document.getElementById("access-form");
+  const accessGate = document.getElementById("access-gate");
   const adminSecretInput = document.getElementById("adminSecret");
-  const toggleSecretButton = document.getElementById("toggle-secret");
-  const clearSecretButton = document.getElementById("clear-secret");
   const unlockButton = document.getElementById("unlock-button");
   const authStatus = document.getElementById("auth-status");
-  const authBadge = document.getElementById("auth-badge");
-
-  const lockedState = document.getElementById("locked-state");
   const workspace = document.getElementById("workspace");
-
-  const createForm = document.getElementById("create-event-form");
-  const createSubmitButton = document.getElementById("create-submit");
-  const resetFormButton = document.getElementById("reset-form");
-  const result = document.getElementById("result");
-  const debug = document.getElementById("debug");
-
-  const summaryAuth = document.getElementById("summary-auth");
-  const summaryPublish = document.getElementById("summary-publish");
-  const summaryTitle = document.getElementById("summary-title");
-  const summaryDate = document.getElementById("summary-date");
-  const summaryPublicLocation = document.getElementById("summary-public-location");
-  const summarySecretLocation = document.getElementById("summary-secret-location");
-
-  const reloadEventsButton = document.getElementById("reload-events");
-  const eventFilterInput = document.getElementById("event-filter");
-  const eventsResult = document.getElementById("events-result");
-  const eventsList = document.getElementById("events-list");
+  const globalStatus = document.getElementById("global-status");
+  const authState = document.getElementById("auth-state");
   const eventCount = document.getElementById("event-count");
-  const filteredCount = document.getElementById("filtered-count");
+  const relayState = document.getElementById("relay-state");
+  const importState = document.getElementById("import-state");
+
+  const eventForm = document.getElementById("event-form");
+  const gatedFields = document.getElementById("gated-fields");
+  const resetFormButton = document.getElementById("reset-form");
+  const saveEventButton = document.getElementById("save-event");
+  const publishInput = document.getElementById("isPublished");
+  const formStatus = document.getElementById("form-status");
+  const eventsTable = document.getElementById("events-table");
+  const reloadEventsButton = document.getElementById("reload-events");
+  const eventFilter = document.getElementById("event-filter");
+  const statusFilter = document.getElementById("status-filter");
+  const accessFilter = document.getElementById("access-filter");
+  const sourceFilter = document.getElementById("source-filter");
+  const timeFilter = document.getElementById("time-filter");
+  const selectFiltered = document.getElementById("select-filtered");
+  const inventoryCount = document.getElementById("inventory-count");
+  const selectedCount = document.getElementById("selected-count");
+  const bulkPublishButton = document.getElementById("bulk-publish");
+  const bulkDeleteButton = document.getElementById("bulk-delete");
+  const clearSelectionButton = document.getElementById("clear-selection");
+
+  const previewImportButton = document.getElementById("preview-import");
+  const syncImportButton = document.getElementById("sync-import");
+  const importStatus = document.getElementById("import-status");
+  const importPreview = document.getElementById("import-preview");
+  const reloadDiagnosticsButton = document.getElementById("reload-diagnostics");
+  const diagnostics = document.getElementById("diagnostics");
 
   function setStatus(target, message, tone = "neutral") {
     if (!(target instanceof HTMLElement)) return;
@@ -328,1088 +338,1196 @@ import Layout from "../layouts/Layout.astro";
     target.className = `status-line ${tone}`;
   }
 
-  function showDebug(payload) {
-    if (!(debug instanceof HTMLElement)) return;
-    debug.hidden = false;
-    debug.textContent = JSON.stringify(payload, null, 2);
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
-  function clearDebug() {
-    if (!(debug instanceof HTMLElement)) return;
-    debug.hidden = true;
-    debug.textContent = "";
+  function setBusy(button, busy) {
+    if (button instanceof HTMLButtonElement) button.disabled = busy;
   }
 
-  function getAdminSecret() {
-    if (!(adminSecretInput instanceof HTMLInputElement)) return "";
-    return adminSecretInput.value.trim();
-  }
-
-  function getAuthHeaders(includeJson = false) {
-    const adminSecret = getAdminSecret();
-    if (!adminSecret) {
-      throw new Error("Vyplň nejdřív Admin Secret.");
+  function adminHeaders(json = false) {
+    if (!(adminSecretInput instanceof HTMLInputElement) || !adminSecretInput.value.trim()) {
+      throw new Error("Admin passcode is missing.");
     }
-
-    const headers = {
-      Authorization: `Bearer ${adminSecret}`,
+    return {
+      Authorization: `Bearer ${adminSecretInput.value.trim()}`,
+      ...(json ? { "Content-Type": "application/json" } : {}),
     };
-
-    if (includeJson) {
-      headers["Content-Type"] = "application/json";
-    }
-
-    return headers;
   }
 
-  function toIsoDateTime(localValue) {
-    const parsedDate = new Date(localValue);
-    if (Number.isNaN(parsedDate.getTime())) {
-      return null;
-    }
-
-    return parsedDate.toISOString();
-  }
-
-  async function parseJsonResponse(response) {
-    try {
-      return await response.json();
-    } catch {
-      return null;
-    }
-  }
-
-  function setButtonBusy(button, busyLabel, idleLabel, isBusy) {
-    if (!(button instanceof HTMLButtonElement)) return;
-    button.disabled = isBusy;
-    button.textContent = isBusy ? busyLabel : idleLabel;
-  }
-
-  function setText(target, value) {
-    if (target instanceof HTMLElement) {
-      target.textContent = value;
-    }
-  }
-
-  function updateCounts(total, visible) {
-    setText(eventCount, String(total));
-    setText(filteredCount, String(visible));
-  }
-
-  function setAuthState(isAuthenticated, message, tone = "neutral") {
-    state.authenticated = isAuthenticated;
-
-    if (workspace instanceof HTMLElement) {
-      workspace.hidden = !isAuthenticated;
-    }
-
-    if (lockedState instanceof HTMLElement) {
-      lockedState.hidden = isAuthenticated;
-    }
-
-    if (authBadge instanceof HTMLElement) {
-      authBadge.textContent = isAuthenticated ? "Unlocked" : "Locked";
-      authBadge.className = `status-badge ${isAuthenticated ? "positive" : tone}`;
-    }
-
-    if (summaryAuth instanceof HTMLElement) {
-      summaryAuth.textContent = isAuthenticated ? "Unlocked" : "Locked";
-    }
-
-    setStatus(authStatus, message, tone);
-  }
-
-  function normalizeFilter(value) {
-    return value.trim().toLowerCase();
-  }
-
-  function getFilteredEvents() {
-    const filter = normalizeFilter(state.filter);
-
-    if (!filter) {
-      return state.events;
-    }
-
-    return state.events.filter((item) =>
-      [item.title, item.slug, item.publicLocation].some((value) => String(value).toLowerCase().includes(filter)),
-    );
-  }
-
-  function updateCreateSummary() {
-    if (!(createForm instanceof HTMLFormElement)) return;
-
-    const data = new FormData(createForm);
-    const title = String(data.get("title") || "").trim();
-    const publicLocation = String(data.get("publicLocation") || "").trim();
-    const secretLocation = String(data.get("secretLocationName") || "").trim();
-    const startsAtRaw = String(data.get("startsAt") || "");
-    const startsAtIso = startsAtRaw ? toIsoDateTime(startsAtRaw) : null;
-    const publishNow = data.get("isPublished") === "on";
-
-    setText(summaryTitle, title || "Nová akce bez názvu");
-    setText(summaryPublicLocation, publicLocation || "Nevyplněno");
-    setText(summarySecretLocation, secretLocation || "Nevyplněno");
-    setText(summaryPublish, publishNow ? "Publish" : "Draft");
-    setText(summaryDate, startsAtIso ? dateFormatter.format(new Date(startsAtIso)) : "Nevyplněno");
-
-    const publishHelper = document.getElementById("publish-helper");
-    if (publishHelper instanceof HTMLElement) {
-      publishHelper.textContent = publishNow
-        ? "Akce bude po vytvoření veřejně viditelná."
-        : "Akce zůstane jen v admin správě jako draft.";
-    }
-  }
-
-  async function copyText(value, successMessage) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setStatus(eventsResult, successMessage, "positive");
-    } catch {
-      setStatus(eventsResult, "Nepodařilo se kopírovat do schránky.", "danger");
-    }
-  }
-
-  function buildMetaRow(label, value) {
-    const row = document.createElement("p");
-    row.className = "event-meta";
-    row.textContent = `${label}: ${value}`;
-    return row;
-  }
-
-  async function deleteEvent(slug, confirmSlug) {
-    const response = await fetch("/api/admin/events", {
-      method: "DELETE",
-      headers: getAuthHeaders(true),
-      body: JSON.stringify({ slug, confirmSlug }),
-    });
-
-    const json = await parseJsonResponse(response);
-
+  async function parseResponse(response) {
+    const json = await response.json().catch(() => null);
     if (!response.ok || !json?.ok) {
-      const err = json?.error || {};
-      throw {
-        status: response.status,
-        message: err.message || "Smazání akce selhalo.",
-        code: err.code,
-        body: json,
-      };
+      throw new Error(json?.error?.message || `Request failed with ${response.status}`);
     }
-
     return json.data;
   }
 
-  function renderEvents() {
-    if (!(eventsList instanceof HTMLElement)) return;
+  function toLocalInputValue(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const offsetMs = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  }
 
-    eventsList.innerHTML = "";
+  function toIsoFromLocal(value) {
+    if (!value) return undefined;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  }
 
-    const filteredItems = getFilteredEvents();
-    updateCounts(state.events.length, filteredItems.length);
+  function listFromInput(value) {
+    return String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
 
-    if (filteredItems.length === 0) {
-      eventsList.hidden = false;
-      const emptyState = document.createElement("p");
-      emptyState.className = "empty-state";
-      emptyState.textContent = state.events.length === 0 ? "Zatím tu nejsou žádné uložené akce." : "Filtr nic nenašel.";
-      eventsList.append(emptyState);
+  function selectedAccessType() {
+    if (!(eventForm instanceof HTMLFormElement)) return "public";
+    const data = new FormData(eventForm);
+    return data.get("accessType") === "gated" ? "gated" : "public";
+  }
+
+  function isEditingEvent() {
+    if (!(eventForm instanceof HTMLFormElement)) return false;
+    const slug = eventForm.elements.namedItem("slug");
+    return slug instanceof HTMLInputElement && Boolean(slug.value);
+  }
+
+  function syncSaveButtonLabel() {
+    if (!(saveEventButton instanceof HTMLButtonElement)) return;
+    if (isEditingEvent()) {
+      saveEventButton.textContent = "Update event";
       return;
     }
 
-    const fragment = document.createDocumentFragment();
-
-    filteredItems.forEach((item) => {
-      const article = document.createElement("article");
-      article.className = "event-item";
-
-      const header = document.createElement("div");
-      header.className = "event-head";
-
-      const titleWrap = document.createElement("div");
-
-      const title = document.createElement("h3");
-      title.className = "event-title";
-      title.textContent = item.title;
-
-      const slugLine = document.createElement("p");
-      slugLine.className = "event-slug";
-      slugLine.textContent = item.slug;
-
-      titleWrap.append(title, slugLine);
-
-      const badgeRow = document.createElement("div");
-      badgeRow.className = "event-badges";
-
-      const stateBadge = document.createElement("span");
-      stateBadge.className = item.isPublished ? "pill live" : "pill draft";
-      stateBadge.textContent = item.isPublished ? "Publikováno" : "Draft";
-
-      const dateBadge = document.createElement("span");
-      dateBadge.className = "pill soft";
-      dateBadge.textContent = dateFormatter.format(new Date(item.startsAt));
-
-      badgeRow.append(stateBadge, dateBadge);
-      header.append(titleWrap, badgeRow);
-
-      const meta = document.createElement("div");
-      meta.className = "event-meta-list";
-      meta.append(
-        buildMetaRow("Public místo", item.publicLocation),
-        buildMetaRow("Vytvořeno", dateFormatter.format(new Date(item.createdAt))),
-      );
-
-      const actions = document.createElement("div");
-      actions.className = "event-actions";
-
-      const openLink = document.createElement("a");
-      openLink.className = "ghost-button compact-button";
-      openLink.href = `/akce/${item.slug}`;
-      openLink.target = "_blank";
-      openLink.rel = "noreferrer";
-      openLink.textContent = "Otevřít detail";
-
-      const copyButton = document.createElement("button");
-      copyButton.type = "button";
-      copyButton.className = "ghost-button compact-button";
-      copyButton.textContent = "Kopírovat slug";
-      copyButton.addEventListener("click", async () => {
-        await copyText(item.slug, `Slug ${item.slug} zkopírován.`);
-      });
-
-      actions.append(openLink, copyButton);
-
-      const dangerZone = document.createElement("details");
-      dangerZone.className = "danger-zone";
-
-      const summary = document.createElement("summary");
-      summary.textContent = "Danger zone";
-
-      const copy = document.createElement("p");
-      copy.className = "danger-copy";
-      copy.textContent = "Pro smazání opiš slug přesně. Secret payload se odstraní spolu s akcí.";
-
-      const deleteForm = document.createElement("form");
-      deleteForm.className = "delete-form";
-
-      const inputLabel = document.createElement("label");
-      inputLabel.className = "field";
-      inputLabel.setAttribute("for", `confirm-${item.id}`);
-
-      const labelText = document.createElement("span");
-      labelText.className = "field-label";
-      labelText.textContent = "Potvrď slug";
-
-      const deleteInput = document.createElement("input");
-      deleteInput.id = `confirm-${item.id}`;
-      deleteInput.name = "confirmSlug";
-      deleteInput.type = "text";
-      deleteInput.autocomplete = "off";
-      deleteInput.spellcheck = false;
-      deleteInput.placeholder = item.slug;
-
-      const deleteButton = document.createElement("button");
-      deleteButton.type = "submit";
-      deleteButton.className = "danger-button compact-button";
-      deleteButton.textContent = "Trvale smazat";
-      deleteButton.disabled = true;
-
-      deleteInput.addEventListener("input", () => {
-        deleteButton.disabled = deleteInput.value.trim() !== item.slug;
-      });
-
-      deleteForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
-
-        const confirmSlug = deleteInput.value.trim();
-        if (confirmSlug !== item.slug) {
-          setStatus(eventsResult, "Slug potvrzení nesouhlasí.", "danger");
-          return;
-        }
-
-        const approved = window.confirm(`Opravdu smazat akci ${item.title}?`);
-        if (!approved) {
-          return;
-        }
-
-        deleteButton.disabled = true;
-        setStatus(eventsResult, `Mažu akci ${item.slug}...`, "warning");
-        clearDebug();
-
-        try {
-          await deleteEvent(item.slug, confirmSlug);
-          setStatus(eventsResult, `Akce ${item.slug} byla smazána.`, "positive");
-          await loadEvents({ preserveMessage: true });
-        } catch (error) {
-          deleteButton.disabled = false;
-          setStatus(eventsResult, error?.message || "Smazání akce selhalo.", "danger");
-          showDebug(error);
-        }
-      });
-
-      inputLabel.append(labelText, deleteInput);
-      deleteForm.append(inputLabel, deleteButton);
-      dangerZone.append(summary, copy, deleteForm);
-
-      article.append(header, meta, actions, dangerZone);
-      fragment.append(article);
-    });
-
-    eventsList.hidden = false;
-    eventsList.append(fragment);
+    saveEventButton.textContent = publishInput instanceof HTMLInputElement && publishInput.checked ? "Publish event" : "Save draft";
   }
 
-  async function loadEvents(options = {}) {
-    const { preserveMessage = false } = options;
+  function syncAccessMode() {
+    const gated = selectedAccessType() === "gated";
+    if (gatedFields instanceof HTMLElement) gatedFields.hidden = !gated;
+    for (const input of document.querySelectorAll("#gated-fields input, #gated-fields textarea")) {
+      if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+        input.required = gated && ["unlockCode", "secretLocationName", "secretLatitude", "secretLongitude", "secretInfo"].includes(input.name);
+      }
+    }
+    syncSaveButtonLabel();
+  }
 
+  function resetEditor() {
+    if (!(eventForm instanceof HTMLFormElement)) return;
+    eventForm.reset();
+    const slug = document.getElementById("slug");
+    if (slug instanceof HTMLInputElement) slug.value = "";
+    syncAccessMode();
+    syncSaveButtonLabel();
+    setStatus(formStatus, "Ready.", "neutral");
+  }
+
+  function fillEditor(item) {
+    if (!(eventForm instanceof HTMLFormElement)) return;
+    resetEditor();
+    const fields = {
+      slug: item.slug,
+      title: item.title,
+      startsAt: toLocalInputValue(item.startsAt),
+      endAt: toLocalInputValue(item.endAt),
+      publicLocation: item.publicLocation,
+      summary: item.summary,
+      genres: (item.genres || []).join(", "),
+      lineup: (item.lineup || []).join(", "),
+      tags: (item.tags || []).join(", "),
+      galleryImageUrls: (item.galleryImageUrls || []).join(", "),
+      coverImageUrl: item.coverImageUrl || "",
+      externalUrl: item.externalUrl || "",
+      sourceUrl: item.source?.url || "",
+      sourceName: item.source?.name || "",
+    };
+    for (const [name, value] of Object.entries(fields)) {
+      const field = eventForm.elements.namedItem(name);
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.value = value;
+    }
+    const published = eventForm.elements.namedItem("isPublished");
+    if (published instanceof HTMLInputElement) published.checked = Boolean(item.isPublished);
+    const access = eventForm.querySelector(`input[name="accessType"][value="${item.accessType || "public"}"]`);
+    if (access instanceof HTMLInputElement) access.checked = true;
+    syncAccessMode();
+    syncSaveButtonLabel();
+    setStatus(formStatus, `Editing ${item.slug}. Saving will replace the latest Nostr event for this slug.`, "warning");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function filteredEvents() {
+    const query = state.filters.query.trim().toLowerCase();
+    const now = Date.now();
+    return state.events.filter((item) => {
+      const searchable = [
+        item.title,
+        item.slug,
+        item.publicLocation,
+        item.source?.name,
+        item.source?.url,
+        item.externalUrl,
+        ...(item.tags || []),
+        ...(item.genres || []),
+        ...(item.lineup || []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const itemEnd = new Date(item.endAt || item.startsAt).getTime();
+      const matchesQuery = !query || searchable.includes(query);
+      const matchesStatus =
+        state.filters.status === "all" ||
+        (state.filters.status === "draft" && !item.isPublished) ||
+        (state.filters.status === "live" && item.isPublished);
+      const matchesAccess = state.filters.access === "all" || item.accessType === state.filters.access;
+      const matchesSource =
+        state.filters.source === "all" ||
+        (state.filters.source === "imported" && item.source) ||
+        (state.filters.source === "manual" && !item.source);
+      const matchesTime =
+        state.filters.time === "all" ||
+        (state.filters.time === "upcoming" && itemEnd >= now) ||
+        (state.filters.time === "past" && itemEnd < now) ||
+        (state.filters.time === "missing-image" && !item.coverImageUrl);
+
+      return matchesQuery && matchesStatus && matchesAccess && matchesSource && matchesTime;
+    });
+  }
+
+  function badge(text, tone = "") {
+    return `<span class="badge ${tone}">${text}</span>`;
+  }
+
+  function eventDateRange(item) {
+    const start = dateFormatter.format(new Date(item.startsAt));
+    return item.endAt ? `${start} -> ${dateFormatter.format(new Date(item.endAt))}` : start;
+  }
+
+  function compactList(values, max = 4) {
+    const list = (values || []).filter(Boolean);
+    if (list.length <= max) return list.join(", ");
+    return `${list.slice(0, max).join(", ")} +${list.length - max}`;
+  }
+
+  function syncBulkControls(rows) {
+    const selectedRows = state.events.filter((item) => state.selectedSlugs.has(item.slug));
+    const selectedDrafts = selectedRows.filter((item) => !item.isPublished);
+    const allFilteredSelected = rows.length > 0 && rows.every((item) => state.selectedSlugs.has(item.slug));
+
+    if (inventoryCount instanceof HTMLElement) inventoryCount.textContent = `${rows.length} shown / ${state.events.length} total`;
+    if (selectedCount instanceof HTMLElement) selectedCount.textContent = `${selectedRows.length} selected`;
+    if (bulkPublishButton instanceof HTMLButtonElement) bulkPublishButton.disabled = selectedDrafts.length === 0;
+    if (bulkDeleteButton instanceof HTMLButtonElement) bulkDeleteButton.disabled = selectedRows.length === 0;
+    if (clearSelectionButton instanceof HTMLButtonElement) clearSelectionButton.disabled = selectedRows.length === 0;
+    if (selectFiltered instanceof HTMLInputElement) {
+      selectFiltered.checked = allFilteredSelected;
+      selectFiltered.indeterminate = !allFilteredSelected && rows.some((item) => state.selectedSlugs.has(item.slug));
+    }
+  }
+
+  function renderEvents() {
+    if (!(eventsTable instanceof HTMLElement)) return;
+    const rows = filteredEvents();
+    if (eventCount instanceof HTMLElement) eventCount.textContent = String(state.events.length);
+    syncBulkControls(rows);
+    if (rows.length === 0) {
+      eventsTable.innerHTML = `<p class="empty-state">No events match.</p>`;
+      return;
+    }
+
+    const header = `
+      <div class="event-table-head" role="row">
+        <span></span>
+        <span>Art</span>
+        <span>Event</span>
+        <span>Date</span>
+        <span>Location</span>
+        <span>Source</span>
+        <span>Status</span>
+        <span>Actions</span>
+      </div>
+    `;
+
+    eventsTable.innerHTML =
+      header +
+      rows
+        .map((item, index) => {
+        const sourceBadge = item.source ? badge("import", "soft") : "";
+        const liveBadge = item.isPublished ? badge("live", "live") : badge("draft", "draft");
+        const accessBadge = item.accessType === "gated" ? badge("gated", "danger") : badge("public", "soft");
+        const sourceLine = item.source?.url ? `<a href="${escapeHtml(item.source.url)}" target="_blank" rel="noreferrer">source</a>` : "manual";
+        const thumb = item.coverImageUrl
+          ? `<img class="event-thumb" src="${escapeHtml(item.coverImageUrl)}" alt="" loading="lazy" />`
+          : `<span class="event-thumb-empty" aria-hidden="true"></span>`;
+        const tags = compactList([...(item.tags || []), ...(item.genres || [])]);
+        const selected = state.selectedSlugs.has(item.slug);
+        return `
+          <article class="event-row ${selected ? "selected" : ""}" data-index="${index}">
+            <label class="row-select" aria-label="Select ${escapeHtml(item.title)}">
+              <input type="checkbox" data-action="select" data-slug="${escapeHtml(item.slug)}" ${selected ? "checked" : ""} />
+            </label>
+            ${thumb}
+            <div class="event-main">
+              <strong>${escapeHtml(item.title)}</strong>
+              <span class="slug">${escapeHtml(item.slug)}</span>
+              <p>${escapeHtml(String(item.summary || "").slice(0, 260))}</p>
+            </div>
+            <div class="event-when">${escapeHtml(eventDateRange(item))}</div>
+            <div class="event-place">${escapeHtml(item.publicLocation || "Unknown")}</div>
+            <div class="event-source">
+              <span>${sourceLine}</span>
+              ${tags ? `<small>${escapeHtml(tags)}</small>` : ""}
+            </div>
+            <div class="badges">${liveBadge}${accessBadge}${sourceBadge}</div>
+            <div class="row-actions">
+              <button type="button" data-action="edit" data-slug="${escapeHtml(item.slug)}">Edit</button>
+              ${!item.isPublished ? `<button type="button" data-action="publish" data-slug="${escapeHtml(item.slug)}">Publish</button>` : `<a href="/akce/${escapeHtml(item.slug)}" target="_blank" rel="noreferrer">Open</a>`}
+              <button type="button" data-action="delete" data-slug="${escapeHtml(item.slug)}">Delete</button>
+            </div>
+          </article>
+        `;
+        })
+        .join("");
+  }
+
+  async function loadEvents() {
+    const response = await fetch("/api/admin/events", { headers: adminHeaders() });
+    const data = await parseResponse(response);
+    state.events = Array.isArray(data.events) ? data.events : [];
+    const knownSlugs = new Set(state.events.map((item) => item.slug));
+    for (const slug of [...state.selectedSlugs]) {
+      if (!knownSlugs.has(slug)) state.selectedSlugs.delete(slug);
+    }
+    renderEvents();
+  }
+
+  async function loadDiagnostics() {
+    if (!(diagnostics instanceof HTMLElement)) return;
+    const response = await fetch("/api/admin/diagnostics", { headers: adminHeaders() });
+    const data = await parseResponse(response);
+    const okCount = data.checks?.relays?.filter((relay) => relay.ok).length || 0;
+    if (relayState instanceof HTMLElement) relayState.textContent = `${okCount}/${data.relays?.length || 0} ok`;
+    diagnostics.innerHTML = `
+      <p><strong>Publisher</strong><br>${data.publisherPubkey}</p>
+      <p><strong>Write quorum</strong><br>${data.writeMinSuccess}</p>
+      ${(data.checks?.relays || [])
+        .map((relay) => `<p>${relay.ok ? "OK" : "ERR"} ${relay.relay}<br><small>${relay.message || `${relay.events} events`}</small></p>`)
+        .join("")}
+    `;
+  }
+
+  async function authenticate() {
+    setBusy(unlockButton, true);
+    setStatus(authStatus, "Verifying passcode...", "warning");
     try {
-      if (!preserveMessage) {
-        setStatus(eventsResult, "Načítám akce...", "warning");
-      }
-
-      setButtonBusy(reloadEventsButton, "Obnovuji...", "Obnovit", true);
-      clearDebug();
-
-      const response = await fetch("/api/admin/events", {
-        method: "GET",
-        headers: getAuthHeaders(),
-      });
-
-      const json = await parseJsonResponse(response);
-
-      if (!response.ok || !json?.ok) {
-        const err = json?.error || {};
-        setStatus(eventsResult, err.message || "Načtení akcí selhalo.", "danger");
-        showDebug({
-          status: response.status,
-          code: err.code,
-          body: json,
-        });
-        return false;
-      }
-
-      state.events = Array.isArray(json.data?.events) ? json.data.events : [];
-      renderEvents();
-
-      if (!preserveMessage) {
-        setStatus(eventsResult, `Načteno ${state.events.length} akcí.`, "positive");
-      }
-
-      return true;
-    } catch (error) {
-      setStatus(eventsResult, error instanceof Error ? error.message : "Nepodařilo se načíst akce.", "danger");
-      showDebug({ error: "LOAD_EVENTS_FAILED" });
-      return false;
-    } finally {
-      setButtonBusy(reloadEventsButton, "Obnovuji...", "Obnovit", false);
-    }
-  }
-
-  function resetAccessState() {
-    state.authenticated = false;
-    state.events = [];
-    state.filter = "";
-
-    if (workspace instanceof HTMLElement) {
-      workspace.hidden = true;
-    }
-
-    if (lockedState instanceof HTMLElement) {
-      lockedState.hidden = false;
-    }
-
-    if (eventsList instanceof HTMLElement) {
-      eventsList.hidden = true;
-      eventsList.innerHTML = "";
-    }
-
-    if (eventFilterInput instanceof HTMLInputElement) {
-      eventFilterInput.value = "";
-    }
-
-    updateCounts(0, 0);
-    setAuthState(false, "Workspace čeká na ověření secretu.", "neutral");
-    setStatus(eventsResult, "Akce se načtou až po odemknutí přístupu.", "neutral");
-  }
-
-  async function authenticateAdmin() {
-    clearDebug();
-
-    try {
-      setButtonBusy(unlockButton, "Ověřuji...", "Ověřit a načíst", true);
-      const ok = await loadEvents();
-
-      if (!ok) {
-        resetAccessState();
-        setAuthState(false, "Secret se nepodařilo ověřit.", "danger");
-        return;
-      }
-
-      setAuthState(true, "Admin byl odemčený a akce byly načtené.", "positive");
-      setStatus(result, "Workspace je připravený pro vytvoření nové akce.", "positive");
-
-      const titleInput = document.getElementById("title");
-      if (titleInput instanceof HTMLInputElement) {
-        titleInput.focus();
-      }
-    } finally {
-      setButtonBusy(unlockButton, "Ověřuji...", "Ověřit a načíst", false);
-    }
-  }
-
-  if (toggleSecretButton instanceof HTMLButtonElement && adminSecretInput instanceof HTMLInputElement) {
-    toggleSecretButton.addEventListener("click", () => {
-      const reveal = adminSecretInput.type === "password";
-      adminSecretInput.type = reveal ? "text" : "password";
-      toggleSecretButton.textContent = reveal ? "Skrýt" : "Zobrazit";
-    });
-  }
-
-  if (clearSecretButton instanceof HTMLButtonElement && adminSecretInput instanceof HTMLInputElement) {
-    clearSecretButton.addEventListener("click", () => {
-      adminSecretInput.value = "";
-      adminSecretInput.type = "password";
-      if (toggleSecretButton instanceof HTMLButtonElement) {
-        toggleSecretButton.textContent = "Zobrazit";
-      }
-      resetAccessState();
-    });
-  }
-
-  if (accessForm instanceof HTMLFormElement) {
-    accessForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      await authenticateAdmin();
-    });
-  }
-
-  if (reloadEventsButton instanceof HTMLButtonElement) {
-    reloadEventsButton.addEventListener("click", async () => {
       await loadEvents();
-    });
+      state.authenticated = true;
+      if (accessGate instanceof HTMLElement) accessGate.hidden = true;
+      if (workspace instanceof HTMLElement) workspace.hidden = false;
+      if (authState instanceof HTMLElement) authState.textContent = "Unlocked";
+      setStatus(globalStatus, "Workspace loaded.", "positive");
+      loadDiagnostics().catch((error) => {
+        if (relayState instanceof HTMLElement) relayState.textContent = "Check failed";
+        setStatus(globalStatus, error instanceof Error ? error.message : "Relay diagnostics failed.", "warning");
+      });
+    } catch (error) {
+      setStatus(authStatus, error instanceof Error ? error.message : "Authentication failed.", "danger");
+    } finally {
+      setBusy(unlockButton, false);
+    }
   }
 
-  if (eventFilterInput instanceof HTMLInputElement) {
-    eventFilterInput.addEventListener("input", () => {
-      state.filter = eventFilterInput.value;
+  async function saveEvent(event) {
+    event.preventDefault();
+    if (!(eventForm instanceof HTMLFormElement)) return;
+    const data = new FormData(eventForm);
+    const accessType = selectedAccessType();
+    const payload = {
+      slug: String(data.get("slug") || "").trim() || undefined,
+      title: String(data.get("title") || ""),
+      startsAt: toIsoFromLocal(String(data.get("startsAt") || "")),
+      endAt: toIsoFromLocal(String(data.get("endAt") || "")),
+      publicLocation: String(data.get("publicLocation") || ""),
+      summary: String(data.get("summary") || ""),
+      coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
+      externalUrl: String(data.get("externalUrl") || "").trim() || undefined,
+      sourceUrl: String(data.get("sourceUrl") || "").trim() || undefined,
+      sourceName: String(data.get("sourceName") || "").trim() || undefined,
+      genres: listFromInput(data.get("genres")),
+      lineup: listFromInput(data.get("lineup")),
+      tags: listFromInput(data.get("tags")),
+      galleryImageUrls: listFromInput(data.get("galleryImageUrls")),
+      accessType,
+      isPublished: data.get("isPublished") === "on",
+      unlockCode: accessType === "gated" ? String(data.get("unlockCode") || "") : undefined,
+      secretLocationName: accessType === "gated" ? String(data.get("secretLocationName") || "") : undefined,
+      secretLatitude: accessType === "gated" ? Number(data.get("secretLatitude")) : undefined,
+      secretLongitude: accessType === "gated" ? Number(data.get("secretLongitude")) : undefined,
+      secretInfo: accessType === "gated" ? String(data.get("secretInfo") || "") : undefined,
+      secretMapNote: accessType === "gated" ? String(data.get("secretMapNote") || "").trim() || undefined : undefined,
+    };
+
+    setStatus(formStatus, "Saving event to Nostr relays...", "warning");
+    try {
+      const response = await fetch("/api/admin/events", {
+        method: "POST",
+        headers: adminHeaders(true),
+        body: JSON.stringify(payload),
+      });
+      const saved = await parseResponse(response);
+      setStatus(formStatus, `Saved ${saved.slug}.`, "positive");
+      resetEditor();
+      await loadEvents();
+    } catch (error) {
+      setStatus(formStatus, error instanceof Error ? error.message : "Save failed.", "danger");
+    }
+  }
+
+  async function previewImport() {
+    setBusy(previewImportButton, true);
+    setStatus(importStatus, "Fetching source preview...", "warning");
+    try {
+      const response = await fetch("/api/admin/imports/jiripetrak/preview", { headers: adminHeaders() });
+      const data = await parseResponse(response);
+      if (importState instanceof HTMLElement) importState.textContent = `${data.events.length} found`;
+      if (importPreview instanceof HTMLElement) {
+        importPreview.hidden = false;
+        importPreview.innerHTML = data.events
+          .slice(0, 12)
+          .map(
+            (item) => `
+              <article class="preview-item">
+                <strong>${escapeHtml(item.title)}</strong>
+                <span>${escapeHtml(eventDateRange(item))}</span>
+                <small>${escapeHtml(item.publicLocation || "Unknown location")}</small>
+                <p>${escapeHtml(String(item.summary || "").slice(0, 420))}</p>
+                <small>${escapeHtml([...(item.tags || []), ...(item.genres || [])].join(", "))}</small>
+                <small>${escapeHtml(item.sourceUrl)}</small>
+              </article>
+            `,
+          )
+          .join("");
+      }
+      setStatus(importStatus, `Preview loaded ${data.events.length} events.`, "positive");
+    } catch (error) {
+      setStatus(importStatus, error instanceof Error ? error.message : "Import preview failed.", "danger");
+    } finally {
+      setBusy(previewImportButton, false);
+    }
+  }
+
+  async function syncImport() {
+    setBusy(syncImportButton, true);
+    setStatus(importStatus, "Syncing import drafts...", "warning");
+    try {
+      const response = await fetch("/api/admin/imports/jiripetrak/sync", {
+        method: "POST",
+        headers: adminHeaders(),
+      });
+      const data = await parseResponse(response);
+      if (importState instanceof HTMLElement) importState.textContent = `${data.created} new / ${data.updated} updated`;
+      setStatus(importStatus, `Synced ${data.imported} source events.`, "positive");
+      await loadEvents();
+    } catch (error) {
+      setStatus(importStatus, error instanceof Error ? error.message : "Import sync failed.", "danger");
+    } finally {
+      setBusy(syncImportButton, false);
+    }
+  }
+
+  async function publishSlug(slug) {
+    const response = await fetch("/api/admin/events", {
+      method: "PATCH",
+      headers: adminHeaders(true),
+      body: JSON.stringify({ slug, action: "publish" }),
+    });
+    await parseResponse(response);
+  }
+
+  async function deleteSlug(slug) {
+    const response = await fetch("/api/admin/events", {
+      method: "DELETE",
+      headers: adminHeaders(true),
+      body: JSON.stringify({ slug, confirmSlug: slug }),
+    });
+    await parseResponse(response);
+  }
+
+  async function bulkPublishSelected() {
+    const selectedDrafts = state.events.filter((item) => state.selectedSlugs.has(item.slug) && !item.isPublished);
+    if (selectedDrafts.length === 0) return;
+
+    setStatus(globalStatus, `Publishing ${selectedDrafts.length} drafts...`, "warning");
+    setBusy(bulkPublishButton, true);
+    try {
+      for (const item of selectedDrafts) {
+        await publishSlug(item.slug);
+      }
+      setStatus(globalStatus, `Published ${selectedDrafts.length} drafts.`, "positive");
+      await loadEvents();
+    } catch (error) {
+      setStatus(globalStatus, error instanceof Error ? error.message : "Bulk publish failed.", "danger");
+    } finally {
+      setBusy(bulkPublishButton, false);
       renderEvents();
-    });
+    }
   }
 
-  if (createForm instanceof HTMLFormElement) {
-    createForm.addEventListener("input", updateCreateSummary);
+  async function bulkDeleteSelected() {
+    const selectedRows = state.events.filter((item) => state.selectedSlugs.has(item.slug));
+    if (selectedRows.length === 0) return;
 
-    createForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      clearDebug();
+    const confirmation = window.prompt(`Type DELETE ${selectedRows.length} to delete ${selectedRows.length} selected events.`);
+    if (confirmation !== `DELETE ${selectedRows.length}`) return;
 
-      if (!state.authenticated) {
-        setStatus(result, "Nejdřív odemkni admin secret.", "danger");
-        return;
+    setStatus(globalStatus, `Deleting ${selectedRows.length} events...`, "warning");
+    setBusy(bulkDeleteButton, true);
+    try {
+      for (const item of selectedRows) {
+        await deleteSlug(item.slug);
+        state.selectedSlugs.delete(item.slug);
+      }
+      setStatus(globalStatus, `Deleted ${selectedRows.length} events.`, "positive");
+      await loadEvents();
+    } catch (error) {
+      setStatus(globalStatus, error instanceof Error ? error.message : "Bulk delete failed.", "danger");
+    } finally {
+      setBusy(bulkDeleteButton, false);
+      renderEvents();
+    }
+  }
+
+  async function handleEventAction(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const action = target.dataset.action;
+    const slug = target.dataset.slug;
+    if (!action || !slug) return;
+    const item = state.events.find((candidate) => candidate.slug === slug);
+    if (!item) return;
+
+    if (action === "select") {
+      if (target instanceof HTMLInputElement && target.checked) {
+        state.selectedSlugs.add(slug);
+      } else {
+        state.selectedSlugs.delete(slug);
+      }
+      renderEvents();
+      return;
+    }
+
+    if (action === "edit") {
+      fillEditor(item);
+      return;
+    }
+
+    try {
+      if (action === "publish") {
+        await publishSlug(slug);
+        setStatus(globalStatus, `Published ${slug}.`, "positive");
       }
 
-      try {
-        const startsAtInput = createForm.elements.namedItem("startsAt");
-        const startsAtLocal = startsAtInput instanceof HTMLInputElement ? startsAtInput.value : "";
-        const startsAtIso = toIsoDateTime(startsAtLocal);
-
-        if (!startsAtIso) {
-          setStatus(result, "Začátek akce není ve validním formátu.", "danger");
-          return;
-        }
-
-        setStatus(result, "Vytvářím akci...", "warning");
-        setButtonBusy(createSubmitButton, "Vytvářím...", "Vytvořit akci", true);
-
-        const data = new FormData(createForm);
-        const payload = {
-          title: String(data.get("title") || ""),
-          summary: String(data.get("summary") || ""),
-          publicLocation: String(data.get("publicLocation") || ""),
-          startsAt: startsAtIso,
-          coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
-          isPublished: data.get("isPublished") === "on",
-          unlockCode: String(data.get("unlockCode") || ""),
-          secretInfo: String(data.get("secretInfo") || ""),
-          secretLocationName: String(data.get("secretLocationName") || ""),
-          secretLatitude: Number(data.get("secretLatitude")),
-          secretLongitude: Number(data.get("secretLongitude")),
-          secretMapNote: String(data.get("secretMapNote") || "").trim() || undefined,
-        };
-
-        const response = await fetch("/api/admin/events", {
-          method: "POST",
-          headers: getAuthHeaders(true),
-          body: JSON.stringify(payload),
-        });
-
-        const json = await parseJsonResponse(response);
-
-        if (!response.ok || !json?.ok) {
-          const err = json?.error || {};
-          setStatus(result, err.message || "Vytvoření akce selhalo.", "danger");
-          showDebug({
-            status: response.status,
-            code: err.code,
-            body: json,
-          });
-          return;
-        }
-
-        const slug = json.data?.slug;
-        setStatus(result, slug ? `Akce vytvořena. Detail: /akce/${slug}` : "Akce vytvořena.", "positive");
-        createForm.reset();
-        updateCreateSummary();
-        await loadEvents({ preserveMessage: true });
-      } catch (error) {
-        setStatus(result, error instanceof Error ? error.message : "Nepodařilo se kontaktovat server.", "danger");
-        showDebug({ error: "CREATE_EVENT_FAILED" });
-      } finally {
-        setButtonBusy(createSubmitButton, "Vytvářím...", "Vytvořit akci", false);
+      if (action === "delete") {
+        const confirmSlug = window.prompt(`Type slug to delete: ${slug}`);
+        if (confirmSlug !== slug) return;
+        await deleteSlug(slug);
+        state.selectedSlugs.delete(slug);
+        setStatus(globalStatus, `Deleted ${slug}.`, "positive");
       }
-    });
+
+      await loadEvents();
+    } catch (error) {
+      setStatus(globalStatus, error instanceof Error ? error.message : `${action} failed.`, "danger");
+    }
   }
 
-  if (resetFormButton instanceof HTMLButtonElement && createForm instanceof HTMLFormElement) {
-    resetFormButton.addEventListener("click", () => {
-      createForm.reset();
-      updateCreateSummary();
-      setStatus(result, "Formulář byl vyčištěn.", "neutral");
-    });
+  for (const input of document.querySelectorAll('input[name="accessType"]')) {
+    input.addEventListener("change", syncAccessMode);
   }
+  syncAccessMode();
+  publishInput?.addEventListener("change", syncSaveButtonLabel);
 
-  updateCreateSummary();
-  resetAccessState();
+  accessForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    authenticate();
+  });
+  eventForm?.addEventListener("submit", saveEvent);
+  resetFormButton?.addEventListener("click", resetEditor);
+  reloadEventsButton?.addEventListener("click", async () => {
+    await loadEvents();
+  });
+  reloadDiagnosticsButton?.addEventListener("click", async () => {
+    await loadDiagnostics();
+  });
+  previewImportButton?.addEventListener("click", previewImport);
+  syncImportButton?.addEventListener("click", syncImport);
+  eventsTable?.addEventListener("click", handleEventAction);
+  eventFilter?.addEventListener("input", () => {
+    state.filters.query = eventFilter instanceof HTMLInputElement ? eventFilter.value : "";
+    renderEvents();
+  });
+  statusFilter?.addEventListener("change", () => {
+    state.filters.status = statusFilter instanceof HTMLSelectElement ? statusFilter.value : "all";
+    renderEvents();
+  });
+  accessFilter?.addEventListener("change", () => {
+    state.filters.access = accessFilter instanceof HTMLSelectElement ? accessFilter.value : "all";
+    renderEvents();
+  });
+  sourceFilter?.addEventListener("change", () => {
+    state.filters.source = sourceFilter instanceof HTMLSelectElement ? sourceFilter.value : "all";
+    renderEvents();
+  });
+  timeFilter?.addEventListener("change", () => {
+    state.filters.time = timeFilter instanceof HTMLSelectElement ? timeFilter.value : "all";
+    renderEvents();
+  });
+  selectFiltered?.addEventListener("change", () => {
+    const rows = filteredEvents();
+    const checked = selectFiltered instanceof HTMLInputElement && selectFiltered.checked;
+    for (const item of rows) {
+      if (checked) {
+        state.selectedSlugs.add(item.slug);
+      } else {
+        state.selectedSlugs.delete(item.slug);
+      }
+    }
+    renderEvents();
+  });
+  clearSelectionButton?.addEventListener("click", () => {
+    state.selectedSlugs.clear();
+    renderEvents();
+  });
+  bulkPublishButton?.addEventListener("click", bulkPublishSelected);
+  bulkDeleteButton?.addEventListener("click", bulkDeleteSelected);
 </script>
 
 <style>
+  :global(html.admin-html) {
+    scroll-snap-type: none;
+  }
+
   :global(body.admin-body) {
     scroll-snap-type: none;
+    overflow-x: clip;
     background:
-      radial-gradient(circle at top left, rgba(255, 233, 182, 0.22), transparent 28%),
-      linear-gradient(180deg, #920000 0%, #b40808 38%, #c00 100%);
+      linear-gradient(90deg, rgba(0, 0, 0, 0.12) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.12) 1px, transparent 1px),
+      #c00;
+    background-size: 28px 28px;
   }
 
-  .admin-page {
-    max-width: 1320px;
+  :global(body.admin-body section) {
+    min-height: auto;
+    scroll-snap-align: none;
+    perspective: none;
+    transform: none !important;
+    transform-style: flat;
+    opacity: 1 !important;
+    filter: none !important;
+    transition: none;
+  }
+
+  .admin-shell {
+    max-width: 1440px;
     margin: 0 auto;
-    padding: 36px 20px 72px;
-    position: relative;
-    z-index: 1;
-    display: grid;
-    gap: 24px;
-  }
-
-  .admin-header,
-  .access-grid,
-  .workspace-grid {
-    display: grid;
-    gap: 20px;
-  }
-
-  .admin-header,
-  .access-grid {
-    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.8fr);
-  }
-
-  .workspace-grid {
-    grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
-    align-items: start;
-  }
-
-  .hero-card,
-  .panel {
-    border: 3px solid #000;
-    box-shadow: 14px 14px 0 #000;
-  }
-
-  .hero-card {
     padding: 24px;
-  }
-
-  .intro-card {
-    background:
-      linear-gradient(135deg, rgba(14, 14, 14, 0.96), rgba(55, 10, 10, 0.96)),
-      #111;
-    color: #fff7e5;
-    display: grid;
-    gap: 14px;
-  }
-
-  .support-card {
-    background:
-      linear-gradient(180deg, rgba(255, 238, 199, 0.95), rgba(247, 209, 130, 0.96)),
-      #f7d182;
-    display: grid;
-    align-content: center;
-    text-align: center;
-  }
-
-  .eyebrow,
-  .panel-kicker {
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-size: 0.78rem;
-    font-weight: 700;
-  }
-
-  .intro-card h1 {
-    font-size: clamp(2.8rem, 6vw, 5.4rem);
-    line-height: 0.92;
-    max-width: 9ch;
-  }
-
-  .panel-copy,
-  .locked-item p,
-  .step-head p,
-  .danger-copy {
-    line-height: 1.55;
-  }
-
-  .hero-tags,
-  .locked-grid,
-  .summary-grid,
-  .events-list,
-  .field-stack {
-    display: grid;
-    gap: 12px;
-  }
-
-  .hero-tags {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .hero-tag {
-    border: 2px solid #fff7e5;
-    padding: 8px 10px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-  }
-
-  .locked-item,
-  .summary-item,
-  .step-block,
-  .event-item,
-  .empty-state {
-    border: 2px solid #000;
-    background: rgba(255, 255, 255, 0.72);
-  }
-
-  .highlight-index,
-  .step-number {
-    font-family: var(--font-display);
-    font-size: 1.3rem;
-  }
-
-  .panel {
-    background: rgba(255, 246, 228, 0.94);
-    padding: 22px;
     display: grid;
     gap: 16px;
   }
 
-  .access-panel {
-    background:
-      linear-gradient(135deg, rgba(15, 15, 15, 0.97), rgba(43, 9, 9, 0.97)),
-      #111;
-    color: #fff8eb;
+  .admin-shell [hidden] {
+    display: none !important;
   }
 
-  .panel-head {
-    display: flex;
-    justify-content: space-between;
-    gap: 14px;
-    align-items: start;
-  }
-
-  .panel h2,
-  .support-card h2 {
-    font-size: clamp(1.7rem, 3vw, 2.5rem);
-    line-height: 1;
-  }
-
-  .status-badge,
-  .pill,
-  .stat-pill {
-    border: 2px solid currentColor;
-    padding: 7px 10px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    white-space: nowrap;
-  }
-
-  .status-badge.neutral {
-    color: #f7d182;
-  }
-
-  .status-badge.positive {
-    color: #8ef1b0;
-  }
-
-  .status-badge.danger {
-    color: #ffafaf;
-  }
-
-  .field,
-  .delete-form {
+  .access-gate {
+    min-height: calc(100svh - 48px) !important;
     display: grid;
-    gap: 8px;
+    place-items: center;
   }
 
-  .field-label {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+  .gate-card {
+    width: min(100%, 560px);
+    border: 4px solid #000;
+    background: #fff6df;
+    box-shadow: 12px 12px 0 #000;
+    padding: 24px;
+    display: grid;
+    gap: 16px;
+  }
+
+  .gate-card h1 {
+    font-size: clamp(2.4rem, 8vw, 4.8rem);
+    max-width: 8ch;
+  }
+
+  .gate-copy,
+  .topbar-note {
+    line-height: 1.45;
     font-weight: 700;
   }
 
-  .secret-input-row,
+  .admin-topbar,
+  .status-grid,
+  .field-row,
   .action-row,
-  .field-pair,
-  .event-actions,
-  .event-badges,
-  .stats-row {
+  .panel-head,
+  .table-tools,
+  .row-actions,
+  .badges {
     display: flex;
     gap: 10px;
+  }
+
+  .field-row {
     flex-wrap: wrap;
   }
 
-  .secret-input-row > :first-child,
-  .field-pair > :first-child,
-  .field-pair > :last-child {
-    flex: 1 1 280px;
+  .admin-topbar,
+  .panel-head {
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .admin-topbar {
+    border: 3px solid #000;
+    background: #fff6df;
+    padding: 16px;
+    box-shadow: 7px 7px 0 #000;
+  }
+
+  h1,
+  h2 {
+    line-height: 1;
+  }
+
+  .kicker,
+  label span,
+  .metric span,
+  .slug,
+  .badge {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.76rem;
+    font-weight: 700;
+  }
+
+  .access-form,
+  .table-tools {
+    display: flex;
+    gap: 8px;
+    width: 100%;
   }
 
   input,
   textarea,
+  select,
   button,
-  a.ghost-button {
-    width: 100%;
+  a {
     border: 2px solid #000;
-    padding: 11px 12px;
     background: #fffef8;
     color: #000;
+    padding: 9px 10px;
+    font: inherit;
     box-sizing: border-box;
-    font-family: var(--font-body);
-    font-size: 1rem;
+    border-radius: 0;
   }
 
-  textarea {
-    min-height: 112px;
-    resize: vertical;
+  label input,
+  label textarea,
+  .event-form input,
+  .event-form textarea {
+    width: 100%;
+  }
+
+  .access-form input,
+  .table-tools input {
+    min-width: 0;
   }
 
   button,
-  a.ghost-button {
+  a {
     cursor: pointer;
-    font-weight: 700;
+    font-weight: 800;
     text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  }
+
+  button:hover,
+  a:hover {
+    background: #000;
+    color: #ff1a1a;
   }
 
   button:disabled {
-    cursor: not-allowed;
     opacity: 0.45;
+    cursor: not-allowed;
   }
 
-  input:focus,
-  textarea:focus,
-  button:focus,
-  a.ghost-button:focus,
-  details summary:focus {
-    outline: 3px solid #000;
-    outline-offset: 2px;
+  textarea {
+    min-height: 92px;
+    resize: vertical;
   }
 
-  .primary-button {
-    background: #000;
-    color: #f7d182;
+  .access-form input,
+  .table-tools input {
+    flex: 1;
   }
 
-  .ghost-button {
-    background: transparent;
-    color: inherit;
+  .action-row .status-line {
+    flex: 1 1 260px;
   }
 
-  .compact-button {
-    width: auto;
-  }
-
-  .summary-panel {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 233, 182, 0.92)),
-      #fff;
-  }
-
-  .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .summary-item {
-    padding: 14px;
+  .status-grid {
     display: grid;
-    gap: 6px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .summary-wide {
-    grid-column: 1 / -1;
-  }
-
-  .summary-label {
-    font-size: 0.76rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    opacity: 0.7;
-  }
-
-  .locked-panel {
-    background:
-      linear-gradient(180deg, rgba(255, 243, 214, 0.96), rgba(255, 224, 164, 0.96)),
-      #ffe0a4;
-  }
-
-  .locked-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .locked-item {
-    padding: 16px;
-  }
-
-  .create-panel {
-    align-content: start;
-  }
-
-  .step-block {
-    padding: 16px;
-    display: grid;
-    gap: 14px;
-  }
-
-  .secret-step {
-    background: rgba(255, 228, 228, 0.82);
-  }
-
-  .publish-step {
-    background: rgba(255, 241, 205, 0.82);
-  }
-
-  .step-head {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 12px;
-    align-items: start;
-  }
-
-  .step-head h3 {
-    font-size: 1.3rem;
-  }
-
-  .publish-toggle {
-    display: flex;
-    align-items: start;
-    gap: 14px;
+  .metric,
+  .panel,
+  .status-line {
     border: 2px solid #000;
-    background: rgba(255, 255, 255, 0.68);
-    padding: 14px;
+    background: #fff6df;
   }
 
-  .publish-toggle input {
-    width: 20px;
-    height: 20px;
-    margin: 0;
-    padding: 0;
-    flex: 0 0 auto;
-  }
-
-  .publish-toggle span {
+  .metric {
+    padding: 12px;
     display: grid;
     gap: 4px;
+    box-shadow: 4px 4px 0 #000;
   }
 
-  .create-footer {
-    border-top: 2px solid #000;
-    padding-top: 16px;
-    display: grid;
-    gap: 14px;
+  .metric strong {
+    font-size: 1.15rem;
   }
 
   .status-line {
-    border: 2px solid #000;
-    padding: 12px 14px;
+    padding: 9px 10px;
+    margin: 0;
     font-weight: 700;
-  }
-
-  .status-line.neutral {
-    background: rgba(255, 255, 255, 0.72);
   }
 
   .status-line.positive {
-    background: #d6ffd9;
+    background: #bbf7d0;
   }
 
   .status-line.warning {
-    background: #fff0b8;
+    background: #fde68a;
   }
 
   .status-line.danger {
-    background: #ffd7d7;
+    background: #fecaca;
   }
 
-  .manage-panel {
-    align-content: start;
-  }
-
-  .stat-pill,
-  .pill.soft {
-    background: rgba(255, 255, 255, 0.72);
-    color: #000;
-  }
-
-  .pill.live {
-    background: #c00;
-    color: #000;
-  }
-
-  .pill.draft {
-    background: #f7d182;
-    color: #000;
-  }
-
-  .event-item {
-    padding: 16px;
+  .workspace {
     display: grid;
-    gap: 14px;
+    gap: 16px;
   }
 
-  .event-head {
-    display: flex;
-    justify-content: space-between;
+  .cockpit-grid {
+    display: grid;
+    grid-template-columns: minmax(380px, 0.92fr) minmax(320px, 0.58fr);
+    align-items: start;
     gap: 16px;
+  }
+
+  .panel {
+    padding: 14px;
+    display: grid;
+    gap: 12px;
+    box-shadow: 5px 5px 0 #000;
+  }
+
+  .panel-head {
     align-items: start;
   }
 
-  .event-title {
-    font-size: 1.25rem;
-    margin-bottom: 4px;
+  .form-panel {
+    grid-row: span 2;
   }
 
-  .event-slug {
-    font-family: monospace;
-    overflow-wrap: anywhere;
-    opacity: 0.75;
-  }
-
-  .event-meta-list {
+  .side-column {
     display: grid;
-    gap: 6px;
+    gap: 16px;
   }
 
-  .danger-zone {
+  .events-panel {
+    grid-column: 1 / -1;
+    overflow: hidden;
+  }
+
+  .table-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .table-tools input,
+  .table-tools select {
+    min-width: 145px;
+  }
+
+  .table-tools input {
+    min-width: min(320px, 100%);
+  }
+
+  .bulk-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
     border: 2px solid #000;
-    background: rgba(255, 218, 218, 0.86);
+    background: #f2dfca;
+    padding: 8px;
   }
 
-  .danger-zone summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 12px 14px;
-    font-weight: 700;
+  .bulk-bar strong {
+    border: 1px solid #000;
+    background: #fffef8;
+    padding: 7px 9px;
   }
 
-  .danger-zone summary::-webkit-details-marker {
+  .select-filtered {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid #000;
+    background: #fffef8;
+    padding: 7px 9px;
+    font-weight: 900;
+  }
+
+  .select-filtered input {
+    width: auto;
+  }
+
+  .event-form,
+  .gated-fields {
+    display: grid;
+    gap: 12px;
+  }
+
+  .gated-fields[hidden] {
     display: none;
   }
 
-  .danger-zone[open] summary {
-    border-bottom: 2px solid #000;
+  label {
+    display: grid;
+    gap: 5px;
   }
 
-  .danger-copy,
-  .delete-form {
+  .editor-mode-row {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) auto;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .form-section {
+    display: grid;
+    gap: 10px;
     margin: 0;
-    padding: 14px;
-  }
-
-  .danger-button {
-    background: #1e0000;
-    color: #fff3f3;
-  }
-
-  .debug {
-    border: 2px solid #000;
-    background: #fff;
     padding: 12px;
+    border: 2px solid #000;
+    background: rgba(255, 254, 248, 0.52);
+  }
+
+  .form-section legend {
+    padding: 5px 8px;
+    border: 2px solid #000;
+    background: #000;
+    color: #ff1a1a;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .title-field input {
+    font-size: 1.18rem;
+    font-weight: 800;
+  }
+
+  .field-row > label {
+    flex: 1 1 240px;
+  }
+
+  .segmented {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 2px solid #000;
+    background: #fffef8;
+  }
+
+  .segmented label {
+    display: block;
+    cursor: pointer;
+  }
+
+  .segmented input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .segmented span {
+    display: block;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .segmented input:checked + span {
+    background: #000;
+    color: #c00;
+  }
+
+  .publish-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 130px;
+    border: 2px solid #000;
+    background: #fffef8;
+    padding: 9px 10px;
+    cursor: pointer;
+  }
+
+  .publish-check input {
+    width: auto;
+  }
+
+  .publish-check:has(input:checked) {
+    background: #bbf7d0;
+  }
+
+  .editor-actions {
+    position: sticky;
+    bottom: 10px;
+    z-index: 2;
+    align-items: stretch;
+    border: 2px solid #000;
+    background: #f2dfca;
+    padding: 8px;
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  .editor-actions button {
+    min-width: 170px;
+    background: #000;
+    color: #ff1a1a;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .preview-list,
+  .diagnostics {
+    display: grid;
+    gap: 8px;
+    max-height: 340px;
     overflow: auto;
-    max-height: 280px;
-    font-size: 0.9rem;
   }
 
+  .preview-item,
+  .diagnostics p,
   .empty-state {
-    padding: 16px;
+    border: 1px solid #000;
+    padding: 9px;
+    background: rgba(255, 255, 255, 0.7);
   }
 
-  @media (max-width: 1080px) {
-    .admin-header,
-    .access-grid,
-    .workspace-grid,
-    .locked-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .intro-card h1 {
-      max-width: none;
-    }
+  .preview-item {
+    display: grid;
+    gap: 5px;
   }
 
-  @media (max-width: 768px) {
-    .admin-page {
-      padding: 24px 12px 48px;
-      gap: 18px;
-    }
+  .preview-item p {
+    white-space: pre-line;
+    line-height: 1.4;
+  }
 
-    .hero-card,
-    .panel {
-      padding: 16px;
-      box-shadow: 8px 8px 0 #000;
-    }
+  .preview-item small {
+    overflow-wrap: anywhere;
+  }
 
-    .summary-grid {
-      grid-template-columns: 1fr;
-    }
+  .events-table {
+    display: grid;
+    gap: 8px;
+    overflow-x: auto;
+  }
 
-    .summary-wide {
-      grid-column: auto;
-    }
+  .event-row {
+    display: grid;
+    grid-template-columns: 32px 74px minmax(260px, 1.4fr) 190px 150px 150px 160px minmax(230px, auto);
+    gap: 10px;
+    align-items: stretch;
+    border: 2px solid #000;
+    background: #fffef8;
+    padding: 10px;
+    min-width: 1210px;
+  }
 
+  .event-table-head {
+    display: grid;
+    grid-template-columns: 32px 74px minmax(260px, 1.4fr) 190px 150px 150px 160px minmax(230px, auto);
+    gap: 10px;
+    min-width: 1210px;
+    border: 2px solid #000;
+    background: #000;
+    color: #ff1a1a;
+    padding: 8px 10px;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .event-row.selected {
+    background: #fff1a8;
+    box-shadow: inset 0 0 0 3px #000;
+  }
+
+  .row-select {
+    display: grid;
+    place-items: start center;
+    padding-top: 4px;
+  }
+
+  .row-select input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .event-row strong,
+  .slug {
+    display: block;
+  }
+
+  .slug {
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+  }
+
+  .event-thumb {
+    width: 74px;
+    height: 74px;
+    object-fit: cover;
+    border: 2px solid #000;
+    background: #f2dfca;
+  }
+
+  .event-thumb-empty {
+    display: block;
+    width: 74px;
+    height: 74px;
+  }
+
+  .event-main,
+  .event-when,
+  .event-place,
+  .event-source {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .event-main p {
+    margin: 6px 0 0;
+    white-space: pre-line;
+    line-height: 1.35;
+    max-height: 4.1em;
+    overflow: hidden;
+  }
+
+  .event-source {
+    display: grid;
+    gap: 6px;
+    align-content: start;
+  }
+
+  .event-source small {
+    line-height: 1.3;
+  }
+
+  .badge {
+    border: 1px solid #000;
+    padding: 4px 6px;
+    background: #fff;
+  }
+
+  .badge.live {
+    background: #bbf7d0;
+  }
+
+  .badge.draft {
+    background: #fde68a;
+  }
+
+  .badge.danger {
+    background: #fecaca;
+  }
+
+  .badge.soft {
+    background: #e5e7eb;
+  }
+
+  .row-actions button,
+  .row-actions a {
+    padding: 7px 8px;
+  }
+
+  @media (max-width: 980px) {
+    .admin-topbar,
+    .access-form,
+    .field-row,
+    .editor-mode-row,
     .panel-head,
-    .event-head,
-    .field-pair,
-    .secret-input-row {
+    .table-tools,
+    .row-actions {
       flex-direction: column;
       align-items: stretch;
     }
 
-    input,
-    textarea,
-    button,
-    a.ghost-button {
-      font-size: 0.95rem;
-      padding: 10px 11px;
+    .editor-mode-row {
+      display: grid;
+      grid-template-columns: 1fr;
     }
 
-    .compact-button {
-      width: 100%;
+    .status-grid,
+    .cockpit-grid {
+      grid-template-columns: 1fr;
     }
 
-    .debug {
-      max-height: 180px;
-      font-size: 0.78rem;
+    .event-row {
+      grid-template-columns: 1fr;
+      min-width: 0;
+    }
+
+    .event-table-head {
+      display: none;
+    }
+
+    .event-thumb-empty {
+      display: none;
+    }
+
+    .admin-shell {
+      padding: 14px;
+    }
+
+    .gate-card {
+      padding: 18px;
+      box-shadow: 8px 8px 0 #000;
     }
   }
 </style>

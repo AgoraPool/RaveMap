@@ -1,36 +1,45 @@
 ---
 export const prerender = false;
 
-import { and, eq } from "drizzle-orm";
 import Layout from "../../layouts/Layout.astro";
-import { db } from "../../db/client";
-import { events } from "../../db/schema";
+import { getNostrEventRepository } from "../../lib/server/nostr-repository";
 
 const slug = Astro.params.slug?.trim().toLowerCase() ?? "";
 const slugValid = /^[a-z0-9-]{3,120}$/.test(slug);
+const repository = getNostrEventRepository();
 
-const rows = slugValid
-  ? await db
-      .select({
-        slug: events.slug,
-        title: events.title,
-        summary: events.summary,
-        publicLocation: events.publicLocation,
-        startsAt: events.startsAt,
-        coverImageUrl: events.coverImageUrl,
-      })
-      .from(events)
-      .where(and(eq(events.slug, slug), eq(events.isPublished, true)))
-      .limit(1)
-  : [];
-
-const event = rows[0] ?? null;
+const event = slugValid ? await repository.getPublishedEvent(slug) : null;
 if (!event) {
   Astro.response.status = 404;
 }
+const publisherPubkey = repository.getPublisherPubkey();
+const commentCoordinate = event ? `31923:${publisherPubkey}:${event.slug}` : "";
+const comments = event ? await repository.listComments(event.slug).catch(() => []) : [];
 
 const formatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "full",
+  timeStyle: "short",
+});
+
+const shortFormatter = new Intl.DateTimeFormat("cs-CZ", {
+  day: "numeric",
+  month: "numeric",
+  year: "numeric",
+});
+
+const formatEventDate = () => {
+  if (!event) {
+    return "";
+  }
+
+  const start = formatter.format(event.startsAt);
+  return event.endAt ? `${start} -> ${formatter.format(event.endAt)}` : start;
+};
+
+const sourceSummaryFallback = event ? `${event.title}\n${event.publicLocation}\n${shortFormatter.format(event.startsAt)}` : "";
+const showSummary = Boolean(event?.summary && event.summary.trim() !== sourceSummaryFallback.trim() && event.summary.trim() !== event.title.trim());
+const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
+  dateStyle: "medium",
   timeStyle: "short",
 });
 ---
@@ -49,7 +58,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     {
       !event ? (
         <div class="event-layout event-layout-missing">
-          <a class="back-link" href="/#akce">Zpět na akce</a>
+          <a class="back-link" href="/akce">Zpět na akce</a>
           <article class="event-card public-card">
             <p class="card-kicker">AKCE</p>
             <h1>Akce nenalezena</h1>
@@ -59,7 +68,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       ) : (
         <div class="event-layout">
           <div class="event-topbar">
-            <a class="back-link" href="/#akce">Zpět na akce</a>
+            <a class="back-link" href="/akce">Zpět na akce</a>
             <span class="event-slug">{event.slug}</span>
           </div>
 
@@ -72,63 +81,197 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
               </div>
             </div>
 
-            <img
-              class="event-cover"
-              src={event.coverImageUrl || "/bunkr.png"}
-              alt={event.title}
-            />
-            <h1>{event.title}</h1>
-            <p class="event-date">{formatter.format(event.startsAt)}</p>
-            <p class="card-copy">{event.summary}</p>
+            <div class:list={["public-event-body", event.coverImageUrl && "has-cover"]}>
+              {
+                event.coverImageUrl ? (
+                  <img
+                    class="event-cover"
+                    src={event.coverImageUrl}
+                    alt={event.title}
+                  />
+                ) : null
+              }
+
+              <div class="event-content">
+                <h1>{event.title}</h1>
+
+                <div class="event-facts">
+                  <div>
+                    <span>Datum</span>
+                    <strong>{formatEventDate()}</strong>
+                  </div>
+                  <div>
+                    <span>Lokalita</span>
+                    <strong>{event.publicLocation}</strong>
+                  </div>
+                  {
+                    event.source && (
+                      <div>
+                        <span>Zdroj</span>
+                        <strong>{event.source.name}</strong>
+                      </div>
+                    )
+                  }
+                </div>
+
+                {showSummary && <p class="card-copy">{event.summary}</p>}
+
+                {
+                  event.tags.length > 0 && (
+                    <div class="chip-group" aria-label="Tagy">
+                      {event.tags.map((tag) => <span>{tag}</span>)}
+                    </div>
+                  )
+                }
+
+                {
+                  event.lineup.length > 0 && (
+                    <p class="event-meta-line">
+                      Lineup: {event.lineup.join(", ")}
+                    </p>
+                  )
+                }
+                {
+                  event.genres.length > 0 && (
+                    <p class="event-meta-line">
+                      Genres: {event.genres.join(", ")}
+                    </p>
+                  )
+                }
+
+                {
+                  (event.source?.url || event.externalUrl) && (
+                    <div class="event-links">
+                      {
+                        event.source?.url && (
+                          <a class="external-link" href={event.source.url} target="_blank" rel="noreferrer">
+                            Původní událost
+                          </a>
+                        )
+                      }
+                      {
+                        event.externalUrl && event.externalUrl !== event.source?.url && (
+                          <a class="external-link" href={event.externalUrl} target="_blank" rel="noreferrer">
+                            Externí odkaz
+                          </a>
+                        )
+                      }
+                    </div>
+                  )
+                }
+              </div>
+            </div>
+
+            {
+              event.galleryImageUrls.length > 1 && (
+                <div class="event-gallery" aria-label="Fotogalerie">
+                  {event.galleryImageUrls.slice(0, 8).map((imageUrl) => (
+                    <img src={imageUrl} alt="" loading="lazy" />
+                  ))}
+                </div>
+              )
+            }
           </article>
 
-          <article class="event-card secret-card">
+          {
+            event.accessType === "gated" ? (
+              <article class="event-card secret-card">
+                <div class="card-head">
+                  <p class="card-kicker">SECRET</p>
+                  <span id="secret-state" class="meta-pill">LOCKED</span>
+                </div>
+
+                <form id="unlock-form" class="unlock-form" data-slug={event.slug}>
+                  <label class="unlock-field" for="unlockCode">
+                    <span class="unlock-label">Unlock kód</span>
+                    <input
+                      id="unlockCode"
+                      class="secret-input"
+                      name="unlockCode"
+                      type="password"
+                      placeholder="SECRET KOD"
+                      minlength="8"
+                      maxlength="128"
+                      required
+                    />
+                  </label>
+                  <button class="secret-button" type="submit">ODEMKNOUT</button>
+                </form>
+
+                <p id="unlock-message" class="unlock-message" role="status" aria-live="polite"></p>
+
+                <div id="secret-content" class="secret-content" hidden>
+                  <div class="secret-block">
+                    <span class="secret-label">Lokace</span>
+                    <h2 id="secret-location"></h2>
+                  </div>
+                  <div class="secret-block">
+                    <span class="secret-label">Info</span>
+                    <p id="secret-info"></p>
+                  </div>
+                  <div class="secret-block secret-note-block" id="secret-note-wrap" hidden>
+                    <span class="secret-label">Poznámka</span>
+                    <p id="secret-note"></p>
+                  </div>
+                  <iframe
+                    id="secret-map"
+                    title="Mapa tajné lokace"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                    width="100%"
+                    height="320"
+                  ></iframe>
+                </div>
+              </article>
+            ) : (
+              <article class="event-card public-access-card">
+                <div class="card-head">
+                  <p class="card-kicker">PUBLIC EVENT</p>
+                  <span class="meta-pill meta-pill-positive">NO CODE</span>
+                </div>
+                <p class="card-copy">
+                  Tahle akce je veřejný záznam z hudebního kalendáře. Secret vrstva není potřeba.
+                </p>
+              </article>
+            )
+          }
+
+          <article class="event-card comments-card" id="comments" data-slug={event.slug} data-coordinate={commentCoordinate}>
             <div class="card-head">
-              <p class="card-kicker">SECRET</p>
-              <span id="secret-state" class="meta-pill">LOCKED</span>
+              <div>
+                <p class="card-kicker">COMMENTS</p>
+                <h2>Diskuze</h2>
+              </div>
+              <span id="comment-mode" class="meta-pill meta-pill-soft">Anonymous</span>
             </div>
 
-            <form id="unlock-form" class="unlock-form" data-slug={event.slug}>
-              <label class="unlock-field" for="unlockCode">
-                <span class="unlock-label">Unlock kód</span>
-                <input
-                  id="unlockCode"
-                  class="secret-input"
-                  name="unlockCode"
-                  type="password"
-                  placeholder="SECRET KOD"
-                  minlength="8"
-                  maxlength="128"
-                  required
-                />
-              </label>
-              <button class="secret-button" type="submit">ODEMKNOUT</button>
+            <div id="comment-list" class="comment-list" aria-live="polite">
+              {
+                comments.length > 0 ? (
+                  comments.map((comment) => (
+                    <article class="comment-item">
+                      <div class="comment-meta">
+                        <strong>{comment.authorName}</strong>
+                        <time datetime={comment.createdAt.toISOString()}>{commentFormatter.format(comment.createdAt)}</time>
+                      </div>
+                      <p>{comment.content}</p>
+                    </article>
+                  ))
+                ) : (
+                  <p class="empty-comments">Zatím žádné komentáře.</p>
+                )
+              }
+            </div>
+
+            <form id="comment-form" class="comment-form">
+              <input id="comment-nickname" name="nickname" type="text" maxlength="40" placeholder="Nickname optional" />
+              <textarea id="comment-content" name="content" maxlength="1200" placeholder="Add a comment..." required></textarea>
+              <div class="comment-actions">
+                <button id="comment-submit" type="submit">Post comment</button>
+                <button id="comment-signer" type="button">Use my account</button>
+              </div>
+              <p id="comment-status" class="comment-status" role="status" aria-live="polite"></p>
             </form>
-
-            <p id="unlock-message" class="unlock-message" role="status" aria-live="polite"></p>
-
-            <div id="secret-content" class="secret-content" hidden>
-              <div class="secret-block">
-                <span class="secret-label">Lokace</span>
-                <h2 id="secret-location"></h2>
-              </div>
-              <div class="secret-block">
-                <span class="secret-label">Info</span>
-                <p id="secret-info"></p>
-              </div>
-              <div class="secret-block secret-note-block" id="secret-note-wrap" hidden>
-                <span class="secret-label">Poznámka</span>
-                <p id="secret-note"></p>
-              </div>
-              <iframe
-                id="secret-map"
-                title="Mapa tajné lokace"
-                loading="lazy"
-                referrerpolicy="no-referrer"
-                width="100%"
-                height="320"
-              ></iframe>
-            </div>
           </article>
         </div>
       )
@@ -220,6 +363,143 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       }
     });
   }
+</script>
+
+<script>
+  const commentsCard = document.getElementById("comments");
+  const commentForm = document.getElementById("comment-form");
+  const commentList = document.getElementById("comment-list");
+  const commentStatus = document.getElementById("comment-status");
+  const commentMode = document.getElementById("comment-mode");
+  const signerButton = document.getElementById("comment-signer");
+  const commentSubmit = document.getElementById("comment-submit");
+  let signedCommentMode = false;
+  let signedPubkey = "";
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function setCommentStatus(message, tone = "neutral") {
+    if (!(commentStatus instanceof HTMLElement)) return;
+    commentStatus.textContent = message;
+    commentStatus.dataset.tone = tone;
+  }
+
+  function formatCommentDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium", timeStyle: "short" }).format(date);
+  }
+
+  function renderComments(comments) {
+    if (!(commentList instanceof HTMLElement)) return;
+    if (!Array.isArray(comments) || comments.length === 0) {
+      commentList.innerHTML = `<p class="empty-comments">Zatím žádné komentáře.</p>`;
+      return;
+    }
+
+    commentList.innerHTML = comments
+      .map(
+        (comment) => `
+          <article class="comment-item">
+            <div class="comment-meta">
+              <strong>${escapeHtml(comment.authorName || "Anonymous")}</strong>
+              <time datetime="${escapeHtml(comment.createdAt)}">${escapeHtml(formatCommentDate(comment.createdAt))}</time>
+            </div>
+            <p>${escapeHtml(comment.content)}</p>
+          </article>
+        `,
+      )
+      .join("");
+  }
+
+  async function parseCommentResponse(response) {
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error?.message || "Could not post comment.");
+    }
+    return payload.data;
+  }
+
+  async function buildSignedComment(slug, coordinate, content, nickname) {
+    const nostr = /** @type {any} */ (window).nostr;
+    if (!nostr?.signEvent) {
+      throw new Error("No browser signer found. Anonymous posting still works.");
+    }
+
+    if (!signedPubkey && nostr.getPublicKey) {
+      signedPubkey = await nostr.getPublicKey();
+    }
+
+    return nostr.signEvent({
+      kind: 1111,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ["A", coordinate],
+        ["K", "31923"],
+        ["P", coordinate.split(":")[1] || ""],
+        ["a", coordinate],
+        ["ravemap-event", slug],
+        ["client", "RaveMap"],
+        ...(nickname ? [["name", nickname]] : []),
+      ],
+      content,
+    });
+  }
+
+  signerButton?.addEventListener("click", async () => {
+    try {
+      const nostr = /** @type {any} */ (window).nostr;
+      if (!nostr?.getPublicKey || !nostr?.signEvent) {
+        setCommentStatus("No browser signer found. You can still post normally.", "warning");
+        return;
+      }
+
+      signedPubkey = await nostr.getPublicKey();
+      signedCommentMode = true;
+      if (commentMode instanceof HTMLElement) commentMode.textContent = "Your account";
+      setCommentStatus("Posting with your account.", "positive");
+    } catch {
+      setCommentStatus("Could not connect to your account. You can still post normally.", "warning");
+    }
+  });
+
+  commentForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!(commentForm instanceof HTMLFormElement) || !(commentsCard instanceof HTMLElement)) return;
+    const slug = commentsCard.dataset.slug;
+    const coordinate = commentsCard.dataset.coordinate;
+    const data = new FormData(commentForm);
+    const content = String(data.get("content") || "").trim();
+    const nickname = String(data.get("nickname") || "").trim();
+    if (!slug || !coordinate || !content) return;
+
+    if (commentSubmit instanceof HTMLButtonElement) commentSubmit.disabled = true;
+    setCommentStatus("Posting...", "warning");
+
+    try {
+      const signedEvent = signedCommentMode ? await buildSignedComment(slug, coordinate, content, nickname) : undefined;
+      const response = await fetch(`/api/events/${slug}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, nickname, signedEvent }),
+      });
+      const result = await parseCommentResponse(response);
+      renderComments(result.comments);
+      commentForm.reset();
+      setCommentStatus("Comment posted.", "positive");
+    } catch (error) {
+      setCommentStatus(error instanceof Error ? error.message : "Could not post comment.", "danger");
+    } finally {
+      if (commentSubmit instanceof HTMLButtonElement) commentSubmit.disabled = false;
+    }
+  });
 </script>
 
 <style>
@@ -354,6 +634,14 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     color: #fff5e1;
   }
 
+  .public-access-card {
+    background: rgba(255, 255, 255, 0.86);
+  }
+
+  .comments-card {
+    background: rgba(255, 244, 221, 0.94);
+  }
+
   .card-head,
   .meta-pills,
   .unlock-form {
@@ -381,23 +669,238 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     line-height: 0.95;
   }
 
-  .event-date {
-    font-size: 1.2rem;
-    text-transform: uppercase;
+  .public-event-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+
+  .public-event-body.has-cover {
+    grid-template-columns: minmax(220px, 340px) minmax(0, 1fr);
+  }
+
+  .event-content {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
   }
 
   .event-cover {
     width: 100%;
-    max-height: 360px;
+    max-height: 460px;
     object-fit: cover;
     border: 3px solid #000;
     background: rgba(0, 0, 0, 0.08);
+  }
+
+  .event-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.5);
+  }
+
+  .event-facts div {
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    border-right: 2px solid #000;
+    min-width: 0;
+  }
+
+  .event-facts div:last-child {
+    border-right: 0;
+  }
+
+  .event-facts span {
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 900;
+  }
+
+  .event-facts strong {
+    line-height: 1.35;
+    overflow-wrap: anywhere;
   }
 
   .card-copy {
     max-width: 60ch;
     line-height: 1.55;
     font-size: 1.1rem;
+    white-space: pre-line;
+  }
+
+  .event-meta-line {
+    line-height: 1.45;
+    font-weight: 700;
+  }
+
+  .chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip-group span {
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 7px 9px;
+    font-weight: 900;
+    overflow-wrap: anywhere;
+  }
+
+  .event-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 10px;
+    max-width: 760px;
+  }
+
+  .event-gallery img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 2px solid #000;
+    background: rgba(0, 0, 0, 0.08);
+  }
+
+  .event-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .external-link {
+    color: #000;
+    border: 2px solid #000;
+    padding: 10px 12px;
+    width: fit-content;
+    text-decoration: none;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .external-link:hover {
+    background: #000;
+    color: #c00;
+  }
+
+  .comment-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .comment-item,
+  .empty-comments {
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.68);
+    padding: 10px;
+  }
+
+  .comment-item {
+    display: grid;
+    gap: 8px;
+  }
+
+  .comment-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: baseline;
+    border-bottom: 1px solid #000;
+    padding-bottom: 6px;
+  }
+
+  .comment-meta strong {
+    overflow-wrap: anywhere;
+  }
+
+  .comment-meta time {
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .comment-item p {
+    white-space: pre-line;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .comment-form {
+    display: grid;
+    gap: 8px;
+  }
+
+  .comment-form input,
+  .comment-form textarea {
+    border: 2px solid #000;
+    background: #fffef8;
+    color: #000;
+    padding: 10px;
+    font: inherit;
+    border-radius: 0;
+    box-sizing: border-box;
+  }
+
+  .comment-form textarea {
+    min-height: 96px;
+    resize: vertical;
+  }
+
+  .comment-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .comment-actions button {
+    border: 2px solid #000;
+    padding: 10px 12px;
+    font: inherit;
+    font-weight: 900;
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  #comment-submit {
+    background: #000;
+    color: #c00;
+  }
+
+  #comment-signer {
+    background: rgba(255, 255, 255, 0.72);
+    color: #000;
+  }
+
+  .comment-actions button:hover {
+    background: #c00;
+    color: #000;
+  }
+
+  .comment-actions button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .comment-status {
+    min-height: 22px;
+    margin: 0;
+    font-weight: 800;
+  }
+
+  .comment-status[data-tone="positive"] {
+    color: #087c2f;
+  }
+
+  .comment-status[data-tone="warning"] {
+    color: #8a5d00;
+  }
+
+  .comment-status[data-tone="danger"] {
+    color: #9b0000;
   }
 
   .meta-pill {
@@ -517,7 +1020,8 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 
     .event-topbar,
     .card-head,
-    .unlock-form {
+    .unlock-form,
+    .comment-meta {
       flex-direction: column;
       align-items: stretch;
     }
@@ -527,12 +1031,26 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       box-shadow: 8px 8px 0 #000;
     }
 
+    .public-event-body,
+    .event-facts {
+      grid-template-columns: 1fr;
+    }
+
+    .event-facts div,
+    .event-facts div:last-child {
+      border-right: 0;
+      border-bottom: 2px solid #000;
+    }
+
+    .event-facts div:last-child {
+      border-bottom: 0;
+    }
+
     .public-card h1,
     .secret-card h2 {
       font-size: 1.8rem;
     }
 
-    .event-date,
     .card-copy,
     #secret-info,
     #secret-note {
@@ -542,6 +1060,10 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     .secret-button {
       width: 100%;
       min-width: 0;
+    }
+
+    .comment-actions button {
+      width: 100%;
     }
 
     .event-slug {
