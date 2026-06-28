@@ -1,4 +1,5 @@
 export const PUBLIC_EVENT_KIND = 31923;
+export const RSVP_EVENT_KIND = 31925;
 export const COMMENT_EVENT_KIND = 1111;
 export const SECRET_EVENT_KIND = 30420;
 export const DRAFT_EVENT_KIND = 30421;
@@ -51,6 +52,8 @@ export type PublicEventDto = {
   title: string;
   summary: string;
   publicLocation: string;
+  publicLatitude?: number;
+  publicLongitude?: number;
   startsAt: Date;
   endAt?: Date;
   coverImageUrl?: string;
@@ -68,6 +71,8 @@ export type PublicSubmitEventCommand = {
   title: string;
   summary: string;
   publicLocation: string;
+  publicLatitude?: number;
+  publicLongitude?: number;
   startsAt: Date;
   endAt?: Date;
   coverImageUrl?: string;
@@ -90,6 +95,19 @@ export type EventCommentDto = {
   authorName: string;
   isAnonymous: boolean;
   createdAt: Date;
+};
+
+export type RsvpStatus = "accepted" | "tentative";
+
+export type EventRsvpSummaryDto = {
+  accepted: number;
+  tentative: number;
+};
+
+export type CreateRsvpCommand = {
+  slug: string;
+  status: RsvpStatus;
+  nickname?: string;
 };
 
 export type CreateCommentCommand = {
@@ -116,6 +134,8 @@ export type CreateEventCommand = {
   title: string;
   summary: string;
   publicLocation: string;
+  publicLatitude?: number;
+  publicLongitude?: number;
   startsAt: Date;
   endAt?: Date;
   coverImageUrl?: string;

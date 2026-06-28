@@ -21,14 +21,18 @@ import {
   type AdminEventDto,
   type CreateCommentCommand,
   type CreateEventCommand,
+  type CreateRsvpCommand,
   type EventCommentDto,
+  type EventRsvpSummaryDto,
   type NostrEvent,
   type NostrFilter,
   type NostrUnsignedEvent,
   type PublicEventDto,
   type PublicSubmitEventCommand,
+  RSVP_EVENT_KIND,
   type RelayReadResult,
   type RelayWriteResult,
+  type RsvpStatus,
 } from "./nostr-types";
 
 type RelayRequestResult = {
@@ -111,6 +115,15 @@ function parseDateFromSeconds(value: string | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function parseNumberTag(value: string | undefined, min: number, max: number): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : undefined;
+}
+
 function tagValues(event: NostrEvent, name: string): string[] {
   return event.tags.filter((tag) => tag[0] === name && tag[1]).map((tag) => tag[1]);
 }
@@ -142,6 +155,10 @@ function parseCommentEvent(event: NostrEvent): EventCommentDto | null {
   };
 }
 
+function rsvpStatusFromTag(value: string | undefined): RsvpStatus | null {
+  return value === "accepted" || value === "tentative" ? value : null;
+}
+
 function accessTypeFromTag(value: string | undefined): "public" | "gated" {
   return value === "public" ? "public" : "gated";
 }
@@ -152,6 +169,8 @@ function publicFieldsFromCommand(input: CreateEventCommand, createdAt = new Date
     title: input.title,
     summary: input.summary,
     publicLocation: input.publicLocation,
+    publicLatitude: input.publicLatitude,
+    publicLongitude: input.publicLongitude,
     startsAt: input.startsAt.toISOString(),
     endAt: input.endAt?.toISOString(),
     coverImageUrl: input.coverImageUrl,
@@ -174,6 +193,8 @@ function publicDtoFromFields(fields: DraftBundle["public"], id: string, authorPu
     title: fields.title,
     summary: fields.summary,
     publicLocation: fields.publicLocation,
+    publicLatitude: fields.publicLatitude,
+    publicLongitude: fields.publicLongitude,
     startsAt: new Date(fields.startsAt),
     endAt: fields.endAt ? new Date(fields.endAt) : undefined,
     coverImageUrl: fields.coverImageUrl,
@@ -194,6 +215,8 @@ function commandFromFields(fields: DraftBundle["public"], isPublished: boolean):
     title: fields.title,
     summary: fields.summary,
     publicLocation: fields.publicLocation,
+    publicLatitude: fields.publicLatitude,
+    publicLongitude: fields.publicLongitude,
     startsAt: new Date(fields.startsAt),
     endAt: fields.endAt ? new Date(fields.endAt) : undefined,
     coverImageUrl: fields.coverImageUrl,
@@ -225,6 +248,8 @@ function parsePublicEvent(event: NostrEvent): PublicEventDto | null {
     title,
     summary: tagValue(event, "summary") || event.content,
     publicLocation,
+    publicLatitude: parseNumberTag(tagValue(event, "lat"), -90, 90),
+    publicLongitude: parseNumberTag(tagValue(event, "lon"), -180, 180),
     startsAt,
     endAt: parseDateFromSeconds(tagValue(event, "end")) ?? undefined,
     coverImageUrl: tagValue(event, "image"),
@@ -262,6 +287,10 @@ function publicEventTemplate(input: CreateEventCommand): NostrUnsignedEvent {
 
   if (input.endAt) {
     tags.push(["end", String(Math.floor(input.endAt.getTime() / 1000))]);
+  }
+
+  if (input.publicLatitude !== undefined && input.publicLongitude !== undefined) {
+    tags.push(["lat", String(input.publicLatitude)], ["lon", String(input.publicLongitude)]);
   }
 
   if (input.coverImageUrl) {
@@ -716,6 +745,114 @@ export class NostrEventRepository {
     ) {
       throw new AppError("Signed comment is invalid", {
         code: "INVALID_SIGNED_COMMENT",
+        status: 400,
+        expose: true,
+      });
+    }
+
+    return {
+      id: event.id,
+      writes: await this.publish(event),
+    };
+  }
+
+  async getRsvpSummary(slug: string): Promise<EventRsvpSummaryDto> {
+    const event = await this.getPublishedEvent(slug);
+    if (!event) {
+      throw new AppError("Event not found", {
+        code: "EVENT_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+
+    const coordinate = eventCoordinate(event.authorPubkey, slug);
+    const events = await this.fetchEvents([
+      {
+        kinds: [RSVP_EVENT_KIND],
+        "#a": [coordinate],
+        limit: 500,
+      },
+    ]);
+    const latestByAuthor = new Map<string, NostrEvent>();
+    for (const rsvp of events) {
+      const status = rsvpStatusFromTag(tagValue(rsvp, "status"));
+      if (!status || tagValue(rsvp, "ravemap-event") !== slug) {
+        continue;
+      }
+
+      const identity = rsvp.pubkey === this.pubkey && tagValue(rsvp, "anonymous") === "true" ? rsvp.id : rsvp.pubkey;
+      const existing = latestByAuthor.get(identity);
+      if (!existing || rsvp.created_at > existing.created_at) {
+        latestByAuthor.set(identity, rsvp);
+      }
+    }
+
+    const summary: EventRsvpSummaryDto = { accepted: 0, tentative: 0 };
+    for (const rsvp of latestByAuthor.values()) {
+      const status = rsvpStatusFromTag(tagValue(rsvp, "status"));
+      if (status) {
+        summary[status] += 1;
+      }
+    }
+
+    return summary;
+  }
+
+  async createAnonymousRsvp(input: CreateRsvpCommand): Promise<{ id: string; writes: RelayWriteResult[] }> {
+    const event = await this.getPublishedEvent(input.slug);
+    if (!event) {
+      throw new AppError("Event not found", {
+        code: "EVENT_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+
+    const nickname = input.nickname?.trim();
+    const coordinate = eventCoordinate(event.authorPubkey, input.slug);
+    const rsvp = await this.signer.sign({
+      kind: RSVP_EVENT_KIND,
+      created_at: nowSeconds(),
+      tags: [
+        ["a", coordinate],
+        ["d", `anonymous-${input.slug}-${crypto.randomUUID()}`],
+        ["status", input.status],
+        ["ravemap-event", input.slug],
+        ["anonymous", "true"],
+        ["client", "RaveMap"],
+        ...(nickname ? [["nickname", nickname]] : []),
+      ],
+      content: "",
+    });
+
+    return {
+      id: rsvp.id,
+      writes: await this.publish(rsvp),
+    };
+  }
+
+  async publishSignedRsvp(slug: string, event: NostrEvent): Promise<{ id: string; writes: RelayWriteResult[] }> {
+    const target = await this.getPublishedEvent(slug);
+    if (!target) {
+      throw new AppError("Event not found", {
+        code: "EVENT_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+
+    const coordinate = eventCoordinate(target.authorPubkey, slug);
+    if (
+      event.kind !== RSVP_EVENT_KIND ||
+      !tagValues(event, "a").includes(coordinate) ||
+      tagValue(event, "ravemap-event") !== slug ||
+      !rsvpStatusFromTag(tagValue(event, "status")) ||
+      event.created_at > nowSeconds() + 10 * 60 ||
+      !verifyEvent(event)
+    ) {
+      throw new AppError("Signed RSVP is invalid", {
+        code: "INVALID_SIGNED_RSVP",
         status: 400,
         expose: true,
       });

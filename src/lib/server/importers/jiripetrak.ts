@@ -15,6 +15,8 @@ export type ImportedEvent = {
   title: string;
   summary: string;
   publicLocation: string;
+  publicLatitude?: number;
+  publicLongitude?: number;
   startsAt: Date;
   endAt?: Date;
   coverImageUrl?: string;
@@ -44,7 +46,7 @@ type SyncResult = {
 
 const SOURCE_NAME = "Jiri Petrak freetekno calendar";
 const SOURCE_DISPLAY_NAME = "Jiří Petrák.cz";
-const SOURCE_IMPORT_VERSION = "jiripetrak-description-lineup-v1";
+const SOURCE_IMPORT_VERSION = "jiripetrak-description-lineup-coordinates-v2";
 const DEFAULT_LOCATION = "Czech Republic";
 const DETAIL_FETCH_CONCURRENCY = 2;
 const DETAIL_FETCH_DELAY_MS = 350;
@@ -54,6 +56,11 @@ const GENERIC_TITLE_RE = /^(?:detail|více|vice|read more|zobrazit více|more|in
 const NAVIGATION_TEXT_RE =
   /^(?:úvodní strana|uvodni strana|akce a parties|tekno parties|freetekno|kalendář událostí|kalendar udalosti|kontakt|facebook|instagram|mapy\.com|www\.facebook\.com)$/i;
 const FLAG_RE = /[\u{1F1E6}-\u{1F1FF}]/gu;
+
+type Coordinates = {
+  latitude: number;
+  longitude: number;
+};
 
 const CZECH_MONTHS: Record<string, number> = {
   leden: 0,
@@ -705,6 +712,99 @@ function cleanSourceLabel(value: string): string {
   return normalizeSpaces(value.replace(FLAG_RE, "").replace(/\s*\(?mapy\.(?:com|cz)\)?\.?\s*/gi, " "));
 }
 
+function parseCoordinateValue(value: string | null | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = decodeURIComponent(value).trim().replace(",", ".");
+  if (!/^-?\d{1,3}(?:\.\d+)?$/.test(normalized)) {
+    return undefined;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function coordinatesFromNumbers(latitude: number | undefined, longitude: number | undefined): Coordinates | undefined {
+  if (
+    latitude === undefined ||
+    longitude === undefined ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return undefined;
+  }
+
+  return { latitude, longitude };
+}
+
+function coordinatesFromPair(value: string | null | undefined): Coordinates | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const decoded = decodeURIComponent(value);
+  const match = decoded.match(/(-?\d{1,2}(?:[.,]\d+)?)[,\s]+(-?\d{1,3}(?:[.,]\d+)?)/);
+  return coordinatesFromNumbers(parseCoordinateValue(match?.[1]), parseCoordinateValue(match?.[2]));
+}
+
+function coordinatesFromUrl(value: string | undefined): Coordinates | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(value);
+    const params = url.searchParams;
+    const fromMapy = coordinatesFromNumbers(parseCoordinateValue(params.get("y")), parseCoordinateValue(params.get("x")));
+    if (fromMapy) {
+      return fromMapy;
+    }
+
+    const fromNamedParams =
+      coordinatesFromNumbers(parseCoordinateValue(params.get("lat")), parseCoordinateValue(params.get("lon"))) ??
+      coordinatesFromNumbers(parseCoordinateValue(params.get("lat")), parseCoordinateValue(params.get("lng"))) ??
+      coordinatesFromNumbers(parseCoordinateValue(params.get("latitude")), parseCoordinateValue(params.get("longitude")));
+    if (fromNamedParams) {
+      return fromNamedParams;
+    }
+
+    const fromPairParam = coordinatesFromPair(params.get("q")) ?? coordinatesFromPair(params.get("ll")) ?? coordinatesFromPair(params.get("center"));
+    if (fromPairParam) {
+      return fromPairParam;
+    }
+
+    const atPathMatch = url.href.match(/@(-?\d{1,2}(?:[.,]\d+)?),(-?\d{1,3}(?:[.,]\d+)?)/);
+    const fromAtPath = coordinatesFromPair(atPathMatch ? `${atPathMatch[1]},${atPathMatch[2]}` : undefined);
+    if (fromAtPath) {
+      return fromAtPath;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+function coordinatesFromJsonLdLocation(location: unknown): Coordinates | undefined {
+  if (!location || typeof location !== "object") {
+    return undefined;
+  }
+
+  const geo = "geo" in location ? (location as { geo?: unknown }).geo : undefined;
+  if (!geo || typeof geo !== "object") {
+    return undefined;
+  }
+
+  return coordinatesFromNumbers(
+    parseCoordinateValue(String((geo as { latitude?: unknown }).latitude ?? "")),
+    parseCoordinateValue(String((geo as { longitude?: unknown }).longitude ?? "")),
+  );
+}
+
 function extractUpcomingSection(html: string): string {
   const startMarkers = ["nadchazejici", "budouci akce", "upcoming"];
   const endMarkers = ["probehle", "uplynule", "archiv", "past events"];
@@ -1009,13 +1109,14 @@ function extractListingEvents(html: string, sourceUrl: string): ImportedEvent[] 
       continue;
     }
 
-    const mapLocationMatch = afterAnchor.match(/<a\b[^>]+href=["'][^"']*mapy\.(?:cz|com)[^"']*["'][^>]*>[\s\S]*?<\/a>\s*([^<\n\r]+)/i);
+    const mapLocationMatch = afterAnchor.match(/<a\b[^>]+href=["']([^"']*mapy\.(?:cz|com)[^"']*)["'][^>]*>[\s\S]*?<\/a>\s*([^<\n\r]+)/i);
+    const mapCoordinates = coordinatesFromUrl(absoluteUrl(mapLocationMatch?.[1], sourceUrl));
     const followingText = htmlToText(afterAnchor);
     const fallbackLocation = followingText
       .split("\n")
       .map((line) => cleanSourceLabel(line))
       .find((line) => line && !NAVIGATION_TEXT_RE.test(line) && !/^[-–—]+$/.test(line));
-    const publicLocation = cleanSourceLabel(mapLocationMatch?.[1] ?? fallbackLocation ?? DEFAULT_LOCATION);
+    const publicLocation = cleanSourceLabel(mapLocationMatch?.[2] ?? fallbackLocation ?? DEFAULT_LOCATION);
     const isHighlightedOnSource = rawTitle.trimStart().startsWith("✅");
     const summary = `${rawTitle}\n${publicLocation}\n${sourceDateRaw}`;
     const hashInput = [sourceEventId, rawTitle, sourceDateRaw, publicLocation, detailUrl].join("\n");
@@ -1033,6 +1134,8 @@ function extractListingEvents(html: string, sourceUrl: string): ImportedEvent[] 
       title,
       summary,
       publicLocation,
+      publicLatitude: mapCoordinates?.latitude,
+      publicLongitude: mapCoordinates?.longitude,
       startsAt: parsedRange.startsAt,
       endAt: parsedRange.endsAt ?? undefined,
       coverImageUrl: undefined,
@@ -1082,6 +1185,7 @@ function eventFromJsonLd(raw: Record<string, unknown>, sourceUrl: string): Impor
   }
 
   const rawLocation = raw.location;
+  const coordinates = coordinatesFromJsonLdLocation(rawLocation);
   const location =
     typeof rawLocation === "string"
       ? rawLocation
@@ -1103,6 +1207,8 @@ function eventFromJsonLd(raw: Record<string, unknown>, sourceUrl: string): Impor
     title,
     summary: typeof raw.description === "string" ? htmlToText(raw.description).slice(0, 2000) : title,
     publicLocation: stripTags(location).slice(0, 180) || DEFAULT_LOCATION,
+    publicLatitude: coordinates?.latitude,
+    publicLongitude: coordinates?.longitude,
     startsAt,
     endAt: parseDate(raw.endDate),
     coverImageUrl: undefined,
@@ -1220,9 +1326,12 @@ function eventFromBlock(block: string, sourceUrl: string): ImportedEvent | null 
     return null;
   }
 
-  const imageMatch = block.match(/<img[^>]+(?:src|data-src)=["']([^"']+)["']/i);
   const summary = summaryFromBlock(block, title);
   const galleryImageUrls = extractImages(block, sourceUrl);
+  const mapHref = [...block.matchAll(/<a\b[^>]+href=["']([^"']+)["'][^>]*>/gi)]
+    .map((match) => absoluteUrl(match[1], sourceUrl))
+    .find((url): url is string => Boolean(url && /(?:mapy\.|google\.[^/]+\/maps|openstreetmap\.org)/i.test(url)));
+  const coordinates = coordinatesFromUrl(mapHref);
 
   return {
     sourceEventId: sourceEventIdFromUrl(externalUrl) ?? slugify(title),
@@ -1236,6 +1345,8 @@ function eventFromBlock(block: string, sourceUrl: string): ImportedEvent | null 
     title,
     summary,
     publicLocation: inferLocation(summary),
+    publicLatitude: coordinates?.latitude,
+    publicLongitude: coordinates?.longitude,
     startsAt,
     endAt: parseEndDateFromText(text, startsAt),
     coverImageUrl: undefined,
@@ -1273,6 +1384,8 @@ function eventFromDetailPage(html: string, detailUrl: string, fallback: Imported
       extractLabelValue(text, ["Lokalita", "Místo", "Misto", "Venue", "Location"]) ??
       fallback.publicLocation,
   );
+  const locationMapUrl = extractHrefForLabel(bounded, ["Lokalita", "Místo", "Misto", "Venue", "Location"], detailUrl);
+  const publicCoordinates = coordinatesFromUrl(locationMapUrl);
   const linkedTags = extractLinkedLabelValues(bounded, ["Tagy", "Tags"]);
   const sourceTags = linkedTags.length > 0 ? linkedTags : normalizeSourceTags(extractLabelValue(text, ["Tagy", "Tags"]) ?? "");
   const sourceLink = extractHrefForLabel(bounded, ["Odkaz", "Link"], detailUrl);
@@ -1296,6 +1409,8 @@ function eventFromDetailPage(html: string, detailUrl: string, fallback: Imported
     title,
     summary,
     publicLocation: location || DEFAULT_LOCATION,
+    publicLatitude: publicCoordinates?.latitude ?? fallback.publicLatitude,
+    publicLongitude: publicCoordinates?.longitude ?? fallback.publicLongitude,
     startsAt,
     endAt: parsedRange.endsAt ?? fallback.endAt,
     coverImageUrl,
@@ -1305,7 +1420,18 @@ function eventFromDetailPage(html: string, detailUrl: string, fallback: Imported
     sourceUpdatedAt,
     sourcePublicationAt,
     sourceContentHash: versionedSourceContentHash(
-      [fallback.sourceEventId, title, dateLine, location, sourceTags.join(","), sourceLink, summary, sourceLineup.join(",")].join("\n"),
+      [
+        fallback.sourceEventId,
+        title,
+        dateLine,
+        location,
+        publicCoordinates?.latitude,
+        publicCoordinates?.longitude,
+        sourceTags.join(","),
+        sourceLink,
+        summary,
+        sourceLineup.join(","),
+      ].join("\n"),
     ),
     warnings,
     genres: uniq([...fallback.genres, ...mergedGenres]),
@@ -1425,6 +1551,8 @@ function toCreateCommand(event: ImportedEvent, slug: string, isPublished = false
     title: event.title,
     summary: event.summary.length >= 10 ? event.summary : `${event.title} from ${event.sourceName}`,
     publicLocation: event.publicLocation,
+    publicLatitude: event.publicLatitude,
+    publicLongitude: event.publicLongitude,
     startsAt: event.startsAt,
     endAt: event.endAt,
     coverImageUrl: event.coverImageUrl,
@@ -1499,6 +1627,8 @@ function enrichedExistingCommand(existing: AdminEventDto, imported: ImportedEven
 
   const nextSummary = shouldReplaceSummary(existing, imported) ? imported.summary : existing.summary;
   const nextCoverImageUrl = existing.coverImageUrl || imported.coverImageUrl;
+  const nextPublicLatitude = existing.publicLatitude ?? imported.publicLatitude;
+  const nextPublicLongitude = existing.publicLongitude ?? imported.publicLongitude;
   const nextLineup = existing.lineup.length > 0 ? uniq([...existing.lineup, ...imported.lineup]) : imported.lineup;
   const nextGenres = uniq([...existing.genres, ...imported.genres]);
   const nextTags = uniq([...existing.tags, ...imported.tags, imported.isHighlightedOnSource ? "highlighted by source" : ""]);
@@ -1513,6 +1643,8 @@ function enrichedExistingCommand(existing: AdminEventDto, imported: ImportedEven
   const changed =
     nextSummary !== existing.summary ||
     nextCoverImageUrl !== existing.coverImageUrl ||
+    nextPublicLatitude !== existing.publicLatitude ||
+    nextPublicLongitude !== existing.publicLongitude ||
     nextLineup.join("\n") !== existing.lineup.join("\n") ||
     nextGenres.join("\n") !== existing.genres.join("\n") ||
     nextTags.join("\n") !== existing.tags.join("\n") ||
@@ -1527,6 +1659,8 @@ function enrichedExistingCommand(existing: AdminEventDto, imported: ImportedEven
     title: existing.title,
     summary: nextSummary,
     publicLocation: existing.publicLocation,
+    publicLatitude: nextPublicLatitude,
+    publicLongitude: nextPublicLongitude,
     startsAt: existing.startsAt,
     endAt: existing.endAt,
     coverImageUrl: nextCoverImageUrl,

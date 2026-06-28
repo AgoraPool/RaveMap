@@ -71,6 +71,8 @@ export const createEventSchema = z
     title: z.string().trim().min(3).max(180),
     summary: z.string().trim().min(10).max(2000),
     publicLocation: z.string().trim().min(2).max(180),
+    publicLatitude: z.number().min(-90).max(90).optional(),
+    publicLongitude: z.number().min(-180).max(180).optional(),
     startsAt: z.string().trim().datetime({ offset: true }),
     endAt: z.string().trim().datetime({ offset: true }).optional(),
     coverImageUrl: optionalHttpUrlSchema,
@@ -93,6 +95,14 @@ export const createEventSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    if ((value.publicLatitude === undefined) !== (value.publicLongitude === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Latitude and longitude must be provided together",
+        path: ["publicLatitude"],
+      });
+    }
+
     const accessType = value.accessType ?? (value.unlockCode ? "gated" : "public");
     if (accessType !== "gated") {
       return;
@@ -176,6 +186,8 @@ export const publicSubmitEventSchema = z
     title: z.string().trim().min(3).max(180),
     summary: z.string().trim().min(10).max(2000),
     publicLocation: z.string().trim().min(2).max(180),
+    publicLatitude: z.number().min(-90).max(90).optional(),
+    publicLongitude: z.number().min(-180).max(180).optional(),
     startsAt: z.string().trim().datetime({ offset: true }),
     endAt: z.string().trim().datetime({ offset: true }).optional(),
     coverImageUrl: optionalHttpUrlSchema,
@@ -185,9 +197,27 @@ export const publicSubmitEventSchema = z
     tags: stringListSchema,
     signedEvent: signedNostrEventSchema.optional(),
   })
+  .strict()
+  .superRefine((value, ctx) => {
+    if ((value.publicLatitude === undefined) !== (value.publicLongitude === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Latitude and longitude must be provided together",
+        path: ["publicLatitude"],
+      });
+    }
+  });
+
+export const rsvpSchema = z
+  .object({
+    status: z.enum(["accepted", "tentative"]),
+    nickname: optionalTrimmedString(40),
+    signedEvent: signedNostrEventSchema.optional(),
+  })
   .strict();
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type DeleteEventInput = z.infer<typeof deleteEventSchema>;
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 export type PublicSubmitEventInput = z.infer<typeof publicSubmitEventSchema>;
+export type RsvpInput = z.infer<typeof rsvpSchema>;

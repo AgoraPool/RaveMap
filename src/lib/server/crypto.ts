@@ -31,6 +31,8 @@ export type DraftBundle = {
     title: string;
     summary: string;
     publicLocation: string;
+    publicLatitude?: number;
+    publicLongitude?: number;
     startsAt: string;
     endAt?: string;
     coverImageUrl?: string;

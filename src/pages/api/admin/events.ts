@@ -64,6 +64,8 @@ export const POST: APIRoute = async ({ request }) =>
       title: input.title,
       summary: input.summary,
       publicLocation: input.publicLocation,
+      publicLatitude: input.publicLatitude,
+      publicLongitude: input.publicLongitude,
       startsAt,
       endAt,
       coverImageUrl: input.coverImageUrl,

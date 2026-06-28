@@ -14,6 +14,7 @@ if (!event) {
 }
 const commentCoordinate = event ? `31923:${event.authorPubkey}:${event.slug}` : "";
 const comments = event ? await repository.listComments(event.slug).catch(() => []) : [];
+const rsvp = event ? await repository.getRsvpSummary(event.slug).catch(() => ({ accepted: 0, tentative: 0 })) : { accepted: 0, tentative: 0 };
 
 const formatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "full",
@@ -41,6 +42,12 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+const publicMapUrl =
+  event?.publicLatitude !== undefined && event.publicLongitude !== undefined
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${event.publicLongitude - 0.01}%2C${event.publicLatitude - 0.01}%2C${
+        event.publicLongitude + 0.01
+      }%2C${event.publicLatitude + 0.01}&layer=mapnik&marker=${event.publicLatitude}%2C${event.publicLongitude}`
+    : "";
 ---
 
 <Layout bodyClass="event-body">
@@ -162,6 +169,18 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
             </div>
 
             {
+              publicMapUrl && (
+                <iframe
+                  class="public-map"
+                  title="Mapa veřejné lokace"
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                  src={publicMapUrl}
+                ></iframe>
+              )
+            }
+
+            {
               event.galleryImageUrls.length > 1 && (
                 <div class="event-gallery" aria-label="Fotogalerie">
                   {event.galleryImageUrls.slice(0, 8).map((imageUrl) => (
@@ -234,6 +253,26 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
               </article>
             )
           }
+
+          <article class="event-card rsvp-card" id="rsvp" data-slug={event.slug} data-coordinate={commentCoordinate}>
+            <div class="card-head">
+              <div>
+                <p class="card-kicker">RSVP</p>
+                <h2>Jdeš?</h2>
+              </div>
+              <span id="rsvp-mode" class="meta-pill meta-pill-soft">Anonymous</span>
+            </div>
+            <div class="rsvp-counts">
+              <span><strong id="rsvp-going">{rsvp.accepted}</strong> going</span>
+              <span><strong id="rsvp-maybe">{rsvp.tentative}</strong> maybe</span>
+            </div>
+            <div class="rsvp-actions">
+              <button type="button" data-rsvp-status="accepted">Going</button>
+              <button type="button" data-rsvp-status="tentative">Maybe</button>
+              <button id="rsvp-signer" type="button">Use my account</button>
+            </div>
+            <p id="rsvp-status" class="comment-status" role="status" aria-live="polite"></p>
+          </article>
 
           <article class="event-card comments-card" id="comments" data-slug={event.slug} data-coordinate={commentCoordinate}>
             <div class="card-head">
@@ -372,7 +411,14 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
   const commentMode = document.getElementById("comment-mode");
   const signerButton = document.getElementById("comment-signer");
   const commentSubmit = document.getElementById("comment-submit");
+  const rsvpCard = document.getElementById("rsvp");
+  const rsvpMode = document.getElementById("rsvp-mode");
+  const rsvpStatus = document.getElementById("rsvp-status");
+  const rsvpGoing = document.getElementById("rsvp-going");
+  const rsvpMaybe = document.getElementById("rsvp-maybe");
+  const rsvpSigner = document.getElementById("rsvp-signer");
   let signedCommentMode = false;
+  let signedRsvpMode = false;
   let signedPubkey = "";
 
   function escapeHtml(value) {
@@ -452,6 +498,41 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
     });
   }
 
+  function setRsvpStatus(message, tone = "neutral") {
+    if (!(rsvpStatus instanceof HTMLElement)) return;
+    rsvpStatus.textContent = message;
+    rsvpStatus.dataset.tone = tone;
+  }
+
+  function renderRsvp(rsvp) {
+    if (rsvpGoing instanceof HTMLElement) rsvpGoing.textContent = String(rsvp?.accepted ?? 0);
+    if (rsvpMaybe instanceof HTMLElement) rsvpMaybe.textContent = String(rsvp?.tentative ?? 0);
+  }
+
+  async function buildSignedRsvp(slug, coordinate, status) {
+    const nostr = /** @type {any} */ (window).nostr;
+    if (!nostr?.signEvent) {
+      throw new Error("No browser signer found. Anonymous RSVP still works.");
+    }
+
+    if (!signedPubkey && nostr.getPublicKey) {
+      signedPubkey = await nostr.getPublicKey();
+    }
+
+    return nostr.signEvent({
+      kind: 31925,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ["a", coordinate],
+        ["d", `rsvp-${slug}`],
+        ["status", status],
+        ["ravemap-event", slug],
+        ["client", "RaveMap"],
+      ],
+      content: "",
+    });
+  }
+
   signerButton?.addEventListener("click", async () => {
     try {
       const nostr = /** @type {any} */ (window).nostr;
@@ -468,6 +549,51 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
       setCommentStatus("Could not connect to your account. You can still post normally.", "warning");
     }
   });
+
+  rsvpSigner?.addEventListener("click", async () => {
+    try {
+      const nostr = /** @type {any} */ (window).nostr;
+      if (!nostr?.getPublicKey || !nostr?.signEvent) {
+        setRsvpStatus("No browser signer found. Anonymous RSVP still works.", "warning");
+        return;
+      }
+
+      signedPubkey = await nostr.getPublicKey();
+      signedRsvpMode = true;
+      if (rsvpMode instanceof HTMLElement) rsvpMode.textContent = "Your account";
+      setRsvpStatus("RSVP will use your account.", "positive");
+    } catch {
+      setRsvpStatus("Could not connect to your account. Anonymous RSVP still works.", "warning");
+    }
+  });
+
+  for (const button of document.querySelectorAll("[data-rsvp-status]")) {
+    button.addEventListener("click", async () => {
+      if (!(button instanceof HTMLButtonElement) || !(rsvpCard instanceof HTMLElement)) return;
+      const slug = rsvpCard.dataset.slug;
+      const coordinate = rsvpCard.dataset.coordinate;
+      const status = button.dataset.rsvpStatus;
+      if (!slug || !coordinate || (status !== "accepted" && status !== "tentative")) return;
+
+      button.disabled = true;
+      setRsvpStatus("Saving response...", "warning");
+      try {
+        const signedEvent = signedRsvpMode ? await buildSignedRsvp(slug, coordinate, status) : undefined;
+        const response = await fetch(`/api/events/${slug}/rsvp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, signedEvent }),
+        });
+        const result = await parseCommentResponse(response);
+        renderRsvp(result.rsvp);
+        setRsvpStatus("Response saved.", "positive");
+      } catch (error) {
+        setRsvpStatus(error instanceof Error ? error.message : "Could not save response.", "danger");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
 
   commentForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -646,6 +772,10 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
     background: rgba(255, 244, 221, 0.94);
   }
 
+  .rsvp-card {
+    background: rgba(255, 255, 255, 0.88);
+  }
+
   .card-head,
   .meta-pills,
   .unlock-form {
@@ -698,6 +828,13 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
     object-fit: cover;
     border: 3px solid #000;
     background: rgba(0, 0, 0, 0.08);
+  }
+
+  .public-map {
+    width: 100%;
+    height: 320px;
+    border: 3px solid #000;
+    box-sizing: border-box;
   }
 
   .event-facts {
@@ -796,6 +933,51 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
   .comment-list {
     display: grid;
     gap: 10px;
+  }
+
+  .rsvp-counts,
+  .rsvp-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .rsvp-counts span {
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 10px 12px;
+    font-weight: 900;
+  }
+
+  .rsvp-counts strong {
+    font-size: 1.45rem;
+    margin-right: 4px;
+  }
+
+  .rsvp-actions button {
+    border: 2px solid #000;
+    background: #fffef8;
+    color: #000;
+    padding: 10px 12px;
+    font: inherit;
+    font-weight: 900;
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  .rsvp-actions button:first-child {
+    background: #000;
+    color: #c00;
+  }
+
+  .rsvp-actions button:hover {
+    background: #c00;
+    color: #000;
+  }
+
+  .rsvp-actions button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 
   .comment-item,
@@ -1071,8 +1253,14 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
       min-width: 0;
     }
 
-    .comment-actions button {
+    .comment-actions button,
+    .rsvp-actions button {
       width: 100%;
+    }
+
+    .public-map {
+      height: 240px;
+      border-width: 2px;
     }
 
     .event-slug {

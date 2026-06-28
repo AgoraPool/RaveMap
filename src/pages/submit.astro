@@ -40,6 +40,17 @@ import Layout from "../layouts/Layout.astro";
           <input id="publicLocation" name="publicLocation" type="text" minlength="2" maxlength="180" required />
         </label>
 
+        <div class="field-row">
+          <label>
+            <span>Latitude</span>
+            <input id="publicLatitude" name="publicLatitude" type="number" step="0.000001" min="-90" max="90" />
+          </label>
+          <label>
+            <span>Longitude</span>
+            <input id="publicLongitude" name="publicLongitude" type="number" step="0.000001" min="-180" max="180" />
+          </label>
+        </div>
+
         <label>
           <span>Popis</span>
           <textarea id="summary" name="summary" minlength="10" maxlength="2000" required></textarea>
@@ -140,6 +151,8 @@ import Layout from "../layouts/Layout.astro";
       title: String(data.get("title") || "").trim(),
       summary: String(data.get("summary") || "").trim(),
       publicLocation: String(data.get("publicLocation") || "").trim(),
+      publicLatitude: data.get("publicLatitude") ? Number(data.get("publicLatitude")) : undefined,
+      publicLongitude: data.get("publicLongitude") ? Number(data.get("publicLongitude")) : undefined,
       startsAt: toIsoFromLocal(data.get("startsAt")),
       endAt: toIsoFromLocal(data.get("endAt")),
       coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
@@ -169,6 +182,9 @@ import Layout from "../layouts/Layout.astro";
       ["t", "ravemap"],
     ];
     if (payload.endAt) tags.push(["end", String(Math.floor(new Date(payload.endAt).getTime() / 1000))]);
+    if (payload.publicLatitude !== undefined && payload.publicLongitude !== undefined) {
+      tags.push(["lat", String(payload.publicLatitude)], ["lon", String(payload.publicLongitude)]);
+    }
     if (payload.coverImageUrl) tags.push(["image", payload.coverImageUrl]);
     if (payload.externalUrl) tags.push(["external", payload.externalUrl], ["r", payload.externalUrl]);
     for (const genre of payload.genres) tags.push(["genre", genre]);

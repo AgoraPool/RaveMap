@@ -104,6 +104,16 @@ import Layout from "../layouts/Layout.astro";
                 <span>Public location</span>
                 <input id="publicLocation" name="publicLocation" type="text" minlength="2" maxlength="180" required />
               </label>
+              <div class="field-row">
+                <label>
+                  <span>Public latitude</span>
+                  <input id="publicLatitude" name="publicLatitude" type="number" step="0.000001" min="-90" max="90" />
+                </label>
+                <label>
+                  <span>Public longitude</span>
+                  <input id="publicLongitude" name="publicLongitude" type="number" step="0.000001" min="-180" max="180" />
+                </label>
+              </div>
             </fieldset>
 
             <fieldset class="form-section">
@@ -442,6 +452,8 @@ import Layout from "../layouts/Layout.astro";
       startsAt: toLocalInputValue(item.startsAt),
       endAt: toLocalInputValue(item.endAt),
       publicLocation: item.publicLocation,
+      publicLatitude: item.publicLatitude ?? "",
+      publicLongitude: item.publicLongitude ?? "",
       summary: item.summary,
       genres: (item.genres || []).join(", "),
       lineup: (item.lineup || []).join(", "),
@@ -660,6 +672,8 @@ import Layout from "../layouts/Layout.astro";
       startsAt: toIsoFromLocal(String(data.get("startsAt") || "")),
       endAt: toIsoFromLocal(String(data.get("endAt") || "")),
       publicLocation: String(data.get("publicLocation") || ""),
+      publicLatitude: data.get("publicLatitude") ? Number(data.get("publicLatitude")) : undefined,
+      publicLongitude: data.get("publicLongitude") ? Number(data.get("publicLongitude")) : undefined,
       summary: String(data.get("summary") || ""),
       coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
       externalUrl: String(data.get("externalUrl") || "").trim() || undefined,
