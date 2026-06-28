@@ -85,7 +85,7 @@ export const createEventSchema = z
     isPublished: z.boolean().optional(),
     slug: slugSchema.optional(),
     unlockCode: optionalTrimmedString(128),
-    secretInfo: optionalTrimmedString(4000),
+    secretInfo: optionalTrimmedString(4400),
     secretLocationName: optionalTrimmedString(180),
     secretLatitude: z.number().min(-90).max(90).optional(),
     secretLongitude: z.number().min(-180).max(180).optional(),

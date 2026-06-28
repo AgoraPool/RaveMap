@@ -8,7 +8,7 @@ const envSchema = z.object({
   NOSTR_RELAYS: z.string().min(1),
   NOSTR_PRIVATE_KEY: z.string().min(1),
   NOSTR_READ_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
-  NOSTR_WRITE_TIMEOUT_MS: z.coerce.number().int().positive().default(4000),
+  NOSTR_WRITE_TIMEOUT_MS: z.coerce.number().int().positive().default(4400),
   NOSTR_WRITE_MIN_SUCCESS: z.coerce.number().int().positive().default(1),
   MIRROR_SOURCE_URL: z.string().url().default("https://www.jiripetrak.cz/cs/tekno-parties-freetekno-kalendar-udalosti-42/"),
   MIRROR_SYNC_SECRET: z.string().min(24).optional(),
