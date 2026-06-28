@@ -36,6 +36,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 
 <style>
   .akce {
+    position: relative;
     width: 100%;
     min-height: 100svh;
     margin: 0;
@@ -85,6 +86,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     width: 70%;
     min-width: 0;
     max-height: min(78svh, 760px);
+    min-height: 0;
     display: flex;
     flex-direction: column;
     margin: auto 40px;
@@ -213,9 +215,9 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       width: 100%;
       max-width: 100%;
       min-width: 0;
-      max-height: none;
       margin: 0;
       box-sizing: border-box;
+      max-height: calc(100svh - 130px);
     }
     .akce-item {
       grid-template-columns: 56px 1fr;

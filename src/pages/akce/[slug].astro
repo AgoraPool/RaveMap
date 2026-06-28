@@ -513,8 +513,9 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
   .event-shell {
     position: relative;
     min-height: 100vh;
-    overflow: hidden;
+    overflow-x: clip;
     padding: 36px 20px 72px;
+    box-sizing: border-box;
   }
 
   .event-grid-canvas {
@@ -567,10 +568,12 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
   .event-layout {
     position: relative;
     z-index: 1;
+    width: min(1180px, 100%);
     max-width: 1180px;
     margin: 0 auto;
     display: grid;
     gap: 20px;
+    min-width: 0;
   }
 
   .event-layout-missing {
@@ -620,6 +623,8 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
     padding: 22px;
     display: grid;
     gap: 16px;
+    box-sizing: border-box;
+    min-width: 0;
   }
 
   .public-card {
@@ -666,6 +671,7 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
   .secret-card h2 {
     font-size: clamp(2.2rem, 6vw, 4.4rem);
     line-height: 0.95;
+    overflow-wrap: anywhere;
   }
 
   .public-event-body {
@@ -687,6 +693,7 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
 
   .event-cover {
     width: 100%;
+    min-width: 0;
     max-height: 460px;
     object-fit: cover;
     border: 3px solid #000;
@@ -835,6 +842,7 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
 
   .comment-form input,
   .comment-form textarea {
+    width: 100%;
     border: 2px solid #000;
     background: #fffef8;
     color: #000;
@@ -1014,7 +1022,7 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
 
   @media (max-width: 768px) {
     .event-shell {
-      padding: 20px 12px 42px;
+      padding: 14px 8px 36px;
     }
 
     .event-topbar,
@@ -1026,11 +1034,13 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
     }
 
     .event-card {
-      padding: 16px;
-      box-shadow: 8px 8px 0 #000;
+      border-width: 2px;
+      padding: 12px;
+      box-shadow: 4px 4px 0 #000;
     }
 
     .public-event-body,
+    .public-event-body.has-cover,
     .event-facts {
       grid-template-columns: 1fr;
     }
@@ -1047,7 +1057,7 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
 
     .public-card h1,
     .secret-card h2 {
-      font-size: 1.8rem;
+      font-size: clamp(1.75rem, 12vw, 2.4rem);
     }
 
     .card-copy,
@@ -1068,6 +1078,14 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
     .event-slug {
       width: 100%;
       box-sizing: border-box;
+    }
+
+    .meta-pill,
+    .secret-label,
+    .back-link {
+      max-width: 100%;
+      box-sizing: border-box;
+      overflow-wrap: anywhere;
     }
 
     .bunkr {
