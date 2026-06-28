@@ -13,7 +13,7 @@ type AttemptState = {
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILED_ATTEMPTS = 5;
 const BLOCK_MS = 30 * 60 * 1000;
-const MAX_RECORDS = 5000;
+const MAX_RECORDS = 4000;
 
 const attempts = new Map<string, AttemptRecord>();
 const commentAttempts = new Map<string, number[]>();
