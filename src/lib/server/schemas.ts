@@ -14,7 +14,10 @@ function isHttpUrl(value: string): boolean {
 function isSimplexUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return (url.protocol === "https:" && (url.hostname === "simplex.chat" || url.hostname === "www.simplex.chat")) || url.protocol === "simplex:";
+    const hostname = url.hostname.toLowerCase();
+    const isSimplexHost =
+      hostname === "simplex.chat" || hostname === "www.simplex.chat" || hostname === "simplex.im" || hostname.endsWith(".simplex.im");
+    return (url.protocol === "https:" && isSimplexHost) || url.protocol === "simplex:";
   } catch {
     return false;
   }
@@ -48,7 +51,7 @@ const optionalSimplexUrlSchema = z.preprocess(
   z
     .string()
     .max(2048)
-    .refine(isSimplexUrl, { message: "Použij SimpleX odkaz ze simplex.chat nebo simplex: invite" })
+    .refine(isSimplexUrl, { message: "Použij SimpleX odkaz ze simplex.chat, simplex.im nebo simplex: invite" })
     .optional(),
 );
 

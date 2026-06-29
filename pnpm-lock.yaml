@@ -17,6 +17,9 @@ importers:
       nostr-tools:
         specifier: ^2.23.8
         version: 2.23.8(typescript@5.9.3)
+      uqr:
+        specifier: ^0.1.3
+        version: 0.1.3
       zod:
         specifier: ^4.1.5
         version: 4.4.3

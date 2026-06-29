@@ -12,6 +12,7 @@ interface ImportMetaEnv {
   readonly MIRROR_SOURCE_URL?: string;
   readonly MIRROR_SYNC_SECRET?: string;
   readonly MIRROR_USER_AGENT?: string;
+  readonly SIMPLEX_GROUP_URL?: string;
 }
 
 interface ImportMeta {

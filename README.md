@@ -30,6 +30,7 @@ Kam Na Rave is a Nostr-backed event app for underground music events. It publish
 - `MIRROR_SOURCE_URL`: source listing URL, default Jiri Petrak freetekno calendar.
 - `MIRROR_SYNC_SECRET`: secret for scheduled mirror sync endpoint.
 - `MIRROR_USER_AGENT`: optional fetch user agent for mirror requests.
+- `SIMPLEX_GROUP_URL`: optional SimpleX group invite, for example `https://smp12.simplex.im/...`, shown in FAQ with a locally generated QR code.
 
 ## Scripts
 
