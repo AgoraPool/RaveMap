@@ -17,6 +17,8 @@
 
 Public event tags include `d`, `title`, `summary`, `location`, `start`, optional `end`, `image`, `external`, `source`, `source-url`, `genre`, `artist`, and `access`.
 
+Studio-created public events and drafts include `origin=studio`. The organizer studio lists and mutates only events with that marker.
+
 ## Access Modes
 
 - `public`: event detail shows public metadata only and no unlock form.
@@ -31,6 +33,13 @@ Gated event secrets use `scrypt` for unlock-code hashing and `AES-256-GCM` for p
 3. Admin creates or replaces events by slug.
 4. Draft publish reads the encrypted draft and publishes a live public event, plus a secret bundle for gated drafts.
 5. Delete writes an app tombstone and a best-effort Nostr delete event.
+
+## Studio Flow
+
+1. `/studio` authenticates with `ORGANIZER_SECRET`.
+2. Studio lists only `origin=studio` events.
+3. Studio creates encrypted drafts or publishes live events using the same event model as admin.
+4. Studio archive writes the same app tombstone, but is limited to studio-created events.
 
 ## Mirroring
 

@@ -49,6 +49,7 @@ export type DraftBundle = {
     tags?: string[];
     galleryImageUrls?: string[];
     accessType?: "public" | "gated";
+    origin?: "studio" | "admin" | "public" | "import";
     createdAt: string;
   };
   codeHash?: string;

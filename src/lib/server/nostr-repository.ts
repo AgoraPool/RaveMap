@@ -23,6 +23,7 @@ import {
   type CreateEventCommand,
   type CreateRsvpCommand,
   type EventCommentDto,
+  type EventOrigin,
   type EventRsvpEntryDto,
   type EventRsvpSummaryDto,
   type NostrEvent,
@@ -212,6 +213,14 @@ function accessTypeFromTag(value: string | undefined): "public" | "gated" {
   return value === "public" ? "public" : "gated";
 }
 
+function eventOriginFromTag(value: string | undefined, source: CreateEventCommand["source"] | undefined): EventOrigin | undefined {
+  if (value === "studio" || value === "admin" || value === "public" || value === "import") {
+    return value;
+  }
+
+  return source ? "import" : undefined;
+}
+
 function publicFieldsFromCommand(input: CreateEventCommand, createdAt = new Date().toISOString()): DraftBundle["public"] {
   return {
     slug: input.slug,
@@ -231,6 +240,7 @@ function publicFieldsFromCommand(input: CreateEventCommand, createdAt = new Date
     tags: input.tags ?? [],
     galleryImageUrls: input.galleryImageUrls ?? [],
     accessType: input.accessType,
+    origin: input.origin,
     createdAt,
   };
 }
@@ -256,6 +266,7 @@ function publicDtoFromFields(fields: DraftBundle["public"], id: string, authorPu
     tags: fields.tags ?? [],
     galleryImageUrls: fields.galleryImageUrls ?? [],
     accessType: fields.accessType ?? "gated",
+    origin: fields.origin,
     createdAt: new Date(fields.createdAt),
   };
 }
@@ -280,6 +291,7 @@ function commandFromFields(fields: DraftBundle["public"], isPublished: boolean):
     galleryImageUrls: fields.galleryImageUrls,
     accessType: fields.accessType ?? "gated",
     isPublished,
+    origin: fields.origin,
   };
 }
 
@@ -320,6 +332,17 @@ function parsePublicEvent(event: NostrEvent): PublicEventDto | null {
     tags: [...new Set([...tagValues(event, "tag"), ...tagValues(event, "t")])],
     galleryImageUrls: tagValues(event, "gallery"),
     accessType: accessTypeFromTag(tagValue(event, "access")),
+    origin: eventOriginFromTag(
+      tagValue(event, "origin"),
+      tagValue(event, "source-url")
+        ? {
+            name: tagValue(event, "source") || "Imported",
+            url: tagValue(event, "source-url") as string,
+            id: tagValue(event, "source-id"),
+            contentHash: tagValue(event, "source-hash"),
+          }
+        : undefined,
+    ),
     createdAt: new Date(event.created_at * 1000),
   };
 }
@@ -371,6 +394,10 @@ function publicEventTemplate(input: CreateEventCommand): NostrUnsignedEvent {
     if (input.source.contentHash) {
       tags.push(["source-hash", input.source.contentHash]);
     }
+  }
+
+  if (input.origin) {
+    tags.push(["origin", input.origin]);
   }
 
   for (const genre of input.genres ?? []) {
@@ -1306,6 +1333,49 @@ export class NostrEventRepository {
     });
   }
 
+  async listStudioEvents(): Promise<AdminEventDto[]> {
+    return (await this.listAdminEvents()).filter((event) => event.origin === "studio");
+  }
+
+  private async getLatestDraftBundle(slug: string): Promise<{ event: NostrEvent; draft: DraftBundle } | null> {
+    const events = await this.fetchEvents([
+      {
+        authors: [this.pubkey],
+        kinds: [DRAFT_EVENT_KIND],
+        "#d": [slug],
+        limit: 20,
+      },
+    ]);
+    const latest = this.latestByD(events).get(slug);
+    if (!latest) {
+      return null;
+    }
+
+    return {
+      event: latest,
+      draft: decryptDraftBundle(latest.content, {
+        coordinate: nostrCoordinate(DRAFT_EVENT_KIND, this.pubkey, slug),
+      }),
+    };
+  }
+
+  private async getStudioEvent(slug: string): Promise<AdminEventDto | null> {
+    return (await this.listAdminEvents()).find((event) => event.slug === slug && event.origin === "studio") ?? null;
+  }
+
+  private async ensureStudioEvent(slug: string): Promise<AdminEventDto> {
+    const event = await this.getStudioEvent(slug);
+    if (!event) {
+      throw new AppError("Studio akce nenalezena", {
+        code: "STUDIO_EVENT_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+
+    return event;
+  }
+
   async slugExists(slug: string): Promise<boolean> {
     const events = await this.fetchEvents([
       {
@@ -1343,6 +1413,10 @@ export class NostrEventRepository {
         ["d", input.slug],
         ["access", input.accessType],
       ];
+
+      if (input.origin) {
+        tags.push(["origin", input.origin]);
+      }
 
       if (input.source) {
         tags.push(["source", input.source.name], ["source-url", input.source.url]);
@@ -1400,6 +1474,121 @@ export class NostrEventRepository {
     return {
       id: publicEvent.id,
       slug: input.slug,
+      writes: [...secretWrites, ...publicWrites],
+    };
+  }
+
+  async createStudioEvent(input: CreateEventCommand): Promise<CreatedEventResult> {
+    const command = { ...input, source: undefined, origin: "studio" as const };
+    const existing = (await this.listAdminEvents()).find((event) => event.slug === command.slug);
+    if (existing && existing.origin !== "studio") {
+      throw new AppError("Tahle akce nepatří do Studia", {
+        code: "STUDIO_EVENT_FORBIDDEN",
+        status: 403,
+        expose: true,
+      });
+    }
+
+    let codeHash: string | undefined;
+    let secret: SecretPayload | undefined;
+    if (command.accessType === "gated") {
+      const hasAnySecret =
+        Boolean(command.unlockCode) ||
+        Boolean(command.secretInfo) ||
+        Boolean(command.secretLocationName) ||
+        command.secretLatitude !== undefined ||
+        command.secretLongitude !== undefined ||
+        Boolean(command.secretMapNote);
+      const hasCompleteSecret =
+        Boolean(command.unlockCode) &&
+        Boolean(command.secretInfo) &&
+        Boolean(command.secretLocationName) &&
+        command.secretLatitude !== undefined &&
+        command.secretLongitude !== undefined;
+
+      if (hasAnySecret && !hasCompleteSecret) {
+        throw new AppError("Nová tajná vrstva musí mít kód, info, lokaci a souřadnice", {
+          code: "STUDIO_SECRET_INCOMPLETE",
+          status: 400,
+          expose: true,
+        });
+      }
+
+      if (hasCompleteSecret) {
+        codeHash = await hashUnlockCode(command.unlockCode ?? "");
+        secret = secretFromCommand(command);
+      } else if (existing) {
+        const draft = existing.isPublished ? null : await this.getLatestDraftBundle(command.slug);
+        const secretBundle = existing.isPublished ? await this.getSecretBundle(command.slug) : null;
+        codeHash = draft?.draft.codeHash ?? secretBundle?.codeHash;
+        secret = draft?.draft.secret ?? secretBundle?.secret;
+      }
+
+      if (!codeHash || !secret) {
+        throw new AppError("Akce na kód vyžaduje kód a tajnou lokaci", {
+          code: "STUDIO_SECRET_REQUIRED",
+          status: 400,
+          expose: true,
+        });
+      }
+    }
+
+    if (!command.isPublished) {
+      const draftBundle: DraftBundle = {
+        public: publicFieldsFromCommand(command),
+        codeHash,
+        secret,
+      };
+      const draftEvent = await this.signer.sign({
+        kind: DRAFT_EVENT_KIND,
+        created_at: nowSeconds(),
+        tags: [
+          ["d", command.slug],
+          ["access", command.accessType],
+          ["origin", "studio"],
+        ],
+        content: encryptDraftBundle(draftBundle, {
+          coordinate: nostrCoordinate(DRAFT_EVENT_KIND, this.pubkey, command.slug),
+        }),
+      });
+
+      return {
+        id: draftEvent.id,
+        slug: command.slug,
+        writes: await this.publish(draftEvent),
+      };
+    }
+
+    if (command.accessType === "public") {
+      const publicEvent = await this.signer.sign(publicEventTemplate(command));
+      return {
+        id: publicEvent.id,
+        slug: command.slug,
+        writes: await this.publish(publicEvent),
+      };
+    }
+
+    const secretEvent = await this.signer.sign({
+      kind: SECRET_EVENT_KIND,
+      created_at: nowSeconds(),
+      tags: [["d", command.slug]],
+      content: encryptSecretBundle(
+        {
+          codeHash: codeHash as string,
+          secret: secret as SecretPayload,
+        },
+        {
+          coordinate: nostrCoordinate(SECRET_EVENT_KIND, this.pubkey, command.slug),
+        },
+      ),
+    });
+    const secretWrites = await this.publish(secretEvent);
+    const publicEvent = await this.signer.sign(publicEventTemplate(command));
+    const publicWrites = await this.publish(publicEvent);
+
+    return {
+      id: publicEvent.id,
+      slug: command.slug,
       writes: [...secretWrites, ...publicWrites],
     };
   }
@@ -1501,6 +1690,24 @@ export class NostrEventRepository {
       slug,
       writes: [...secretWrites, ...publicWrites],
     };
+  }
+
+  async publishStudioDraft(slug: string): Promise<CreatedEventResult> {
+    const draft = await this.getLatestDraftBundle(slug);
+    if (!draft || draft.draft.public.origin !== "studio") {
+      throw new AppError("Studio koncept nenalezen", {
+        code: "STUDIO_DRAFT_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+
+    return this.publishDraft(slug);
+  }
+
+  async archiveStudioEvent(slug: string): Promise<DeletedEventResult> {
+    await this.ensureStudioEvent(slug);
+    return this.deleteEvent(slug);
   }
 
   async deleteEvent(slug: string): Promise<DeletedEventResult> {

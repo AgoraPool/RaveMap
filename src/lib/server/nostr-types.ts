@@ -38,6 +38,7 @@ export type NostrFilter = {
 };
 
 export type EventAccessType = "public" | "gated";
+export type EventOrigin = "studio" | "admin" | "public" | "import";
 
 export type EventSource = {
   name: string;
@@ -66,6 +67,7 @@ export type PublicEventDto = {
   tags: string[];
   galleryImageUrls: string[];
   accessType: EventAccessType;
+  origin?: EventOrigin;
   createdAt: Date;
 };
 
@@ -172,6 +174,7 @@ export type CreateEventCommand = {
   galleryImageUrls?: string[];
   accessType: EventAccessType;
   isPublished: boolean;
+  origin?: EventOrigin;
   unlockCode?: string;
   secretInfo?: string;
   secretLocationName?: string;

@@ -190,6 +190,13 @@ export const eventActionSchema = z
   })
   .strict();
 
+export const studioEventActionSchema = z
+  .object({
+    slug: slugSchema,
+    action: z.enum(["publish", "archive"]),
+  })
+  .strict();
+
 const nostrTagSchema = z.array(z.string().max(2048)).min(1).max(8);
 const signedNostrEventSchema = z
   .object({
@@ -288,8 +295,65 @@ export const rsvpSchema = z
   })
   .strict();
 
+export const studioEventSchema = z
+  .object({
+    title: z.string().trim().min(3).max(180),
+    summary: z.string().trim().min(10).max(2000),
+    publicLocation: z.string().trim().min(2).max(180),
+    publicLatitude: z.number().min(-90).max(90).optional(),
+    publicLongitude: z.number().min(-180).max(180).optional(),
+    startsAt: z.string().trim().datetime({ offset: true }),
+    endAt: z.string().trim().datetime({ offset: true }).optional(),
+    coverImageUrl: optionalHttpUrlSchema,
+    externalUrl: optionalHttpUrlSchema,
+    simplexUrl: optionalSimplexUrlSchema,
+    genres: stringListSchema,
+    lineup: stringListSchema,
+    tags: stringListSchema,
+    accessType: z.enum(["public", "gated"]).default("public"),
+    isPublished: z.boolean().default(false),
+    slug: slugSchema.optional(),
+    unlockCode: optionalTrimmedString(128),
+    secretInfo: optionalTrimmedString(4400),
+    secretLocationName: optionalTrimmedString(180),
+    secretLatitude: z.number().min(-90).max(90).optional(),
+    secretLongitude: z.number().min(-180).max(180).optional(),
+    secretMapNote: optionalTrimmedString(500),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if ((value.publicLatitude === undefined) !== (value.publicLongitude === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Šířka a délka musí být vyplněné společně",
+        path: ["publicLatitude"],
+      });
+    }
+
+    if (value.accessType !== "gated") {
+      return;
+    }
+
+    if (value.unlockCode && value.unlockCode.length < 8) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Kód k odemknutí musí mít alespoň 8 znaků",
+        path: ["unlockCode"],
+      });
+    }
+
+    if ((value.secretLatitude === undefined) !== (value.secretLongitude === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Tajná šířka a délka musí být vyplněné společně",
+        path: ["secretLatitude"],
+      });
+    }
+  });
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type DeleteEventInput = z.infer<typeof deleteEventSchema>;
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 export type PublicSubmitEventInput = z.infer<typeof publicSubmitEventSchema>;
 export type RsvpInput = z.infer<typeof rsvpSchema>;
+export type StudioEventInput = z.infer<typeof studioEventSchema>;

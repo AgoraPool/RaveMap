@@ -2,7 +2,7 @@
 
 ## Core Modules
 
-- `auth.ts`: shared-secret admin guard.
+- `auth.ts`: shared-secret admin and organizer guards.
 - `crypto.ts`: unlock hashing and encrypted draft/secret bundles.
 - `env.ts`: runtime environment validation.
 - `nostr-repository.ts`: relay reads, writes, draft publish, delete, diagnostics, and source dedupe.
@@ -15,6 +15,9 @@
 - `GET /api/events`
 - `GET /api/events/[slug]`
 - `POST /api/events/[slug]/unlock`
+- `GET /api/studio/events`
+- `POST /api/studio/events`
+- `PATCH /api/studio/events`
 - `GET /api/admin/events`
 - `POST /api/admin/events`
 - `PATCH /api/admin/events`

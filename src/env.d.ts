@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly ADMIN_SECRET: string;
+  readonly ORGANIZER_SECRET: string;
   readonly ENCRYPTION_KEY: string;
   readonly RATE_LIMIT_SECRET: string;
   readonly NOSTR_RELAYS: string;

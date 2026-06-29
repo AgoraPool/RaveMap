@@ -1,0 +1,957 @@
+---
+export const prerender = false;
+
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout bodyClass="studio-body">
+  <main class="studio-shell">
+    <div class="studio-bg"></div>
+
+    <section id="studio-gate" class="studio-gate">
+      <div class="gate-card">
+        <p class="kicker">Crew přístup</p>
+        <h1>RaveMap Studio</h1>
+        <p class="gate-copy">Skrytý prostor pro přípravu akcí. Importy, diagnostika a admin nástroje tady nejsou.</p>
+        <form id="studio-access-form" class="access-form">
+          <input id="organizerSecret" name="organizerSecret" type="password" minlength="24" placeholder="Organizer kód" required />
+          <button id="unlock-studio" type="submit">Odemknout</button>
+        </form>
+        <p id="auth-status" class="status-line neutral">Zadej organizer kód.</p>
+      </div>
+    </section>
+
+    <section id="studio-workspace" class="studio-workspace" hidden>
+      <header class="studio-topbar">
+        <div>
+          <p class="kicker">Crew studio</p>
+          <h1>Správa akcí</h1>
+        </div>
+        <button id="new-event" type="button">Nová akce</button>
+      </header>
+
+      <p id="global-status" class="status-line neutral">Studio připraveno.</p>
+
+      <section class="studio-grid">
+        <aside class="studio-inventory">
+          <div class="panel-head">
+            <div>
+              <p class="kicker">Tvoje studio</p>
+              <h2>Akce</h2>
+            </div>
+            <button id="reload-events" type="button">Obnovit</button>
+          </div>
+          <div id="studio-events" class="studio-events"></div>
+        </aside>
+
+        <section class="studio-editor">
+          <div class="wizard-steps" aria-label="Kroky editoru">
+            <button type="button" data-step-button="0" data-active="true">1 Základ</button>
+            <button type="button" data-step-button="1">2 Veřejné</button>
+            <button type="button" data-step-button="2">3 Tajné</button>
+            <button type="button" data-step-button="3">4 Preview</button>
+          </div>
+
+          <form id="studio-form" class="studio-form">
+            <input id="slug" name="slug" type="hidden" />
+
+            <section class="wizard-panel" data-step="0">
+              <div class="panel-head">
+                <div>
+                  <p class="kicker">Krok 1</p>
+                  <h2>Základ</h2>
+                </div>
+                <span id="editing-state" class="mode-pill">Nová akce</span>
+              </div>
+
+              <div class="segmented" role="group" aria-label="Typ přístupu k akci">
+                <label>
+                  <input type="radio" name="accessType" value="public" checked />
+                  <span>Veřejná</span>
+                </label>
+                <label>
+                  <input type="radio" name="accessType" value="gated" />
+                  <span>Na kód</span>
+                </label>
+              </div>
+
+              <label class="title-field">
+                <span>Název</span>
+                <input id="title" name="title" type="text" minlength="3" maxlength="180" required />
+              </label>
+
+              <div class="field-row">
+                <label>
+                  <span>Začátek</span>
+                  <input id="startsAt" name="startsAt" type="datetime-local" required />
+                </label>
+                <label>
+                  <span>Konec</span>
+                  <input id="endAt" name="endAt" type="datetime-local" />
+                </label>
+              </div>
+
+              <label>
+                <span>Veřejná lokalita</span>
+                <input id="publicLocation" name="publicLocation" type="text" minlength="2" maxlength="180" required />
+              </label>
+
+              <div class="field-row">
+                <label>
+                  <span>Veřejná šířka</span>
+                  <input id="publicLatitude" name="publicLatitude" type="number" step="0.000001" min="-90" max="90" />
+                </label>
+                <label>
+                  <span>Veřejná délka</span>
+                  <input id="publicLongitude" name="publicLongitude" type="number" step="0.000001" min="-180" max="180" />
+                </label>
+              </div>
+            </section>
+
+            <section class="wizard-panel" data-step="1" hidden>
+              <div class="panel-head">
+                <div>
+                  <p class="kicker">Krok 2</p>
+                  <h2>Veřejný obsah</h2>
+                </div>
+              </div>
+
+              <label>
+                <span>Popis</span>
+                <textarea id="summary" name="summary" minlength="10" maxlength="2000" required></textarea>
+              </label>
+
+              <div class="field-row">
+                <label>
+                  <span>Žánry</span>
+                  <input id="genres" name="genres" type="text" placeholder="tekno, freetekno" />
+                </label>
+                <label>
+                  <span>Lineup</span>
+                  <input id="lineup" name="lineup" type="text" placeholder="crew, live, djs" />
+                </label>
+              </div>
+
+              <div class="field-row">
+                <label>
+                  <span>URL plakátu</span>
+                  <input id="coverImageUrl" name="coverImageUrl" type="url" inputmode="url" placeholder="https://..." />
+                </label>
+                <label>
+                  <span>Externí odkaz</span>
+                  <input id="externalUrl" name="externalUrl" type="url" inputmode="url" placeholder="https://..." />
+                </label>
+              </div>
+
+              <label>
+                <span>SimpleX kontakt</span>
+                <input id="simplexUrl" name="simplexUrl" type="text" inputmode="url" placeholder="https://smp12.simplex.im/..." />
+              </label>
+
+              <label>
+                <span>Tagy</span>
+                <input id="tags" name="tags" type="text" placeholder="festival, soundsystem, město" />
+              </label>
+            </section>
+
+            <section class="wizard-panel" data-step="2" hidden>
+              <div class="panel-head">
+                <div>
+                  <p class="kicker">Krok 3</p>
+                  <h2>Tajná vrstva</h2>
+                </div>
+                <span id="secret-mode" class="mode-pill">Jen pro akce na kód</span>
+              </div>
+
+              <div id="secret-fields" class="secret-fields">
+                <div class="field-row">
+                  <label>
+                    <span>Kód k odemknutí</span>
+                    <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" />
+                  </label>
+                  <label>
+                    <span>Název tajné lokace</span>
+                    <input id="secretLocationName" name="secretLocationName" type="text" maxlength="180" />
+                  </label>
+                </div>
+                <div class="field-row">
+                  <label>
+                    <span>Tajná šířka</span>
+                    <input id="secretLatitude" name="secretLatitude" type="number" step="0.000001" min="-90" max="90" />
+                  </label>
+                  <label>
+                    <span>Tajná délka</span>
+                    <input id="secretLongitude" name="secretLongitude" type="number" step="0.000001" min="-180" max="180" />
+                  </label>
+                </div>
+                <label>
+                  <span>Tajné info</span>
+                  <textarea id="secretInfo" name="secretInfo" maxlength="4400"></textarea>
+                </label>
+                <label>
+                  <span>Poznámka k mapě</span>
+                  <textarea id="secretMapNote" name="secretMapNote" maxlength="500"></textarea>
+                </label>
+                <p class="field-note">Při úpravě existující akce na kód můžeš tajná pole nechat prázdná. Studio zachová uložený kód a tajnou lokaci.</p>
+              </div>
+            </section>
+
+            <section class="wizard-panel" data-step="3" hidden>
+              <div class="panel-head">
+                <div>
+                  <p class="kicker">Krok 4</p>
+                  <h2>Preview</h2>
+                </div>
+              </div>
+              <div class="preview-grid">
+                <article>
+                  <span>Veřejně viditelné</span>
+                  <div id="public-preview"></div>
+                </article>
+                <article class="secret-preview">
+                  <span>Po kódu</span>
+                  <div id="secret-preview"></div>
+                </article>
+              </div>
+            </section>
+
+            <div class="wizard-actions">
+              <button id="prev-step" type="button">Zpět</button>
+              <button id="next-step" type="button">Další</button>
+              <button id="save-draft" type="button">Uložit koncept</button>
+              <button id="publish-event" type="button">Publikovat</button>
+            </div>
+
+            <p id="form-status" class="status-line neutral">Připraveno.</p>
+          </form>
+        </section>
+      </section>
+    </section>
+  </main>
+</Layout>
+
+<script>
+  const STORAGE_KEY = "ravemap:studio-secret";
+  const state = {
+    secret: sessionStorage.getItem(STORAGE_KEY) || "",
+    events: [],
+    step: 0,
+  };
+
+  const gate = document.getElementById("studio-gate");
+  const workspace = document.getElementById("studio-workspace");
+  const accessForm = document.getElementById("studio-access-form");
+  const secretInput = document.getElementById("organizerSecret");
+  const unlockButton = document.getElementById("unlock-studio");
+  const authStatus = document.getElementById("auth-status");
+  const globalStatus = document.getElementById("global-status");
+  const reloadButton = document.getElementById("reload-events");
+  const eventsEl = document.getElementById("studio-events");
+  const newEventButton = document.getElementById("new-event");
+  const form = document.getElementById("studio-form");
+  const formStatus = document.getElementById("form-status");
+  const editingState = document.getElementById("editing-state");
+  const secretMode = document.getElementById("secret-mode");
+  const secretFields = document.getElementById("secret-fields");
+  const publicPreview = document.getElementById("public-preview");
+  const secretPreview = document.getElementById("secret-preview");
+  const prevStep = document.getElementById("prev-step");
+  const nextStep = document.getElementById("next-step");
+  const saveDraftButton = document.getElementById("save-draft");
+  const publishButton = document.getElementById("publish-event");
+  const stepButtons = [...document.querySelectorAll("[data-step-button]")];
+  const panels = [...document.querySelectorAll("[data-step]")];
+  const dateFormatter = new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium", timeStyle: "short" });
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function setStatus(target, message, tone = "neutral") {
+    if (!(target instanceof HTMLElement)) return;
+    target.textContent = message;
+    target.dataset.tone = tone;
+  }
+
+  function setBusy(button, busy) {
+    if (button instanceof HTMLButtonElement) button.disabled = busy;
+  }
+
+  function headers(json = false) {
+    return {
+      ...(json ? { "Content-Type": "application/json" } : {}),
+      "x-organizer-secret": state.secret,
+    };
+  }
+
+  async function parseResponse(response) {
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error?.message || "Požadavek selhal.");
+    }
+    return payload.data;
+  }
+
+  function listFromInput(value) {
+    return String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function toIsoFromLocal(value) {
+    if (!value) return undefined;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  }
+
+  function toLocalInputValue(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const offset = date.getTimezoneOffset();
+    return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
+  }
+
+  function selectedAccessType() {
+    if (!(form instanceof HTMLFormElement)) return "public";
+    const data = new FormData(form);
+    return data.get("accessType") === "gated" ? "gated" : "public";
+  }
+
+  function syncAccessMode() {
+    const gated = selectedAccessType() === "gated";
+    if (secretFields instanceof HTMLElement) secretFields.dataset.disabled = String(!gated);
+    if (secretMode instanceof HTMLElement) secretMode.textContent = gated ? "Lokace po kódu" : "Vypnuto pro veřejnou akci";
+    for (const field of document.querySelectorAll("#secret-fields input, #secret-fields textarea")) {
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.disabled = !gated;
+    }
+    renderPreview();
+  }
+
+  function payloadFromForm(isPublished) {
+    if (!(form instanceof HTMLFormElement)) throw new Error("Formulář není dostupný.");
+    const data = new FormData(form);
+    const accessType = selectedAccessType();
+    return {
+      slug: String(data.get("slug") || "").trim() || undefined,
+      title: String(data.get("title") || "").trim(),
+      startsAt: toIsoFromLocal(String(data.get("startsAt") || "")),
+      endAt: toIsoFromLocal(String(data.get("endAt") || "")),
+      publicLocation: String(data.get("publicLocation") || "").trim(),
+      publicLatitude: data.get("publicLatitude") ? Number(data.get("publicLatitude")) : undefined,
+      publicLongitude: data.get("publicLongitude") ? Number(data.get("publicLongitude")) : undefined,
+      summary: String(data.get("summary") || "").trim(),
+      coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
+      externalUrl: String(data.get("externalUrl") || "").trim() || undefined,
+      simplexUrl: String(data.get("simplexUrl") || "").trim() || undefined,
+      genres: listFromInput(data.get("genres")),
+      lineup: listFromInput(data.get("lineup")),
+      tags: listFromInput(data.get("tags")),
+      accessType,
+      isPublished,
+      unlockCode: accessType === "gated" ? String(data.get("unlockCode") || "").trim() || undefined : undefined,
+      secretLocationName: accessType === "gated" ? String(data.get("secretLocationName") || "").trim() || undefined : undefined,
+      secretLatitude: accessType === "gated" && data.get("secretLatitude") ? Number(data.get("secretLatitude")) : undefined,
+      secretLongitude: accessType === "gated" && data.get("secretLongitude") ? Number(data.get("secretLongitude")) : undefined,
+      secretInfo: accessType === "gated" ? String(data.get("secretInfo") || "").trim() || undefined : undefined,
+      secretMapNote: accessType === "gated" ? String(data.get("secretMapNote") || "").trim() || undefined : undefined,
+    };
+  }
+
+  function setStep(step) {
+    state.step = Math.max(0, Math.min(3, step));
+    for (const panel of panels) {
+      if (panel instanceof HTMLElement) panel.hidden = Number(panel.dataset.step) !== state.step;
+    }
+    for (const button of stepButtons) {
+      if (button instanceof HTMLButtonElement) button.dataset.active = String(Number(button.dataset.stepButton) === state.step);
+    }
+    if (prevStep instanceof HTMLButtonElement) prevStep.disabled = state.step === 0;
+    if (nextStep instanceof HTMLButtonElement) nextStep.hidden = state.step === 3;
+    renderPreview();
+  }
+
+  function renderPreview() {
+    if (!(form instanceof HTMLFormElement)) return;
+    const data = new FormData(form);
+    const title = String(data.get("title") || "Bez názvu");
+    const startsAt = toIsoFromLocal(String(data.get("startsAt") || ""));
+    const accessType = selectedAccessType();
+    if (publicPreview instanceof HTMLElement) {
+      publicPreview.innerHTML = `
+        <h3>${escapeHtml(title)}</h3>
+        <p><strong>Datum:</strong> ${escapeHtml(startsAt ? dateFormatter.format(new Date(startsAt)) : "Nevyplněno")}</p>
+        <p><strong>Lokalita:</strong> ${escapeHtml(String(data.get("publicLocation") || "Nevyplněno"))}</p>
+        <p>${escapeHtml(String(data.get("summary") || "Popis zatím není vyplněný."))}</p>
+        <small>${accessType === "gated" ? "Na kód" : "Veřejná"}</small>
+      `;
+    }
+    if (secretPreview instanceof HTMLElement) {
+      if (accessType !== "gated") {
+        secretPreview.innerHTML = `<p>Tahle akce nemá tajnou vrstvu.</p>`;
+      } else {
+        secretPreview.innerHTML = `
+          <p><strong>Lokace:</strong> ${escapeHtml(String(data.get("secretLocationName") || "Zachovat existující / nevyplněno"))}</p>
+          <p><strong>Info:</strong> ${escapeHtml(String(data.get("secretInfo") || "Zachovat existující / nevyplněno"))}</p>
+          <p><strong>Poznámka:</strong> ${escapeHtml(String(data.get("secretMapNote") || ""))}</p>
+        `;
+      }
+    }
+  }
+
+  function resetEditor() {
+    if (!(form instanceof HTMLFormElement)) return;
+    form.reset();
+    const slug = form.elements.namedItem("slug");
+    if (slug instanceof HTMLInputElement) slug.value = "";
+    if (editingState instanceof HTMLElement) editingState.textContent = "Nová akce";
+    syncAccessMode();
+    setStep(0);
+    setStatus(formStatus, "Připraveno.", "neutral");
+  }
+
+  function fillEditor(item) {
+    resetEditor();
+    if (!(form instanceof HTMLFormElement)) return;
+    const fields = {
+      slug: item.slug,
+      title: item.title,
+      startsAt: toLocalInputValue(item.startsAt),
+      endAt: toLocalInputValue(item.endAt),
+      publicLocation: item.publicLocation,
+      publicLatitude: item.publicLatitude ?? "",
+      publicLongitude: item.publicLongitude ?? "",
+      summary: item.summary,
+      genres: (item.genres || []).join(", "),
+      lineup: (item.lineup || []).join(", "),
+      tags: (item.tags || []).join(", "),
+      coverImageUrl: item.coverImageUrl || "",
+      externalUrl: item.externalUrl || "",
+      simplexUrl: item.simplexUrl || "",
+    };
+    for (const [name, value] of Object.entries(fields)) {
+      const field = form.elements.namedItem(name);
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.value = value;
+    }
+    const access = form.querySelector(`input[name="accessType"][value="${item.accessType || "public"}"]`);
+    if (access instanceof HTMLInputElement) access.checked = true;
+    if (editingState instanceof HTMLElement) editingState.textContent = item.isPublished ? "Publikovaná akce" : "Koncept";
+    syncAccessMode();
+    setStep(0);
+    setStatus(formStatus, `Upravuješ ${item.slug}. Tajná pole nech prázdná, pokud je nechceš měnit.`, "warning");
+  }
+
+  function eventDate(item) {
+    return dateFormatter.format(new Date(item.startsAt));
+  }
+
+  function renderEvents() {
+    if (!(eventsEl instanceof HTMLElement)) return;
+    if (state.events.length === 0) {
+      eventsEl.innerHTML = `<p class="empty-state">Studio zatím nemá žádné akce.</p>`;
+      return;
+    }
+
+    eventsEl.innerHTML = state.events
+      .map(
+        (item) => `
+          <article class="studio-event">
+            <div>
+              <strong>${escapeHtml(item.title)}</strong>
+              <span>${escapeHtml(eventDate(item))}</span>
+              <small>${escapeHtml(item.isPublished ? "publikováno" : "koncept")} / ${escapeHtml(item.accessType === "gated" ? "na kód" : "veřejná")}</small>
+            </div>
+            <div class="event-actions">
+              <button type="button" data-action="edit" data-slug="${escapeHtml(item.slug)}">Upravit</button>
+              ${!item.isPublished ? `<button type="button" data-action="publish" data-slug="${escapeHtml(item.slug)}">Publikovat</button>` : `<a href="/akce/${escapeHtml(item.slug)}" target="_blank" rel="noreferrer">Otevřít</a>`}
+              <button type="button" data-action="archive" data-slug="${escapeHtml(item.slug)}">Archivovat</button>
+            </div>
+          </article>
+        `,
+      )
+      .join("");
+  }
+
+  async function loadEvents() {
+    const response = await fetch("/api/studio/events", { headers: headers() });
+    const data = await parseResponse(response);
+    state.events = Array.isArray(data.events) ? data.events : [];
+    renderEvents();
+  }
+
+  async function authenticate(secret) {
+    state.secret = secret;
+    setBusy(unlockButton, true);
+    setStatus(authStatus, "Ověřuji kód...", "warning");
+    try {
+      await loadEvents();
+      sessionStorage.setItem(STORAGE_KEY, state.secret);
+      if (gate instanceof HTMLElement) gate.hidden = true;
+      if (workspace instanceof HTMLElement) workspace.hidden = false;
+      setStatus(globalStatus, "Studio načteno.", "positive");
+    } catch (error) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      state.secret = "";
+      setStatus(authStatus, error instanceof Error ? error.message : "Ověření selhalo.", "danger");
+    } finally {
+      setBusy(unlockButton, false);
+    }
+  }
+
+  async function saveEvent(isPublished) {
+    const payload = payloadFromForm(isPublished);
+    setStatus(formStatus, isPublished ? "Publikuji..." : "Ukládám koncept...", "warning");
+    setBusy(saveDraftButton, true);
+    setBusy(publishButton, true);
+    try {
+      const response = await fetch("/api/studio/events", {
+        method: "POST",
+        headers: headers(true),
+        body: JSON.stringify(payload),
+      });
+      const saved = await parseResponse(response);
+      setStatus(formStatus, isPublished ? `Publikováno ${saved.slug}.` : `Koncept uložen ${saved.slug}.`, "positive");
+      resetEditor();
+      await loadEvents();
+    } catch (error) {
+      setStatus(formStatus, error instanceof Error ? error.message : "Uložení selhalo.", "danger");
+    } finally {
+      setBusy(saveDraftButton, false);
+      setBusy(publishButton, false);
+    }
+  }
+
+  async function studioAction(slug, action) {
+    const message = action === "archive" ? "Archivovat tuhle akci ze Studia?" : "";
+    if (message && !window.confirm(message)) return;
+    setStatus(globalStatus, action === "archive" ? "Archivuji..." : "Publikuji koncept...", "warning");
+    const response = await fetch("/api/studio/events", {
+      method: "PATCH",
+      headers: headers(true),
+      body: JSON.stringify({ slug, action }),
+    });
+    await parseResponse(response);
+    setStatus(globalStatus, action === "archive" ? "Akce archivována." : "Koncept publikován.", "positive");
+    await loadEvents();
+  }
+
+  accessForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const secret = secretInput instanceof HTMLInputElement ? secretInput.value.trim() : "";
+    if (secret) authenticate(secret);
+  });
+
+  reloadButton?.addEventListener("click", () => loadEvents().catch((error) => setStatus(globalStatus, error.message, "danger")));
+  newEventButton?.addEventListener("click", resetEditor);
+  prevStep?.addEventListener("click", () => setStep(state.step - 1));
+  nextStep?.addEventListener("click", () => setStep(state.step + 1));
+  saveDraftButton?.addEventListener("click", () => saveEvent(false));
+  publishButton?.addEventListener("click", () => saveEvent(true));
+
+  for (const button of stepButtons) {
+    button.addEventListener("click", () => {
+      if (button instanceof HTMLButtonElement) setStep(Number(button.dataset.stepButton || 0));
+    });
+  }
+
+  form?.addEventListener("input", () => {
+    syncAccessMode();
+    renderPreview();
+  });
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+
+  eventsEl?.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const actionTarget = target.closest("[data-action]");
+    if (!(actionTarget instanceof HTMLElement)) return;
+    const action = actionTarget.dataset.action;
+    const slug = actionTarget.dataset.slug;
+    if (!action || !slug) return;
+    const item = state.events.find((candidate) => candidate.slug === slug);
+    if (action === "edit" && item) {
+      fillEditor(item);
+      return;
+    }
+    if (action === "publish" || action === "archive") {
+      try {
+        await studioAction(slug, action);
+      } catch (error) {
+        setStatus(globalStatus, error instanceof Error ? error.message : "Akce selhala.", "danger");
+      }
+    }
+  });
+
+  syncAccessMode();
+  setStep(0);
+  if (state.secret) {
+    authenticate(state.secret);
+  }
+</script>
+
+<style>
+  :global(body.studio-body) {
+    scroll-snap-type: none;
+  }
+
+  :global(.grid-canvas) {
+    display: none;
+  }
+
+  .studio-shell {
+    position: relative;
+    min-height: 100svh;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+
+  .studio-bg {
+    position: absolute;
+    inset: 0;
+    opacity: 0.04;
+    background: url("/bg.jpeg") center / cover;
+    pointer-events: none;
+  }
+
+  .studio-gate,
+  .studio-workspace {
+    position: relative;
+    z-index: 1;
+  }
+
+  .studio-gate {
+    min-height: calc(100svh - 48px);
+    display: grid;
+    place-items: center;
+  }
+
+  .gate-card,
+  .studio-inventory,
+  .studio-editor {
+    border: 3px solid #000;
+    background: rgba(255, 244, 221, 0.95);
+    box-shadow: 10px 10px 0 #000;
+  }
+
+  .gate-card {
+    width: min(560px, 100%);
+    padding: 18px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .gate-card h1,
+  .studio-topbar h1 {
+    margin: 0;
+    font-size: clamp(2.6rem, 8vw, 5rem);
+    line-height: 0.9;
+  }
+
+  .gate-copy {
+    line-height: 1.45;
+    margin: 0;
+    font-weight: 700;
+  }
+
+  .access-form,
+  .field-row,
+  .studio-topbar,
+  .panel-head,
+  .wizard-actions,
+  .event-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .access-form {
+    align-items: stretch;
+  }
+
+  .studio-topbar,
+  .panel-head {
+    justify-content: space-between;
+    align-items: start;
+  }
+
+  .studio-topbar {
+    margin-bottom: 14px;
+  }
+
+  .studio-grid {
+    display: grid;
+    grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .studio-inventory,
+  .studio-editor {
+    padding: 16px;
+  }
+
+  .studio-events,
+  .studio-form,
+  .wizard-panel {
+    display: grid;
+    gap: 12px;
+  }
+
+  .studio-event {
+    display: grid;
+    gap: 10px;
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 10px;
+  }
+
+  .studio-event div:first-child {
+    display: grid;
+    gap: 4px;
+  }
+
+  .studio-event strong {
+    font-size: 1.1rem;
+    overflow-wrap: anywhere;
+  }
+
+  .studio-event small,
+  .kicker,
+  label span,
+  .preview-grid > article > span {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.74rem;
+    font-weight: 900;
+  }
+
+  .wizard-steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 2px solid #000;
+    margin-bottom: 14px;
+  }
+
+  .wizard-steps button {
+    border: 0;
+    border-right: 2px solid #000;
+    background: #fffef8;
+    padding: 10px;
+  }
+
+  .wizard-steps button:last-child {
+    border-right: 0;
+  }
+
+  .wizard-steps button[data-active="true"] {
+    background: #000;
+    color: #c00;
+  }
+
+  .segmented {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 2px solid #000;
+    background: #fffef8;
+  }
+
+  .segmented label {
+    cursor: pointer;
+  }
+
+  .segmented label + label {
+    border-left: 2px solid #000;
+  }
+
+  .segmented input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .segmented span {
+    display: block;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .segmented input:checked + span {
+    background: #000;
+    color: #c00;
+  }
+
+  label {
+    display: grid;
+    gap: 7px;
+  }
+
+  .field-row {
+    flex-wrap: wrap;
+  }
+
+  .field-row > label {
+    flex: 1 1 220px;
+  }
+
+  input,
+  textarea,
+  button,
+  .event-actions a {
+    border: 2px solid #000;
+    background: #fffef8;
+    color: #000;
+    padding: 10px;
+    font: inherit;
+    font-weight: 900;
+    border-radius: 0;
+    box-sizing: border-box;
+  }
+
+  input,
+  textarea {
+    width: 100%;
+    font-weight: 500;
+  }
+
+  textarea {
+    min-height: 120px;
+    resize: vertical;
+  }
+
+  button,
+  .event-actions a {
+    cursor: pointer;
+    text-decoration: none;
+    text-transform: uppercase;
+    font-size: 0.82rem;
+  }
+
+  button:hover,
+  .event-actions a:hover {
+    background: #c00;
+    color: #000;
+  }
+
+  button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  #publish-event,
+  #unlock-studio,
+  #new-event {
+    background: #000;
+    color: #c00;
+  }
+
+  .mode-pill {
+    display: inline-flex;
+    border: 2px solid #000;
+    background: #fffef8;
+    padding: 8px 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.76rem;
+    font-weight: 900;
+  }
+
+  .secret-fields[data-disabled="true"] {
+    opacity: 0.55;
+  }
+
+  .field-note {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    font-weight: 700;
+  }
+
+  .preview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .preview-grid article {
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 12px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .secret-preview {
+    background: #000 !important;
+    color: #fff6df;
+  }
+
+  .preview-grid h3,
+  .preview-grid p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .status-line {
+    min-height: 22px;
+    margin: 10px 0;
+    font-weight: 900;
+  }
+
+  .status-line[data-tone="positive"] {
+    color: #087c2f;
+  }
+
+  .status-line[data-tone="warning"] {
+    color: #8a5d00;
+  }
+
+  .status-line[data-tone="danger"] {
+    color: #9b0000;
+  }
+
+  .empty-state {
+    margin: 0;
+    border: 2px solid #000;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.72);
+    font-weight: 900;
+  }
+
+  @media (max-width: 900px) {
+    .studio-shell {
+      padding: 12px;
+    }
+
+    .studio-grid,
+    .preview-grid,
+    .wizard-steps {
+      grid-template-columns: 1fr;
+    }
+
+    .wizard-steps button,
+    .wizard-steps button:last-child {
+      border-right: 0;
+      border-bottom: 2px solid #000;
+    }
+
+    .wizard-steps button:last-child {
+      border-bottom: 0;
+    }
+
+    .studio-topbar,
+    .panel-head,
+    .field-row,
+    .access-form,
+    .wizard-actions,
+    .event-actions {
+      flex-direction: column;
+    }
+  }
+</style>

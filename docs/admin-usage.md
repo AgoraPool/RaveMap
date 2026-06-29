@@ -9,3 +9,13 @@
 7. Use diagnostics to verify relay reads and write quorum configuration.
 
 Mirrored events are never published immediately. They enter admin as public-only drafts and can be reviewed, edited, published, or deleted.
+
+# Organizer Studio
+
+1. Open `/studio`.
+2. Enter `ORGANIZER_SECRET`.
+3. Create or edit only studio-created events.
+4. Use the guided steps to prepare public info, optional code-gated details, and preview the public/secret split.
+5. Save as draft, publish, or archive.
+
+Studio does not expose imports, relay diagnostics, bulk deletion, or non-studio events.

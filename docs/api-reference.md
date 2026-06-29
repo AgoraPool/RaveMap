@@ -19,6 +19,11 @@ Admin endpoints require one of:
 - `x-admin-secret: <ADMIN_SECRET>`
 - `Authorization: Bearer <ADMIN_SECRET>`
 
+Studio endpoints require one of:
+
+- `x-organizer-secret: <ORGANIZER_SECRET>`
+- `Authorization: Bearer <ORGANIZER_SECRET>`
+
 ## `GET /api/admin/events`
 
 Returns live events and unpublished drafts.
@@ -105,6 +110,44 @@ Fetches source events and writes review drafts. Existing imported events are mat
 Scheduler-facing sync endpoint. Requires:
 
 - `x-mirror-sync-secret: <MIRROR_SYNC_SECRET>`
+
+## `GET /api/studio/events`
+
+Returns only events created by `/studio`, identified by the `origin=studio` Nostr marker.
+
+## `POST /api/studio/events`
+
+Creates or replaces a studio event as a draft or live event. Studio payloads cannot set import/source fields or arbitrary origin metadata.
+
+```json
+{
+  "title": "Warehouse Night",
+  "summary": "Public event info",
+  "publicLocation": "Brno",
+  "startsAt": "2026-03-14T21:00:00+01:00",
+  "accessType": "gated",
+  "isPublished": false,
+  "unlockCode": "my-strong-code",
+  "secretInfo": "Secret organizer instructions",
+  "secretLocationName": "Industrial Hall",
+  "secretLatitude": 49.1951,
+  "secretLongitude": 16.6068
+}
+```
+
+For existing gated studio events, secret fields may be omitted to preserve the already encrypted secret bundle.
+
+## `PATCH /api/studio/events`
+
+Publishes or archives a studio-created event.
+
+```json
+{ "slug": "warehouse-night-2026-03-14", "action": "publish" }
+```
+
+```json
+{ "slug": "warehouse-night-2026-03-14", "action": "archive" }
+```
 
 ## `GET /api/events`
 

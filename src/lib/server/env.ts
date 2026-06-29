@@ -27,6 +27,7 @@ const optionalSimplexUrlSchema = z.preprocess(
 
 const envSchema = z.object({
   ADMIN_SECRET: z.string().min(24),
+  ORGANIZER_SECRET: z.string().min(24),
   ENCRYPTION_KEY: z.string().min(1),
   RATE_LIMIT_SECRET: z.string().min(24),
   NOSTR_RELAYS: z.string().min(1),
@@ -52,6 +53,7 @@ export function getEnv(): AppEnv {
 
   const parsed = envSchema.safeParse({
     ADMIN_SECRET: import.meta.env.ADMIN_SECRET,
+    ORGANIZER_SECRET: import.meta.env.ORGANIZER_SECRET,
     ENCRYPTION_KEY: import.meta.env.ENCRYPTION_KEY,
     RATE_LIMIT_SECRET: import.meta.env.RATE_LIMIT_SECRET,
     NOSTR_RELAYS: import.meta.env.NOSTR_RELAYS,
