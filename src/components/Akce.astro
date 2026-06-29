@@ -2,7 +2,11 @@
 import { getNostrEventRepository } from "../lib/server/nostr-repository";
 
 const { limit = 80 } = Astro.props as { limit?: number };
-const list = await getNostrEventRepository().listPublishedEvents(limit);
+const repository = getNostrEventRepository();
+const list = await repository.listPublishedEvents(limit);
+const rsvpSummaries: Record<string, { accepted: number; tentative: number }> = await repository
+  .getRsvpSummariesForEvents(list)
+  .catch(() => ({}));
 
 const formatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "medium",
@@ -27,41 +31,53 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
           <button type="button" data-sort-key="date" aria-label="Seřadit podle data">
             Datum <span data-sort-indicator="date">↑</span>
           </button>
+          <button type="button" data-sort-key="rsvp" aria-label="Seřadit podle účasti">
+            Účast <span data-sort-indicator="rsvp">-</span>
+          </button>
           <button type="button" data-sort-key="location" aria-label="Seřadit podle lokality">
             Lokalita <span data-sort-indicator="location">-</span>
           </button>
         </div>
         <div class="akce-list" data-akce-list>
-          {list.map((item) => (
-            <a
-              class="akce-item"
-              href={`/akce/${item.slug}`}
-              data-name={item.title.toLocaleLowerCase("cs-CZ")}
-              data-date={item.startsAt.getTime()}
-              data-location={item.publicLocation.toLocaleLowerCase("cs-CZ")}
-            >
-              <span class="akce-poster-cell" aria-hidden={!item.coverImageUrl}>
-                {
-                  item.coverImageUrl && (
-                    <img
-                      class="akce-img"
-                      src={item.coverImageUrl}
-                      alt={item.title}
-                      loading="lazy"
-                      decoding="async"
-                      referrerpolicy="no-referrer"
-                    />
-                  )
-                }
-              </span>
-              <h3 class="akce-name">{item.title}</h3>
-              <div class="akce-date">{formatter.format(item.startsAt)}</div>
-              <div class="akce-location">
-                <span>{item.publicLocation}</span>
-                <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
-              </div>
-            </a>
-          ))}
+          {list.map((item) => {
+            const rsvp = rsvpSummaries[item.slug] ?? { accepted: 0, tentative: 0 };
+            const rsvpTotal = rsvp.accepted + rsvp.tentative;
+            return (
+              <a
+                class="akce-item"
+                href={`/akce/${item.slug}`}
+                data-name={item.title.toLocaleLowerCase("cs-CZ")}
+                data-date={item.startsAt.getTime()}
+                data-rsvp={rsvpTotal}
+                data-location={item.publicLocation.toLocaleLowerCase("cs-CZ")}
+              >
+                <span class="akce-poster-cell" aria-hidden={!item.coverImageUrl}>
+                  {
+                    item.coverImageUrl && (
+                      <img
+                        class="akce-img"
+                        src={item.coverImageUrl}
+                        alt={item.title}
+                        loading="lazy"
+                        decoding="async"
+                        referrerpolicy="no-referrer"
+                      />
+                    )
+                  }
+                </span>
+                <h3 class="akce-name">{item.title}</h3>
+                <div class="akce-date">{formatter.format(item.startsAt)}</div>
+                <div class="akce-rsvp" aria-label={`${rsvp.accepted} jde, ${rsvp.tentative} možná`}>
+                  <strong>{rsvpTotal}</strong>
+                  <small>{rsvp.accepted} jde / {rsvp.tentative} možná</small>
+                </div>
+                <div class="akce-location">
+                  <span>{item.publicLocation}</span>
+                  <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
+                </div>
+              </a>
+            );
+          })}
         </div>
       </>
     )}
@@ -82,6 +98,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   function valueFor(row, key) {
     if (!(row instanceof HTMLElement)) return "";
     if (key === "date") return Number(row.dataset.date || 0);
+    if (key === "rsvp") return Number(row.dataset.rsvp || 0);
     if (key === "location") return row.dataset.location || "";
     return row.dataset.name || "";
   }
@@ -203,7 +220,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     box-sizing: border-box;
     min-width: 0;
     display: grid;
-    grid-template-columns: 110px 1.5fr 1fr 1fr;
+    grid-template-columns: 110px minmax(0, 1.45fr) minmax(130px, 0.9fr) minmax(92px, 0.55fr) minmax(140px, 0.9fr);
     align-items: center;
     gap: 16px;
   }
@@ -268,9 +285,24 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     overflow-wrap: anywhere;
   }
   .akce-date,
+  .akce-rsvp,
   .akce-location {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+  .akce-rsvp {
+    display: grid;
+    gap: 3px;
+  }
+  .akce-rsvp strong {
+    font-size: 1.45rem;
+    line-height: 1;
+  }
+  .akce-rsvp small {
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    line-height: 1.2;
   }
   .akce-location {
     display: grid;
@@ -307,7 +339,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     }
     .akce-sort-row,
     .akce-item {
-      grid-template-columns: 80px 1.2fr 1fr;
+      grid-template-columns: 80px minmax(0, 1.2fr) minmax(110px, 0.9fr) minmax(72px, 0.5fr);
       gap: 10px;
     }
     .akce-sort-row button[data-sort-key="location"],
@@ -316,6 +348,12 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     }
     .akce-name {
       font-size: 1.4rem;
+    }
+    .akce-rsvp strong {
+      font-size: 1.2rem;
+    }
+    .akce-rsvp small {
+      font-size: 0.62rem;
     }
     .akce-poster-cell {
       width: 72px;
@@ -359,7 +397,8 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       grid-template-columns: 56px 1fr;
       grid-template-areas:
         "img name"
-        "img date";
+        "img date"
+        "img rsvp";
       min-height: 74px;
       padding: 10px 12px;
       gap: 4px 10px;
@@ -368,7 +407,8 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     .akce-sort-row {
       grid-template-areas:
         "img name"
-        "img date";
+        "img date"
+        "img rsvp";
       padding: 8px 12px;
     }
     .akce-sort-row button {
@@ -380,6 +420,9 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     }
     .akce-sort-row button[data-sort-key="date"] {
       grid-area: date;
+    }
+    .akce-sort-row button[data-sort-key="rsvp"] {
+      grid-area: rsvp;
     }
     .akce-sort-spacer {
       grid-area: img;
@@ -397,6 +440,18 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     .akce-date {
       grid-area: date;
       font-size: 0.85rem;
+    }
+    .akce-rsvp {
+      grid-area: rsvp;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .akce-rsvp strong {
+      font-size: 1rem;
+    }
+    .akce-rsvp small {
+      font-size: 0.68rem;
     }
     .bunkr {
       width: 210px;
