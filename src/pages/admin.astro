@@ -581,7 +581,7 @@ import Layout from "../layouts/Layout.astro";
         const accessBadge = item.accessType === "gated" ? badge("na kód", "danger") : badge("veřejná", "soft");
         const sourceLine = item.source?.url ? `<a href="${escapeHtml(item.source.url)}" target="_blank" rel="noreferrer">zdroj</a>` : "ručně";
         const thumb = item.coverImageUrl
-          ? `<img class="event-thumb" src="${escapeHtml(item.coverImageUrl)}" alt="" loading="lazy" />`
+          ? `<img class="event-thumb" src="${escapeHtml(item.coverImageUrl)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
           : `<span class="event-thumb-empty" aria-hidden="true"></span>`;
         const tags = compactList([...(item.tags || []), ...(item.genres || [])]);
         const selected = state.selectedSlugs.has(item.slug);
@@ -632,10 +632,15 @@ import Layout from "../layouts/Layout.astro";
     const okCount = data.checks?.relays?.filter((relay) => relay.ok).length || 0;
     if (relayState instanceof HTMLElement) relayState.textContent = `${okCount}/${data.relays?.length || 0} ok`;
     diagnostics.innerHTML = `
-      <p><strong>Publikuje</strong><br>${data.publisherPubkey}</p>
-      <p><strong>Quorum zápisu</strong><br>${data.writeMinSuccess}</p>
+      <p><strong>Publikuje</strong><br>${escapeHtml(data.publisherPubkey)}</p>
+      <p><strong>Quorum zápisu</strong><br>${escapeHtml(data.writeMinSuccess)}</p>
       ${(data.checks?.relays || [])
-        .map((relay) => `<p>${relay.ok ? "OK" : "CHYBA"} ${relay.relay}<br><small>${relay.message || `${relay.events} akcí`}</small></p>`)
+        .map(
+          (relay) =>
+            `<p>${relay.ok ? "OK" : "CHYBA"} ${escapeHtml(relay.relay)}<br><small>${escapeHtml(
+              relay.message || `${relay.events} akcí`,
+            )}</small></p>`,
+        )
         .join("")}
     `;
   }

@@ -54,6 +54,11 @@ type DeletedEventResult = {
   writes: RelayWriteResult[];
 };
 
+type ReadCacheEntry<T> = {
+  expiresAt: number;
+  value: T;
+};
+
 type RelayDiagnostics = {
   relays: string[];
   publisherPubkey: string;
@@ -69,6 +74,11 @@ type RelayDiagnostics = {
     publishConfigured: boolean;
   };
 };
+
+const EVENT_READ_CACHE_TTL_MS = 45_000;
+const LIST_READ_CACHE_TTL_MS = 60_000;
+const INTERACTION_READ_CACHE_TTL_MS = 15_000;
+const MAX_READ_CACHE_ENTRIES = 600;
 
 function uniqueRelayUrls(rawRelays: string): string[] {
   const relays = rawRelays
@@ -505,6 +515,7 @@ export class NostrEventRepository {
   private readonly writeMinSuccess: number;
   private readonly signer: NostrSigner;
   private readonly pubkey: string;
+  private readonly readCache = new Map<string, ReadCacheEntry<unknown>>();
 
   constructor(signer = getAppManagedSigner()) {
     const env = getEnv();
@@ -548,7 +559,47 @@ export class NostrEventRepository {
       });
     }
 
+    this.readCache.clear();
     return results;
+  }
+
+  private cacheGet<T>(key: string): T | undefined {
+    const cached = this.readCache.get(key);
+    if (!cached) {
+      return undefined;
+    }
+
+    if (cached.expiresAt <= Date.now()) {
+      this.readCache.delete(key);
+      return undefined;
+    }
+
+    return cached.value as T;
+  }
+
+  private cacheSet<T>(key: string, value: T, ttlMs: number): T {
+    if (!this.readCache.has(key) && this.readCache.size >= MAX_READ_CACHE_ENTRIES) {
+      const now = Date.now();
+      for (const [cachedKey, cached] of this.readCache) {
+        if (cached.expiresAt <= now) {
+          this.readCache.delete(cachedKey);
+        }
+      }
+
+      while (this.readCache.size >= MAX_READ_CACHE_ENTRIES) {
+        const oldestKey = this.readCache.keys().next().value as string | undefined;
+        if (oldestKey === undefined) {
+          break;
+        }
+        this.readCache.delete(oldestKey);
+      }
+    }
+
+    this.readCache.set(key, {
+      expiresAt: Date.now() + ttlMs,
+      value,
+    });
+    return value;
   }
 
   private async fetchEvents(filters: NostrFilter[]): Promise<NostrEvent[]> {
@@ -604,6 +655,12 @@ export class NostrEventRepository {
   }
 
   async listTombstonedSlugs(slugs?: string[]): Promise<Set<string>> {
+    const cacheKey = `tombstones:${slugs ? [...slugs].sort().join(",") : "all"}`;
+    const cached = this.cacheGet<string[]>(cacheKey);
+    if (cached !== undefined) {
+      return new Set(cached);
+    }
+
     const filters: NostrFilter[] = [
       {
         authors: [this.pubkey],
@@ -614,54 +671,97 @@ export class NostrEventRepository {
     ];
 
     const events = await this.fetchEvents(filters);
-    return new Set([...this.latestByD(events).keys()]);
+    const tombstones = [...this.latestByD(events).keys()];
+    return new Set(this.cacheSet(cacheKey, tombstones, EVENT_READ_CACHE_TTL_MS));
   }
 
   async listPublishedEvents(limit?: number): Promise<PublicEventDto[]> {
-    const events = await this.fetchEvents([
-      {
-        authors: [this.pubkey],
-        kinds: [PUBLIC_EVENT_KIND],
-        limit: limit ?? 200,
-      },
-      {
-        kinds: [PUBLIC_EVENT_KIND],
-        "#t": ["ravemap"],
-        limit: limit ?? 200,
-      },
-    ]);
-    const tombstones = await this.listTombstonedSlugs();
+    const cacheKey = `published:${limit ?? "all"}`;
+    const cached = this.cacheGet<PublicEventDto[]>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
 
-    return [...this.latestPublishedByD(events).values()]
+    const [events, tombstones] = await Promise.all([
+      this.fetchEvents([
+        {
+          authors: [this.pubkey],
+          kinds: [PUBLIC_EVENT_KIND],
+          limit: limit ?? 200,
+        },
+        {
+          kinds: [PUBLIC_EVENT_KIND],
+          "#t": ["ravemap"],
+          limit: limit ?? 200,
+        },
+      ]),
+      this.listTombstonedSlugs(),
+    ]);
+
+    const published = [...this.latestPublishedByD(events).values()]
       .map(parsePublicEvent)
       .filter((event): event is PublicEventDto => Boolean(event && !tombstones.has(event.slug)))
       .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime())
       .slice(0, limit);
+
+    return this.cacheSet(cacheKey, published, LIST_READ_CACHE_TTL_MS);
   }
 
   async getPublishedEvent(slug: string): Promise<PublicEventDto | null> {
-    const tombstones = await this.listTombstonedSlugs([slug]);
-    if (tombstones.has(slug)) {
-      return null;
+    const cacheKey = `event:${slug}`;
+    const cached = this.cacheGet<PublicEventDto | null>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
     }
 
+    const [tombstones, events] = await Promise.all([
+      this.listTombstonedSlugs([slug]),
+      this.fetchEvents([
+        {
+          authors: [this.pubkey],
+          kinds: [PUBLIC_EVENT_KIND],
+          "#d": [slug],
+          limit: 20,
+        },
+        {
+          kinds: [PUBLIC_EVENT_KIND],
+          "#d": [slug],
+          "#t": ["ravemap"],
+          limit: 20,
+        },
+      ]),
+    ]);
+    if (tombstones.has(slug)) {
+      return this.cacheSet(cacheKey, null, EVENT_READ_CACHE_TTL_MS);
+    }
+
+    const latest = this.latestPublishedByD(events).get(slug);
+    return this.cacheSet(cacheKey, latest ? parsePublicEvent(latest) : null, EVENT_READ_CACHE_TTL_MS);
+  }
+
+  private async listCommentsForEvent(event: PublicEventDto): Promise<EventCommentDto[]> {
+    const cacheKey = `comments:${event.authorPubkey}:${event.slug}`;
+    const cached = this.cacheGet<EventCommentDto[]>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const coordinate = eventCoordinate(event.authorPubkey, event.slug);
     const events = await this.fetchEvents([
       {
-        authors: [this.pubkey],
-        kinds: [PUBLIC_EVENT_KIND],
-        "#d": [slug],
-        limit: 20,
-      },
-      {
-        kinds: [PUBLIC_EVENT_KIND],
-        "#d": [slug],
-        "#t": ["ravemap"],
-        limit: 20,
+        kinds: [COMMENT_EVENT_KIND],
+        "#a": [coordinate],
+        limit: 200,
       },
     ]);
 
-    const latest = this.latestPublishedByD(events).get(slug);
-    return latest ? parsePublicEvent(latest) : null;
+    const comments = events
+      .filter((comment) => tagValue(comment, "ravemap-event") === event.slug)
+      .map(parseCommentEvent)
+      .filter((comment): comment is EventCommentDto => Boolean(comment))
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+
+    return this.cacheSet(cacheKey, comments, INTERACTION_READ_CACHE_TTL_MS);
   }
 
   async listComments(slug: string): Promise<EventCommentDto[]> {
@@ -674,20 +774,69 @@ export class NostrEventRepository {
       });
     }
 
-    const coordinate = eventCoordinate(event.authorPubkey, slug);
+    return this.listCommentsForEvent(event);
+  }
+
+  private async getRsvpSummaryForEvent(event: PublicEventDto): Promise<EventRsvpSummaryDto> {
+    const cacheKey = `rsvp:${event.authorPubkey}:${event.slug}`;
+    const cached = this.cacheGet<EventRsvpSummaryDto>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const coordinate = eventCoordinate(event.authorPubkey, event.slug);
     const events = await this.fetchEvents([
       {
-        kinds: [COMMENT_EVENT_KIND],
+        kinds: [RSVP_EVENT_KIND],
         "#a": [coordinate],
-        limit: 200,
+        limit: 500,
       },
     ]);
+    const latestByAuthor = new Map<string, NostrEvent>();
+    for (const rsvp of events) {
+      const status = rsvpStatusFromTag(tagValue(rsvp, "status"));
+      if (!status || tagValue(rsvp, "ravemap-event") !== event.slug) {
+        continue;
+      }
 
-    return events
-      .filter((comment) => tagValue(comment, "ravemap-event") === slug)
-      .map(parseCommentEvent)
-      .filter((comment): comment is EventCommentDto => Boolean(comment))
-      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+      const identity = rsvp.pubkey === this.pubkey && tagValue(rsvp, "anonymous") === "true" ? rsvp.id : rsvp.pubkey;
+      const existing = latestByAuthor.get(identity);
+      if (!existing || rsvp.created_at > existing.created_at) {
+        latestByAuthor.set(identity, rsvp);
+      }
+    }
+
+    const summary: EventRsvpSummaryDto = { accepted: 0, tentative: 0 };
+    for (const rsvp of latestByAuthor.values()) {
+      const status = rsvpStatusFromTag(tagValue(rsvp, "status"));
+      if (status) {
+        summary[status] += 1;
+      }
+    }
+
+    return this.cacheSet(cacheKey, summary, INTERACTION_READ_CACHE_TTL_MS);
+  }
+
+  async getPublishedEventPageData(slug: string): Promise<{
+    event: PublicEventDto | null;
+    comments: EventCommentDto[];
+    rsvp: EventRsvpSummaryDto;
+  }> {
+    const event = await this.getPublishedEvent(slug);
+    if (!event) {
+      return {
+        event: null,
+        comments: [],
+        rsvp: { accepted: 0, tentative: 0 },
+      };
+    }
+
+    const [comments, rsvp] = await Promise.all([
+      this.listCommentsForEvent(event).catch(() => []),
+      this.getRsvpSummaryForEvent(event).catch(() => ({ accepted: 0, tentative: 0 })),
+    ]);
+
+    return { event, comments, rsvp };
   }
 
   async createAnonymousComment(input: CreateCommentCommand): Promise<{ id: string; writes: RelayWriteResult[] }> {
@@ -766,37 +915,7 @@ export class NostrEventRepository {
       });
     }
 
-    const coordinate = eventCoordinate(event.authorPubkey, slug);
-    const events = await this.fetchEvents([
-      {
-        kinds: [RSVP_EVENT_KIND],
-        "#a": [coordinate],
-        limit: 500,
-      },
-    ]);
-    const latestByAuthor = new Map<string, NostrEvent>();
-    for (const rsvp of events) {
-      const status = rsvpStatusFromTag(tagValue(rsvp, "status"));
-      if (!status || tagValue(rsvp, "ravemap-event") !== slug) {
-        continue;
-      }
-
-      const identity = rsvp.pubkey === this.pubkey && tagValue(rsvp, "anonymous") === "true" ? rsvp.id : rsvp.pubkey;
-      const existing = latestByAuthor.get(identity);
-      if (!existing || rsvp.created_at > existing.created_at) {
-        latestByAuthor.set(identity, rsvp);
-      }
-    }
-
-    const summary: EventRsvpSummaryDto = { accepted: 0, tentative: 0 };
-    for (const rsvp of latestByAuthor.values()) {
-      const status = rsvpStatusFromTag(tagValue(rsvp, "status"));
-      if (status) {
-        summary[status] += 1;
-      }
-    }
-
-    return summary;
+    return this.getRsvpSummaryForEvent(event);
   }
 
   async createAnonymousRsvp(input: CreateRsvpCommand): Promise<{ id: string; writes: RelayWriteResult[] }> {

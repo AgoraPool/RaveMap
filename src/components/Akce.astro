@@ -20,7 +20,18 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     ) : (
       list.map((item) => (
         <a class:list={["akce-item", !item.coverImageUrl && "akce-item-no-image"]} href={`/akce/${item.slug}`}>
-          {item.coverImageUrl && <img class="akce-img" src={item.coverImageUrl} alt={item.title} />}
+          {
+            item.coverImageUrl && (
+              <img
+                class="akce-img"
+                src={item.coverImageUrl}
+                alt={item.title}
+                loading="lazy"
+                decoding="async"
+                referrerpolicy="no-referrer"
+              />
+            )
+          }
           <h3 class="akce-name">{item.title}</h3>
           <div class="akce-date">{formatter.format(item.startsAt)}</div>
           <div class="akce-location">

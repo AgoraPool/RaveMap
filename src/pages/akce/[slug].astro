@@ -8,13 +8,14 @@ const slug = Astro.params.slug?.trim().toLowerCase() ?? "";
 const slugValid = /^[a-z0-9-]{3,120}$/.test(slug);
 const repository = getNostrEventRepository();
 
-const event = slugValid ? await repository.getPublishedEvent(slug) : null;
+const pageData = slugValid
+  ? await repository.getPublishedEventPageData(slug)
+  : { event: null, comments: [], rsvp: { accepted: 0, tentative: 0 } };
+const { event, comments, rsvp } = pageData;
 if (!event) {
   Astro.response.status = 404;
 }
 const commentCoordinate = event ? `31923:${event.authorPubkey}:${event.slug}` : "";
-const comments = event ? await repository.listComments(event.slug).catch(() => []) : [];
-const rsvp = event ? await repository.getRsvpSummary(event.slug).catch(() => ({ accepted: 0, tentative: 0 })) : { accepted: 0, tentative: 0 };
 
 const formatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "full",
@@ -94,6 +95,10 @@ const publicMapUrl =
                     class="event-cover"
                     src={event.coverImageUrl}
                     alt={event.title}
+                    loading="eager"
+                    decoding="async"
+                    fetchpriority="high"
+                    referrerpolicy="no-referrer"
                   />
                 ) : null
               }
@@ -184,7 +189,7 @@ const publicMapUrl =
               event.galleryImageUrls.length > 1 && (
                 <div class="event-gallery" aria-label="Fotogalerie">
                   {event.galleryImageUrls.slice(0, 8).map((imageUrl) => (
-                    <img src={imageUrl} alt="" loading="lazy" />
+                    <img src={imageUrl} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
                   ))}
                 </div>
               )
