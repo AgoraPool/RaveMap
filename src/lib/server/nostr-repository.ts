@@ -23,6 +23,7 @@ import {
   type CreateEventCommand,
   type CreateRsvpCommand,
   type EventCommentDto,
+  type EventRsvpEntryDto,
   type EventRsvpSummaryDto,
   type NostrEvent,
   type NostrFilter,
@@ -30,8 +31,10 @@ import {
   type PublicEventDto,
   type PublicSubmitEventCommand,
   RSVP_EVENT_KIND,
+  RSVP_SIGNALS,
   type RelayReadResult,
   type RelayWriteResult,
+  type RsvpSignal,
   type RsvpStatus,
 } from "./nostr-types";
 
@@ -167,6 +170,42 @@ function parseCommentEvent(event: NostrEvent): EventCommentDto | null {
 
 function rsvpStatusFromTag(value: string | undefined): RsvpStatus | null {
   return value === "accepted" || value === "tentative" ? value : null;
+}
+
+function rsvpSignalFromTag(value: string | undefined): RsvpSignal | undefined {
+  return RSVP_SIGNALS.find((signal) => signal === value);
+}
+
+function rsvpAuthorName(event: NostrEvent): string {
+  const nickname = tagValue(event, "nickname") || tagValue(event, "name");
+  if (nickname) {
+    return nickname;
+  }
+
+  return tagValue(event, "anonymous") === "true" ? "Anonym" : `${event.pubkey.slice(0, 8)}...`;
+}
+
+function parseRsvpEntry(event: NostrEvent): EventRsvpEntryDto | null {
+  const slug = tagValue(event, "ravemap-event");
+  const status = rsvpStatusFromTag(tagValue(event, "status"));
+  if (!slug || !status) {
+    return null;
+  }
+
+  return {
+    id: event.id,
+    slug,
+    status,
+    signal: rsvpSignalFromTag(tagValue(event, "signal")),
+    authorPubkey: event.pubkey,
+    authorName: rsvpAuthorName(event),
+    isAnonymous: tagValue(event, "anonymous") === "true",
+    createdAt: new Date(event.created_at * 1000),
+  };
+}
+
+function rsvpIdentity(event: NostrEvent, appPubkey: string): string {
+  return event.pubkey === appPubkey && tagValue(event, "anonymous") === "true" ? event.id : event.pubkey;
 }
 
 function accessTypeFromTag(value: string | undefined): "public" | "gated" {
@@ -790,7 +829,7 @@ export class NostrEventRepository {
   }
 
   async getRsvpSummariesForEvents(events: PublicEventDto[]): Promise<Record<string, EventRsvpSummaryDto>> {
-    const summaries = Object.fromEntries(events.map((event) => [event.slug, { accepted: 0, tentative: 0 }])) as Record<
+    const summaries = Object.fromEntries(events.map((event) => [event.slug, { accepted: 0, tentative: 0, signals: 0 }])) as Record<
       string,
       EventRsvpSummaryDto
     >;
@@ -822,7 +861,7 @@ export class NostrEventRepository {
         continue;
       }
 
-      const identity = rsvp.pubkey === this.pubkey && tagValue(rsvp, "anonymous") === "true" ? rsvp.id : rsvp.pubkey;
+      const identity = rsvpIdentity(rsvp, this.pubkey);
       const latestForEvent = latestBySlug.get(target.slug) ?? new Map<string, NostrEvent>();
       const existing = latestForEvent.get(identity);
       if (!existing || rsvp.created_at > existing.created_at) {
@@ -832,11 +871,14 @@ export class NostrEventRepository {
     }
 
     for (const [slug, latestByAuthor] of latestBySlug) {
-      const summary: EventRsvpSummaryDto = { accepted: 0, tentative: 0 };
+      const summary: EventRsvpSummaryDto = { accepted: 0, tentative: 0, signals: 0 };
       for (const rsvp of latestByAuthor.values()) {
         const status = rsvpStatusFromTag(tagValue(rsvp, "status"));
         if (status) {
           summary[status] += 1;
+        }
+        if (rsvpSignalFromTag(tagValue(rsvp, "signal"))) {
+          summary.signals += 1;
         }
       }
       summaries[slug] = summary;
@@ -845,9 +887,9 @@ export class NostrEventRepository {
     return this.cacheSet(cacheKey, summaries, INTERACTION_READ_CACHE_TTL_MS);
   }
 
-  private async getRsvpSummaryForEvent(event: PublicEventDto): Promise<EventRsvpSummaryDto> {
-    const cacheKey = `rsvp:${event.authorPubkey}:${event.slug}`;
-    const cached = this.cacheGet<EventRsvpSummaryDto>(cacheKey);
+  private async listLatestRsvpEventsForEvent(event: PublicEventDto): Promise<NostrEvent[]> {
+    const cacheKey = `rsvp-events:${event.authorPubkey}:${event.slug}`;
+    const cached = this.cacheGet<NostrEvent[]>(cacheKey);
     if (cached !== undefined) {
       return cached;
     }
@@ -863,48 +905,84 @@ export class NostrEventRepository {
     const latestByAuthor = new Map<string, NostrEvent>();
     for (const rsvp of events) {
       const status = rsvpStatusFromTag(tagValue(rsvp, "status"));
-      if (!status || tagValue(rsvp, "ravemap-event") !== event.slug) {
+      if (!status || tagValue(rsvp, "ravemap-event") !== event.slug || !tagValues(rsvp, "a").includes(coordinate)) {
         continue;
       }
 
-      const identity = rsvp.pubkey === this.pubkey && tagValue(rsvp, "anonymous") === "true" ? rsvp.id : rsvp.pubkey;
+      const identity = rsvpIdentity(rsvp, this.pubkey);
       const existing = latestByAuthor.get(identity);
       if (!existing || rsvp.created_at > existing.created_at) {
         latestByAuthor.set(identity, rsvp);
       }
     }
 
-    const summary: EventRsvpSummaryDto = { accepted: 0, tentative: 0 };
-    for (const rsvp of latestByAuthor.values()) {
+    return this.cacheSet(
+      cacheKey,
+      [...latestByAuthor.values()].sort((left, right) => right.created_at - left.created_at),
+      INTERACTION_READ_CACHE_TTL_MS,
+    );
+  }
+
+  private async getRsvpSummaryForEvent(event: PublicEventDto): Promise<EventRsvpSummaryDto> {
+    const cacheKey = `rsvp:${event.authorPubkey}:${event.slug}`;
+    const cached = this.cacheGet<EventRsvpSummaryDto>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const rsvps = await this.listLatestRsvpEventsForEvent(event);
+    const summary: EventRsvpSummaryDto = { accepted: 0, tentative: 0, signals: 0 };
+    for (const rsvp of rsvps) {
       const status = rsvpStatusFromTag(tagValue(rsvp, "status"));
       if (status) {
         summary[status] += 1;
+      }
+      if (rsvpSignalFromTag(tagValue(rsvp, "signal"))) {
+        summary.signals += 1;
       }
     }
 
     return this.cacheSet(cacheKey, summary, INTERACTION_READ_CACHE_TTL_MS);
   }
 
+  private async listRsvpEntriesForEvent(event: PublicEventDto): Promise<EventRsvpEntryDto[]> {
+    const cacheKey = `rsvp-entries:${event.authorPubkey}:${event.slug}`;
+    const cached = this.cacheGet<EventRsvpEntryDto[]>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const entries = (await this.listLatestRsvpEventsForEvent(event))
+      .map(parseRsvpEntry)
+      .filter((entry): entry is EventRsvpEntryDto => Boolean(entry))
+      .slice(0, 40);
+
+    return this.cacheSet(cacheKey, entries, INTERACTION_READ_CACHE_TTL_MS);
+  }
+
   async getPublishedEventPageData(slug: string): Promise<{
     event: PublicEventDto | null;
     comments: EventCommentDto[];
     rsvp: EventRsvpSummaryDto;
+    rsvpEntries: EventRsvpEntryDto[];
   }> {
     const event = await this.getPublishedEvent(slug);
     if (!event) {
       return {
         event: null,
         comments: [],
-        rsvp: { accepted: 0, tentative: 0 },
+        rsvp: { accepted: 0, tentative: 0, signals: 0 },
+        rsvpEntries: [],
       };
     }
 
-    const [comments, rsvp] = await Promise.all([
+    const [comments, rsvp, rsvpEntries] = await Promise.all([
       this.listCommentsForEvent(event).catch(() => []),
-      this.getRsvpSummaryForEvent(event).catch(() => ({ accepted: 0, tentative: 0 })),
+      this.getRsvpSummaryForEvent(event).catch(() => ({ accepted: 0, tentative: 0, signals: 0 })),
+      this.listRsvpEntriesForEvent(event).catch(() => []),
     ]);
 
-    return { event, comments, rsvp };
+    return { event, comments, rsvp, rsvpEntries };
   }
 
   async createAnonymousComment(input: CreateCommentCommand): Promise<{ id: string; writes: RelayWriteResult[] }> {
@@ -986,6 +1064,19 @@ export class NostrEventRepository {
     return this.getRsvpSummaryForEvent(event);
   }
 
+  async listRsvpEntries(slug: string): Promise<EventRsvpEntryDto[]> {
+    const event = await this.getPublishedEvent(slug);
+    if (!event) {
+      throw new AppError("Akce nenalezena", {
+        code: "EVENT_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+
+    return this.listRsvpEntriesForEvent(event);
+  }
+
   async createAnonymousRsvp(input: CreateRsvpCommand): Promise<{ id: string; writes: RelayWriteResult[] }> {
     const event = await this.getPublishedEvent(input.slug);
     if (!event) {
@@ -1009,6 +1100,7 @@ export class NostrEventRepository {
         ["anonymous", "true"],
         ["client", "RaveMap"],
         ...(nickname ? [["nickname", nickname]] : []),
+        ...(input.signal ? [["signal", input.signal]] : []),
       ],
       content: "",
     });
@@ -1035,6 +1127,7 @@ export class NostrEventRepository {
       !tagValues(event, "a").includes(coordinate) ||
       tagValue(event, "ravemap-event") !== slug ||
       !rsvpStatusFromTag(tagValue(event, "status")) ||
+      (tagValue(event, "signal") !== undefined && !rsvpSignalFromTag(tagValue(event, "signal"))) ||
       event.created_at > nowSeconds() + 10 * 60 ||
       !verifyEvent(event)
     ) {

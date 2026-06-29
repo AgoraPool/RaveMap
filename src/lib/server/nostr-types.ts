@@ -5,6 +5,7 @@ export const SECRET_EVENT_KIND = 30420;
 export const DRAFT_EVENT_KIND = 30421;
 export const TOMBSTONE_EVENT_KIND = 30422;
 export const DELETE_EVENT_KIND = 5;
+export const RSVP_SIGNALS = ["hledám partu", "mám místo v autě", "jedu vlakem", "beru distro", "uvidíme se u stage"] as const;
 
 export type NostrEvent = {
   id: string;
@@ -107,16 +108,30 @@ export type EventCommentDto = {
 };
 
 export type RsvpStatus = "accepted" | "tentative";
+export type RsvpSignal = (typeof RSVP_SIGNALS)[number];
 
 export type EventRsvpSummaryDto = {
   accepted: number;
   tentative: number;
+  signals: number;
+};
+
+export type EventRsvpEntryDto = {
+  id: string;
+  slug: string;
+  status: RsvpStatus;
+  signal?: RsvpSignal;
+  authorPubkey: string;
+  authorName: string;
+  isAnonymous: boolean;
+  createdAt: Date;
 };
 
 export type CreateRsvpCommand = {
   slug: string;
   status: RsvpStatus;
   nickname?: string;
+  signal?: RsvpSignal;
 };
 
 export type CreateCommentCommand = {

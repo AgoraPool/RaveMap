@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RSVP_SIGNALS } from "./nostr-types";
 
 const slugSchema = z.string().trim().min(3).max(120).regex(/^[a-z0-9-]+$/);
 
@@ -282,6 +283,7 @@ export const rsvpSchema = z
   .object({
     status: z.enum(["accepted", "tentative"]),
     nickname: optionalTrimmedString(40),
+    signal: z.enum(RSVP_SIGNALS).optional(),
     signedEvent: signedNostrEventSchema.optional(),
   })
   .strict();

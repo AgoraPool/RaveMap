@@ -12,8 +12,8 @@ const repository = getNostrEventRepository();
 
 const pageData = slugValid
   ? await repository.getPublishedEventPageData(slug)
-  : { event: null, comments: [], rsvp: { accepted: 0, tentative: 0 } };
-const { event, comments, rsvp } = pageData;
+  : { event: null, comments: [], rsvp: { accepted: 0, tentative: 0, signals: 0 }, rsvpEntries: [] };
+const { event, comments, rsvp, rsvpEntries } = pageData;
 if (!event) {
   Astro.response.status = 404;
 }
@@ -45,6 +45,8 @@ const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+const rsvpStatusLabel = (status: string) => (status === "accepted" ? "jde" : "možná");
+const rsvpSignalOptions = ["hledám partu", "mám místo v autě", "jedu vlakem", "beru distro", "uvidíme se u stage"];
 const publicMapUrl =
   event?.publicLatitude !== undefined && event.publicLongitude !== undefined
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${event.publicLongitude - 0.01}%2C${event.publicLatitude - 0.01}%2C${
@@ -286,13 +288,30 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
             <div class="card-head">
               <div>
                 <p class="card-kicker">ÚČAST</p>
-                <h2>Jdeš?</h2>
+                <h2>Kdo jde</h2>
               </div>
               <span id="rsvp-mode" class="meta-pill meta-pill-soft">Anonymně</span>
             </div>
             <div class="rsvp-counts">
               <span><strong id="rsvp-going">{rsvp.accepted}</strong> jde</span>
               <span><strong id="rsvp-maybe">{rsvp.tentative}</strong> možná</span>
+              <span><strong id="rsvp-signals">{rsvp.signals}</strong> signálů</span>
+            </div>
+            <label class="rsvp-nickname">
+              <span>Přezdívka volitelná</span>
+              <input id="rsvp-nickname" name="nickname" type="text" maxlength="40" placeholder="Anonym" />
+            </label>
+            <div class="rsvp-signal-group" role="group" aria-label="Signál k účasti">
+              <label>
+                <input type="radio" name="rsvpSignal" value="" checked />
+                <span>bez signálu</span>
+              </label>
+              {rsvpSignalOptions.map((signal) => (
+                <label>
+                  <input type="radio" name="rsvpSignal" value={signal} />
+                  <span>{signal}</span>
+                </label>
+              ))}
             </div>
             <div class="rsvp-actions">
               <button type="button" data-rsvp-status="accepted">Jdu</button>
@@ -300,6 +319,24 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
               <button id="rsvp-signer" type="button">Použít můj účet</button>
             </div>
             <p id="rsvp-status" class="comment-status" role="status" aria-live="polite"></p>
+            <div id="rsvp-entry-list" class="rsvp-entry-list" aria-live="polite">
+              {
+                rsvpEntries.length > 0 ? (
+                  rsvpEntries.map((entry) => (
+                    <article class="rsvp-entry">
+                      <div>
+                        <strong>{entry.authorName}</strong>
+                        <span>{rsvpStatusLabel(entry.status)}</span>
+                      </div>
+                      {entry.signal && <p>{entry.signal}</p>}
+                      <time datetime={entry.createdAt.toISOString()}>{commentFormatter.format(entry.createdAt)}</time>
+                    </article>
+                  ))
+                ) : (
+                  <p class="empty-rsvp">Zatím žádné odpovědi.</p>
+                )
+              }
+            </div>
           </article>
 
           <article class="event-card comments-card" id="comments" data-slug={event.slug} data-coordinate={commentCoordinate}>
@@ -466,8 +503,12 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
   const rsvpStatus = document.getElementById("rsvp-status");
   const rsvpGoing = document.getElementById("rsvp-going");
   const rsvpMaybe = document.getElementById("rsvp-maybe");
+  const rsvpSignals = document.getElementById("rsvp-signals");
+  const rsvpNickname = document.getElementById("rsvp-nickname");
+  const rsvpEntryList = document.getElementById("rsvp-entry-list");
   const rsvpSigner = document.getElementById("rsvp-signer");
   const nostrCopyButtons = document.querySelectorAll("[data-copy-nostr]");
+  const allowedRsvpSignals = new Set(["hledám partu", "mám místo v autě", "jedu vlakem", "beru distro", "uvidíme se u stage"]);
   let signedCommentMode = false;
   let signedRsvpMode = false;
   let signedPubkey = "";
@@ -558,9 +599,44 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
   function renderRsvp(rsvp) {
     if (rsvpGoing instanceof HTMLElement) rsvpGoing.textContent = String(rsvp?.accepted ?? 0);
     if (rsvpMaybe instanceof HTMLElement) rsvpMaybe.textContent = String(rsvp?.tentative ?? 0);
+    if (rsvpSignals instanceof HTMLElement) rsvpSignals.textContent = String(rsvp?.signals ?? 0);
   }
 
-  async function buildSignedRsvp(slug, coordinate, status) {
+  function selectedRsvpSignal() {
+    const selected = document.querySelector('input[name="rsvpSignal"]:checked');
+    if (!(selected instanceof HTMLInputElement)) return "";
+    return allowedRsvpSignals.has(selected.value) ? selected.value : "";
+  }
+
+  function rsvpStatusLabel(status) {
+    return status === "accepted" ? "jde" : "možná";
+  }
+
+  function renderRsvpEntries(entries) {
+    if (!(rsvpEntryList instanceof HTMLElement)) return;
+    if (!Array.isArray(entries) || entries.length === 0) {
+      rsvpEntryList.innerHTML = `<p class="empty-rsvp">Zatím žádné odpovědi.</p>`;
+      return;
+    }
+
+    rsvpEntryList.innerHTML = entries
+      .map((entry) => {
+        const signal = entry.signal ? `<p>${escapeHtml(entry.signal)}</p>` : "";
+        return `
+          <article class="rsvp-entry">
+            <div>
+              <strong>${escapeHtml(entry.authorName || "Anonym")}</strong>
+              <span>${escapeHtml(rsvpStatusLabel(entry.status))}</span>
+            </div>
+            ${signal}
+            <time datetime="${escapeHtml(entry.createdAt)}">${escapeHtml(formatCommentDate(entry.createdAt))}</time>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  async function buildSignedRsvp(slug, coordinate, status, nickname, signal) {
     const nostr = /** @type {any} */ (window).nostr;
     if (!nostr?.signEvent) {
       throw new Error("V prohlížeči není Nostr rozšíření. Anonymní odpověď pořád funguje.");
@@ -579,6 +655,8 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
         ["status", status],
         ["ravemap-event", slug],
         ["client", "RaveMap"],
+        ...(nickname ? [["name", nickname]] : []),
+        ...(signal ? [["signal", signal]] : []),
       ],
       content: "",
     });
@@ -645,18 +723,21 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
       const coordinate = rsvpCard.dataset.coordinate;
       const status = button.dataset.rsvpStatus;
       if (!slug || !coordinate || (status !== "accepted" && status !== "tentative")) return;
+      const nickname = rsvpNickname instanceof HTMLInputElement ? rsvpNickname.value.trim() : "";
+      const signal = selectedRsvpSignal();
 
       button.disabled = true;
       setRsvpStatus("Ukládám odpověď...", "warning");
       try {
-        const signedEvent = signedRsvpMode ? await buildSignedRsvp(slug, coordinate, status) : undefined;
+        const signedEvent = signedRsvpMode ? await buildSignedRsvp(slug, coordinate, status, nickname, signal) : undefined;
         const response = await fetch(`/api/events/${slug}/rsvp`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status, signedEvent }),
+          body: JSON.stringify({ status, nickname: nickname || undefined, signal: signal || undefined, signedEvent }),
         });
         const result = await parseCommentResponse(response);
         renderRsvp(result.rsvp);
+        renderRsvpEntries(result.entries);
         setRsvpStatus("Odpověď uložena.", "positive");
       } catch (error) {
         setRsvpStatus(error instanceof Error ? error.message : "Odpověď se nepodařilo uložit.", "danger");
@@ -1120,6 +1201,112 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
   .rsvp-actions button:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+
+  .rsvp-nickname {
+    display: grid;
+    gap: 7px;
+  }
+
+  .rsvp-nickname span {
+    font-size: 0.76rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .rsvp-nickname input {
+    width: 100%;
+    border: 2px solid #000;
+    background: #fffef8;
+    color: #000;
+    padding: 10px;
+    font: inherit;
+    border-radius: 0;
+    box-sizing: border-box;
+  }
+
+  .rsvp-signal-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .rsvp-signal-group label {
+    cursor: pointer;
+  }
+
+  .rsvp-signal-group input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .rsvp-signal-group span {
+    display: block;
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    font-weight: 900;
+  }
+
+  .rsvp-signal-group input:checked + span,
+  .rsvp-signal-group span:hover {
+    background: #000;
+    color: #c00;
+  }
+
+  .rsvp-entry-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .rsvp-entry,
+  .empty-rsvp {
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.68);
+    padding: 10px;
+  }
+
+  .rsvp-entry {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    align-items: start;
+  }
+
+  .rsvp-entry div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: baseline;
+    min-width: 0;
+  }
+
+  .rsvp-entry strong,
+  .rsvp-entry p {
+    overflow-wrap: anywhere;
+  }
+
+  .rsvp-entry span {
+    border: 1px solid #000;
+    padding: 2px 6px;
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .rsvp-entry p {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-weight: 900;
+  }
+
+  .rsvp-entry time {
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
   }
 
   .nostr-card {

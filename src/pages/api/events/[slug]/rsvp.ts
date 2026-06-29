@@ -44,8 +44,9 @@ function rateLimitResponse(retryAfterSeconds: number | undefined): Response {
 export const GET: APIRoute = async ({ params }) =>
   withApiErrorHandling(async () => {
     const slug = readSlug(params.slug);
-    const rsvp = await getNostrEventRepository().getRsvpSummary(slug);
-    return jsonOk({ rsvp });
+    const repository = getNostrEventRepository();
+    const [rsvp, entries] = await Promise.all([repository.getRsvpSummary(slug), repository.listRsvpEntries(slug)]);
+    return jsonOk({ rsvp, entries });
   });
 
 export const POST: APIRoute = async ({ params, request }) =>
@@ -64,8 +65,9 @@ export const POST: APIRoute = async ({ params, request }) =>
           slug,
           status: input.status,
           nickname: input.nickname,
+          signal: input.signal,
         });
-    const rsvp = await repository.getRsvpSummary(slug);
+    const [rsvp, entries] = await Promise.all([repository.getRsvpSummary(slug), repository.listRsvpEntries(slug)]);
 
-    return jsonOk({ id: result.id, rsvp }, 201);
+    return jsonOk({ id: result.id, rsvp, entries }, 201);
   });

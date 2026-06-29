@@ -114,6 +114,39 @@ Returns published public events.
 
 Returns one published public event.
 
+## `GET /api/events/[slug]/rsvp`
+
+Returns RSVP counts and recent roll-call entries.
+
+```json
+{
+  "rsvp": { "accepted": 12, "tentative": 4, "signals": 3 },
+  "entries": [
+    {
+      "id": "nostr-event-id",
+      "slug": "free-tekno-night-2026-03-14",
+      "status": "accepted",
+      "signal": "hledám partu",
+      "authorName": "Anonym",
+      "isAnonymous": true,
+      "createdAt": "2026-03-01T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+## `POST /api/events/[slug]/rsvp`
+
+Writes a pseudonymous RSVP. `signal` is optional and must be one of `hledám partu`, `mám místo v autě`, `jedu vlakem`, `beru distro`, or `uvidíme se u stage`.
+
+```json
+{
+  "status": "accepted",
+  "nickname": "acid23",
+  "signal": "jedu vlakem"
+}
+```
+
 ## `POST /api/events/[slug]/unlock`
 
 Only applies to `accessType: "gated"` events. Verifies the unlock code and returns decrypted secret payload.

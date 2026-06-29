@@ -9,7 +9,7 @@ const {
 const isPreview = variant === "preview";
 const repository = getNostrEventRepository();
 const list = await repository.listPublishedEvents(limit);
-const rsvpSummaries: Record<string, { accepted: number; tentative: number }> = isPreview
+const rsvpSummaries: Record<string, { accepted: number; tentative: number; signals?: number }> = isPreview
   ? {}
   : await repository.getRsvpSummariesForEvents(list).catch(() => ({}));
 
@@ -55,7 +55,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
         }
         <div class="akce-list" data-akce-list>
           {list.map((item) => {
-            const rsvp = rsvpSummaries[item.slug] ?? { accepted: 0, tentative: 0 };
+            const rsvp = rsvpSummaries[item.slug] ?? { accepted: 0, tentative: 0, signals: 0 };
             const rsvpTotal = rsvp.accepted + rsvp.tentative;
             const eventHref = `/akce/${item.slug}`;
             const mapHref = hasPrecisePublicLocation(item) ? osmMarkerUrl(item) : "";
@@ -92,6 +92,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
                       <small>
                         {rsvp.accepted} jde / {rsvp.tentative} možná
                       </small>
+                      {(rsvp.signals ?? 0) > 0 && <small class="akce-signal">{rsvp.signals} signálů</small>}
                     </div>
                   )
                 }
@@ -371,6 +372,11 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     text-transform: uppercase;
     line-height: 1.2;
   }
+  .akce-rsvp .akce-signal {
+    width: fit-content;
+    border: 1px solid currentColor;
+    padding: 2px 5px;
+  }
   .akce-location {
     display: grid;
     gap: 3px;
@@ -616,6 +622,9 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     }
     .akce-rsvp small {
       font-size: 0.68rem;
+    }
+    .akce-rsvp .akce-signal {
+      font-size: 0.58rem;
     }
     .akce-item.has-map {
       grid-template-columns: 56px minmax(0, 1fr);
