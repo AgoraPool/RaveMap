@@ -58,15 +58,19 @@ const items = [
   <div class="faq-table">
     {
       simplexGroupUrl && (
-        <section class="simplex-group">
-          <div class="simplex-copy">
-            <span>SimpleX skupina</span>
-            <h3>Připoj se bez telefonu a veřejného profilu</h3>
-            <p>Otevři odkaz v SimpleX, nebo naskenuj QR kód.</p>
-            <a href={simplexGroupUrl} target="_blank" rel="noreferrer">Otevřít skupinu</a>
+        <details class="faq-item simplex-group">
+          <summary class="faq-summary">
+            <span class="faq-index">SX.</span>
+            <span class="faq-question">SimpleX skupina</span>
+          </summary>
+          <div class="simplex-body">
+            <div class="simplex-copy">
+              <p>Soukromý chat pro domluvu. Otevři odkaz, nebo naskenuj QR.</p>
+              <a href={simplexGroupUrl} target="_blank" rel="noreferrer">Otevřít skupinu</a>
+            </div>
+            <div class="simplex-qr" aria-label="QR kód pro SimpleX skupinu" set:html={simplexGroupQrSvg} />
           </div>
-          <div class="simplex-qr" aria-label="QR kód pro SimpleX skupinu" set:html={simplexGroupQrSvg} />
-        </section>
+        </details>
       )
     }
     {items.map((item, index) => (
@@ -120,54 +124,44 @@ const items = [
     border-bottom: 1px solid black;
   }
   .simplex-group {
+    background: rgba(142, 241, 176, 0.22);
+  }
+  .simplex-body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 180px;
-    gap: 16px;
-    align-items: center;
-    padding: 18px;
-    border-bottom: 3px solid #000;
-    background: #8ef1b0;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    gap: 12px;
+    align-items: start;
+    padding: 0 18px 18px 104px;
   }
   .simplex-copy {
     display: grid;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
-  }
-  .simplex-copy span {
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    font-weight: 900;
-  }
-  .simplex-copy h3 {
-    margin: 0;
-    font-size: clamp(1.4rem, 3vw, 2.4rem);
-    line-height: 1;
-    overflow-wrap: anywhere;
   }
   .simplex-copy p {
     margin: 0;
     line-height: 1.45;
-    font-weight: 700;
+    font-size: 0.92rem;
   }
   .simplex-copy a {
     width: fit-content;
     border: 2px solid #000;
     background: #000;
     color: #c00;
-    padding: 10px 12px;
+    padding: 7px 9px;
     text-decoration: none;
     font-weight: 900;
+    font-size: 0.82rem;
   }
   .simplex-copy a:hover {
     background: #c00;
     color: #000;
   }
   .simplex-qr {
-    width: 180px;
-    border: 3px solid #000;
+    width: 112px;
+    border: 2px solid #000;
     background: #fffef8;
-    padding: 8px;
+    padding: 5px;
     box-sizing: border-box;
   }
   .simplex-qr :global(svg) {
@@ -255,12 +249,9 @@ const items = [
       padding: 0 12px 14px 70px;
       font-size: 0.9rem;
     }
-    .simplex-group {
+    .simplex-body {
       grid-template-columns: 1fr;
-      padding: 12px;
-    }
-    .simplex-copy h3 {
-      font-size: 1.2rem;
+      padding: 0 12px 14px 70px;
     }
     .simplex-copy a {
       width: 100%;
@@ -268,8 +259,8 @@ const items = [
       text-align: center;
     }
     .simplex-qr {
-      width: min(100%, 220px);
-      justify-self: center;
+      width: 118px;
+      justify-self: start;
     }
     .bunkr {
       position: absolute;
