@@ -18,32 +18,121 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     {list.length === 0 ? (
       <div class="empty-state">Žádné akce zatím nejsou publikované.</div>
     ) : (
-      list.map((item) => (
-        <a class:list={["akce-item", !item.coverImageUrl && "akce-item-no-image"]} href={`/akce/${item.slug}`}>
-          {
-            item.coverImageUrl && (
-              <img
-                class="akce-img"
-                src={item.coverImageUrl}
-                alt={item.title}
-                loading="lazy"
-                decoding="async"
-                referrerpolicy="no-referrer"
-              />
-            )
-          }
-          <h3 class="akce-name">{item.title}</h3>
-          <div class="akce-date">{formatter.format(item.startsAt)}</div>
-          <div class="akce-location">
-            <span>{item.publicLocation}</span>
-            <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
-          </div>
-        </a>
-      ))
+      <>
+        <div class="akce-sort-row" aria-label="Řazení akcí">
+          <span class="akce-sort-spacer" aria-hidden="true"></span>
+          <button type="button" data-sort-key="name" aria-label="Seřadit podle názvu">
+            Název <span data-sort-indicator="name">-</span>
+          </button>
+          <button type="button" data-sort-key="date" aria-label="Seřadit podle data">
+            Datum <span data-sort-indicator="date">↑</span>
+          </button>
+          <button type="button" data-sort-key="location" aria-label="Seřadit podle lokality">
+            Lokalita <span data-sort-indicator="location">-</span>
+          </button>
+        </div>
+        <div class="akce-list" data-akce-list>
+          {list.map((item) => (
+            <a
+              class="akce-item"
+              href={`/akce/${item.slug}`}
+              data-name={item.title.toLocaleLowerCase("cs-CZ")}
+              data-date={item.startsAt.getTime()}
+              data-location={item.publicLocation.toLocaleLowerCase("cs-CZ")}
+            >
+              <span class="akce-poster-cell" aria-hidden={!item.coverImageUrl}>
+                {
+                  item.coverImageUrl && (
+                    <img
+                      class="akce-img"
+                      src={item.coverImageUrl}
+                      alt={item.title}
+                      loading="lazy"
+                      decoding="async"
+                      referrerpolicy="no-referrer"
+                    />
+                  )
+                }
+              </span>
+              <h3 class="akce-name">{item.title}</h3>
+              <div class="akce-date">{formatter.format(item.startsAt)}</div>
+              <div class="akce-location">
+                <span>{item.publicLocation}</span>
+                <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
+              </div>
+            </a>
+          ))}
+        </div>
+      </>
     )}
   </div>
   <img src="/bunkr.png" class="bunkr" alt="Dekorativní bunkr" />
 </section>
+
+<script>
+  const eventList = document.querySelector("[data-akce-list]");
+  const sortButtons = [...document.querySelectorAll("[data-sort-key]")];
+  const sortIndicators = [...document.querySelectorAll("[data-sort-indicator]")];
+  const collator = new Intl.Collator("cs-CZ", { sensitivity: "base", numeric: true });
+  const sortState = {
+    key: "date",
+    direction: "asc",
+  };
+
+  function valueFor(row, key) {
+    if (!(row instanceof HTMLElement)) return "";
+    if (key === "date") return Number(row.dataset.date || 0);
+    if (key === "location") return row.dataset.location || "";
+    return row.dataset.name || "";
+  }
+
+  function compareRows(left, right, key) {
+    const leftValue = valueFor(left, key);
+    const rightValue = valueFor(right, key);
+    if (typeof leftValue === "number" && typeof rightValue === "number") {
+      return leftValue - rightValue;
+    }
+    return collator.compare(String(leftValue), String(rightValue));
+  }
+
+  function renderSortState() {
+    for (const indicator of sortIndicators) {
+      if (!(indicator instanceof HTMLElement)) continue;
+      indicator.textContent = indicator.dataset.sortIndicator === sortState.key ? (sortState.direction === "asc" ? "↑" : "↓") : "-";
+    }
+
+    for (const button of sortButtons) {
+      if (!(button instanceof HTMLButtonElement)) continue;
+      const active = button.dataset.sortKey === sortState.key;
+      button.dataset.active = String(active);
+      button.setAttribute("aria-sort", active ? (sortState.direction === "asc" ? "ascending" : "descending") : "none");
+    }
+  }
+
+  function sortEvents(key) {
+    if (!(eventList instanceof HTMLElement)) return;
+    sortState.direction = sortState.key === key && sortState.direction === "asc" ? "desc" : "asc";
+    sortState.key = key;
+
+    const rows = [...eventList.querySelectorAll(".akce-item")];
+    rows.sort((left, right) => {
+      const result = compareRows(left, right, key);
+      return sortState.direction === "asc" ? result : -result;
+    });
+
+    eventList.replaceChildren(...rows);
+    renderSortState();
+  }
+
+  for (const button of sortButtons) {
+    button.addEventListener("click", () => {
+      if (!(button instanceof HTMLButtonElement) || !button.dataset.sortKey) return;
+      sortEvents(button.dataset.sortKey);
+    });
+  }
+
+  renderSortState();
+</script>
 
 <style>
   .akce {
@@ -108,16 +197,50 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     overscroll-behavior: contain;
     scrollbar-color: #000 #c00;
   }
+  .akce-sort-row,
   .akce-item {
     width: 100%;
     box-sizing: border-box;
     min-width: 0;
-    min-height: 80px;
-    padding: 8px 18px;
     display: grid;
     grid-template-columns: 110px 1.5fr 1fr 1fr;
     align-items: center;
     gap: 16px;
+  }
+  .akce-sort-row {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding: 8px 18px;
+    border-bottom: 3px solid black;
+    background: #000;
+  }
+  .akce-sort-row button {
+    min-width: 0;
+    width: 100%;
+    border: 2px solid #fff6df;
+    background: #c00;
+    color: #fff6df;
+    padding: 7px 8px;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: left;
+    cursor: pointer;
+  }
+  .akce-sort-row button:hover,
+  .akce-sort-row button[data-active="true"] {
+    background: #fff6df;
+    color: #000;
+  }
+  .akce-list {
+    display: contents;
+  }
+  .akce-item {
+    min-height: 80px;
+    padding: 8px 18px;
     border-bottom: 1px solid black;
     font-size: 1.1rem;
     position: relative;
@@ -125,16 +248,18 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     text-decoration: none;
     color: black;
   }
-  .akce-item-no-image {
-    grid-template-columns: 1.5fr 1fr 1fr;
-  }
   .akce-item:hover {
     color: #c00;
     background-color: #000;
   }
-  .akce-img {
-    max-width: 100px;
+  .akce-poster-cell {
+    width: 100px;
     height: 64px;
+    display: block;
+  }
+  .akce-img {
+    width: 100%;
+    height: 100%;
     object-fit: cover;
   }
   .akce-name {
@@ -180,21 +305,20 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       width: 78%;
       margin: auto 20px;
     }
+    .akce-sort-row,
     .akce-item {
       grid-template-columns: 80px 1.2fr 1fr;
       gap: 10px;
     }
-    .akce-item-no-image {
-      grid-template-columns: 1.2fr 1fr;
-    }
+    .akce-sort-row button[data-sort-key="location"],
     .akce-location {
       display: none;
     }
     .akce-name {
       font-size: 1.4rem;
     }
-    .akce-img {
-      max-width: 72px;
+    .akce-poster-cell {
+      width: 72px;
       height: 52px;
     }
   }
@@ -230,6 +354,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       box-sizing: border-box;
       max-height: calc(100svh - 130px);
     }
+    .akce-sort-row,
     .akce-item {
       grid-template-columns: 56px 1fr;
       grid-template-areas:
@@ -240,15 +365,28 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       gap: 4px 10px;
       font-size: 0.95rem;
     }
-    .akce-item-no-image {
-      grid-template-columns: 1fr;
+    .akce-sort-row {
       grid-template-areas:
-        "name"
-        "date";
+        "img name"
+        "img date";
+      padding: 8px 12px;
     }
-    .akce-img {
+    .akce-sort-row button {
+      font-size: 0.68rem;
+      padding: 6px 7px;
+    }
+    .akce-sort-row button[data-sort-key="name"] {
+      grid-area: name;
+    }
+    .akce-sort-row button[data-sort-key="date"] {
+      grid-area: date;
+    }
+    .akce-sort-spacer {
       grid-area: img;
-      max-width: 52px;
+    }
+    .akce-poster-cell {
+      grid-area: img;
+      width: 52px;
       height: 44px;
     }
     .akce-name {
