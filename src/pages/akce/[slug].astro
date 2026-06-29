@@ -59,7 +59,7 @@ const publicMapUrl =
       <span class="h" style="--y: 62%; --w: 3px;"></span>
     </div>
     <div class="event-bg"></div>
-    <img src="/bunkr.png" class="bunkr" alt="Decorative bunker" />
+    <img src="/bunkr.png" class="bunkr" alt="Dekorativní bunkr" />
 
     {
       !event ? (
@@ -80,9 +80,9 @@ const publicMapUrl =
 
           <article class="event-card public-card">
             <div class="card-head">
-              <p class="card-kicker">PUBLIC</p>
+              <p class="card-kicker">VEŘEJNÉ</p>
               <div class="meta-pills">
-                <span class="meta-pill">PUBLISHED</span>
+                <span class="meta-pill">PUBLIKOVÁNO</span>
                 <span class="meta-pill meta-pill-soft">{event.publicLocation}</span>
               </div>
             </div>
@@ -140,7 +140,7 @@ const publicMapUrl =
                 {
                   event.genres.length > 0 && (
                     <p class="event-meta-line">
-                      Genres: {event.genres.join(", ")}
+                      Žánry: {event.genres.join(", ")}
                     </p>
                   )
                 }
@@ -195,19 +195,19 @@ const publicMapUrl =
             event.accessType === "gated" ? (
               <article class="event-card secret-card">
                 <div class="card-head">
-                  <p class="card-kicker">SECRET</p>
-                  <span id="secret-state" class="meta-pill">LOCKED</span>
+                  <p class="card-kicker">TAJNÉ</p>
+                  <span id="secret-state" class="meta-pill">ZAMČENO</span>
                 </div>
 
                 <form id="unlock-form" class="unlock-form" data-slug={event.slug}>
                   <label class="unlock-field" for="unlockCode">
-                    <span class="unlock-label">Unlock kód</span>
+                    <span class="unlock-label">Kód k odemknutí</span>
                     <input
                       id="unlockCode"
                       class="secret-input"
                       name="unlockCode"
                       type="password"
-                      placeholder="SECRET KOD"
+                      placeholder="TAJNÝ KÓD"
                       minlength="8"
                       maxlength="128"
                       required
@@ -244,11 +244,11 @@ const publicMapUrl =
             ) : (
               <article class="event-card public-access-card">
                 <div class="card-head">
-                  <p class="card-kicker">PUBLIC EVENT</p>
-                  <span class="meta-pill meta-pill-positive">NO CODE</span>
+                  <p class="card-kicker">VEŘEJNÁ AKCE</p>
+                  <span class="meta-pill meta-pill-positive">BEZ KÓDU</span>
                 </div>
                 <p class="card-copy">
-                  Tahle akce je veřejný záznam z hudebního kalendáře. Secret vrstva není potřeba.
+                  Tahle akce je veřejný záznam z hudebního kalendáře. Tajná vrstva není potřeba.
                 </p>
               </article>
             )
@@ -257,19 +257,19 @@ const publicMapUrl =
           <article class="event-card rsvp-card" id="rsvp" data-slug={event.slug} data-coordinate={commentCoordinate}>
             <div class="card-head">
               <div>
-                <p class="card-kicker">RSVP</p>
+                <p class="card-kicker">ÚČAST</p>
                 <h2>Jdeš?</h2>
               </div>
-              <span id="rsvp-mode" class="meta-pill meta-pill-soft">Anonymous</span>
+              <span id="rsvp-mode" class="meta-pill meta-pill-soft">Anonymně</span>
             </div>
             <div class="rsvp-counts">
-              <span><strong id="rsvp-going">{rsvp.accepted}</strong> going</span>
-              <span><strong id="rsvp-maybe">{rsvp.tentative}</strong> maybe</span>
+              <span><strong id="rsvp-going">{rsvp.accepted}</strong> jde</span>
+              <span><strong id="rsvp-maybe">{rsvp.tentative}</strong> možná</span>
             </div>
             <div class="rsvp-actions">
-              <button type="button" data-rsvp-status="accepted">Going</button>
-              <button type="button" data-rsvp-status="tentative">Maybe</button>
-              <button id="rsvp-signer" type="button">Use my account</button>
+              <button type="button" data-rsvp-status="accepted">Jdu</button>
+              <button type="button" data-rsvp-status="tentative">Možná</button>
+              <button id="rsvp-signer" type="button">Použít můj účet</button>
             </div>
             <p id="rsvp-status" class="comment-status" role="status" aria-live="polite"></p>
           </article>
@@ -277,10 +277,10 @@ const publicMapUrl =
           <article class="event-card comments-card" id="comments" data-slug={event.slug} data-coordinate={commentCoordinate}>
             <div class="card-head">
               <div>
-                <p class="card-kicker">COMMENTS</p>
+                <p class="card-kicker">KOMENTÁŘE</p>
                 <h2>Diskuze</h2>
               </div>
-              <span id="comment-mode" class="meta-pill meta-pill-soft">Anonymous</span>
+              <span id="comment-mode" class="meta-pill meta-pill-soft">Anonymně</span>
             </div>
 
             <div id="comment-list" class="comment-list" aria-live="polite">
@@ -302,11 +302,11 @@ const publicMapUrl =
             </div>
 
             <form id="comment-form" class="comment-form">
-              <input id="comment-nickname" name="nickname" type="text" maxlength="40" placeholder="Nickname optional" />
-              <textarea id="comment-content" name="content" maxlength="1200" placeholder="Add a comment..." required></textarea>
+              <input id="comment-nickname" name="nickname" type="text" maxlength="40" placeholder="Přezdívka volitelná" />
+              <textarea id="comment-content" name="content" maxlength="1200" placeholder="Přidat komentář..." required></textarea>
               <div class="comment-actions">
-                <button id="comment-submit" type="submit">Post comment</button>
-                <button id="comment-signer" type="button">Use my account</button>
+                <button id="comment-submit" type="submit">Odeslat komentář</button>
+                <button id="comment-signer" type="button">Použít můj účet</button>
               </div>
               <p id="comment-status" class="comment-status" role="status" aria-live="polite"></p>
             </form>
@@ -382,7 +382,7 @@ const publicMapUrl =
         }
         if (content instanceof HTMLElement) content.hidden = false;
         if (secretState instanceof HTMLElement) {
-          secretState.textContent = "UNLOCKED";
+          secretState.textContent = "ODEMČENO";
           secretState.classList.add("meta-pill-positive");
         }
         if (message instanceof HTMLElement) {
@@ -454,7 +454,7 @@ const publicMapUrl =
         (comment) => `
           <article class="comment-item">
             <div class="comment-meta">
-              <strong>${escapeHtml(comment.authorName || "Anonymous")}</strong>
+              <strong>${escapeHtml(comment.authorName || "Anonym")}</strong>
               <time datetime="${escapeHtml(comment.createdAt)}">${escapeHtml(formatCommentDate(comment.createdAt))}</time>
             </div>
             <p>${escapeHtml(comment.content)}</p>
@@ -467,7 +467,7 @@ const publicMapUrl =
   async function parseCommentResponse(response) {
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
-      throw new Error(payload?.error?.message || "Could not post comment.");
+      throw new Error(payload?.error?.message || "Komentář se nepodařilo odeslat.");
     }
     return payload.data;
   }
@@ -475,7 +475,7 @@ const publicMapUrl =
   async function buildSignedComment(slug, coordinate, content, nickname) {
     const nostr = /** @type {any} */ (window).nostr;
     if (!nostr?.signEvent) {
-      throw new Error("No browser signer found. Anonymous posting still works.");
+      throw new Error("V prohlížeči není Nostr rozšíření. Anonymní odeslání pořád funguje.");
     }
 
     if (!signedPubkey && nostr.getPublicKey) {
@@ -512,7 +512,7 @@ const publicMapUrl =
   async function buildSignedRsvp(slug, coordinate, status) {
     const nostr = /** @type {any} */ (window).nostr;
     if (!nostr?.signEvent) {
-      throw new Error("No browser signer found. Anonymous RSVP still works.");
+      throw new Error("V prohlížeči není Nostr rozšíření. Anonymní odpověď pořád funguje.");
     }
 
     if (!signedPubkey && nostr.getPublicKey) {
@@ -537,16 +537,16 @@ const publicMapUrl =
     try {
       const nostr = /** @type {any} */ (window).nostr;
       if (!nostr?.getPublicKey || !nostr?.signEvent) {
-        setCommentStatus("No browser signer found. You can still post normally.", "warning");
+        setCommentStatus("V prohlížeči není Nostr rozšíření. Pořád můžeš psát normálně.", "warning");
         return;
       }
 
       signedPubkey = await nostr.getPublicKey();
       signedCommentMode = true;
-      if (commentMode instanceof HTMLElement) commentMode.textContent = "Your account";
-      setCommentStatus("Posting with your account.", "positive");
+      if (commentMode instanceof HTMLElement) commentMode.textContent = "Tvůj účet";
+      setCommentStatus("Komentáře půjdou přes tvůj účet.", "positive");
     } catch {
-      setCommentStatus("Could not connect to your account. You can still post normally.", "warning");
+      setCommentStatus("Nepodařilo se připojit účet. Pořád můžeš psát normálně.", "warning");
     }
   });
 
@@ -554,16 +554,16 @@ const publicMapUrl =
     try {
       const nostr = /** @type {any} */ (window).nostr;
       if (!nostr?.getPublicKey || !nostr?.signEvent) {
-        setRsvpStatus("No browser signer found. Anonymous RSVP still works.", "warning");
+        setRsvpStatus("V prohlížeči není Nostr rozšíření. Anonymní odpověď pořád funguje.", "warning");
         return;
       }
 
       signedPubkey = await nostr.getPublicKey();
       signedRsvpMode = true;
-      if (rsvpMode instanceof HTMLElement) rsvpMode.textContent = "Your account";
-      setRsvpStatus("RSVP will use your account.", "positive");
+      if (rsvpMode instanceof HTMLElement) rsvpMode.textContent = "Tvůj účet";
+      setRsvpStatus("Účast se odešle přes tvůj účet.", "positive");
     } catch {
-      setRsvpStatus("Could not connect to your account. Anonymous RSVP still works.", "warning");
+      setRsvpStatus("Nepodařilo se připojit účet. Anonymní odpověď pořád funguje.", "warning");
     }
   });
 
@@ -576,7 +576,7 @@ const publicMapUrl =
       if (!slug || !coordinate || (status !== "accepted" && status !== "tentative")) return;
 
       button.disabled = true;
-      setRsvpStatus("Saving response...", "warning");
+      setRsvpStatus("Ukládám odpověď...", "warning");
       try {
         const signedEvent = signedRsvpMode ? await buildSignedRsvp(slug, coordinate, status) : undefined;
         const response = await fetch(`/api/events/${slug}/rsvp`, {
@@ -586,9 +586,9 @@ const publicMapUrl =
         });
         const result = await parseCommentResponse(response);
         renderRsvp(result.rsvp);
-        setRsvpStatus("Response saved.", "positive");
+        setRsvpStatus("Odpověď uložena.", "positive");
       } catch (error) {
-        setRsvpStatus(error instanceof Error ? error.message : "Could not save response.", "danger");
+        setRsvpStatus(error instanceof Error ? error.message : "Odpověď se nepodařilo uložit.", "danger");
       } finally {
         button.disabled = false;
       }
@@ -606,7 +606,7 @@ const publicMapUrl =
     if (!slug || !coordinate || !content) return;
 
     if (commentSubmit instanceof HTMLButtonElement) commentSubmit.disabled = true;
-    setCommentStatus("Posting...", "warning");
+    setCommentStatus("Odesílám...", "warning");
 
     try {
       const signedEvent = signedCommentMode ? await buildSignedComment(slug, coordinate, content, nickname) : undefined;
@@ -618,9 +618,9 @@ const publicMapUrl =
       const result = await parseCommentResponse(response);
       renderComments(result.comments);
       commentForm.reset();
-      setCommentStatus("Comment posted.", "positive");
+      setCommentStatus("Komentář odeslán.", "positive");
     } catch (error) {
-      setCommentStatus(error instanceof Error ? error.message : "Could not post comment.", "danger");
+      setCommentStatus(error instanceof Error ? error.message : "Komentář se nepodařilo odeslat.", "danger");
     } finally {
       if (commentSubmit instanceof HTMLButtonElement) commentSubmit.disabled = false;
     }

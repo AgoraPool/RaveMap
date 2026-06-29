@@ -25,13 +25,13 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
           <div class="akce-date">{formatter.format(item.startsAt)}</div>
           <div class="akce-location">
             <span>{item.publicLocation}</span>
-            <small>{item.accessType === "gated" ? "code gated" : item.source ? "import" : "public"}</small>
+            <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
           </div>
         </a>
       ))
     )}
   </div>
-  <img src="/bunkr.png" class="bunkr" alt="Decorative bunker" />
+  <img src="/bunkr.png" class="bunkr" alt="Dekorativní bunkr" />
 </section>
 
 <style>

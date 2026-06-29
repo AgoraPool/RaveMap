@@ -7,7 +7,7 @@ export async function parseJsonBody<TSchema extends z.ZodTypeAny>(
 ): Promise<z.infer<TSchema>> {
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
-    throw new AppError("Unsupported content type", {
+    throw new AppError("Nepodporovaný typ obsahu", {
       code: "UNSUPPORTED_CONTENT_TYPE",
       status: 415,
       expose: true,
@@ -15,7 +15,7 @@ export async function parseJsonBody<TSchema extends z.ZodTypeAny>(
   }
 
   const body = await request.json().catch(() => {
-    throw new AppError("Invalid JSON body", {
+    throw new AppError("Neplatné JSON tělo požadavku", {
       code: "INVALID_JSON",
       status: 400,
       expose: true,
@@ -24,7 +24,7 @@ export async function parseJsonBody<TSchema extends z.ZodTypeAny>(
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    throw new AppError("Invalid request body", {
+    throw new AppError("Neplatné tělo požadavku", {
       code: "VALIDATION_ERROR",
       status: 400,
       expose: true,

@@ -11,7 +11,7 @@ import { parseJsonBody } from "../../../../lib/server/validation";
 function readSlug(value: string | undefined): string {
   const slug = value?.trim().toLowerCase();
   if (!slug || !/^[a-z0-9-]{3,120}$/.test(slug)) {
-    throw new AppError("Invalid event slug", {
+    throw new AppError("Neplatný slug akce", {
       code: "INVALID_SLUG",
       status: 400,
       expose: true,
@@ -27,7 +27,7 @@ function rateLimitResponse(retryAfterSeconds: number | undefined): Response {
       ok: false,
       error: {
         code: "RSVP_RATE_LIMITED",
-        message: "Too many responses. Try again later.",
+        message: "Příliš mnoho odpovědí. Zkus to později.",
       },
     }),
     {

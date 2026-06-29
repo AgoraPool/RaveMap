@@ -12,7 +12,7 @@ function digest(value: string): Buffer {
 function requireMirrorSecret(request: Request): void {
   const env = getEnv();
   if (!env.MIRROR_SYNC_SECRET) {
-    throw new AppError("Mirror sync secret is not configured", {
+    throw new AppError("Tajný kód pro synchronizaci mirroru není nastavený", {
       code: "MIRROR_SYNC_NOT_CONFIGURED",
       status: 503,
       expose: true,
@@ -21,7 +21,7 @@ function requireMirrorSecret(request: Request): void {
 
   const provided = request.headers.get("x-mirror-sync-secret")?.trim();
   if (!provided || !timingSafeEqual(digest(provided), digest(env.MIRROR_SYNC_SECRET))) {
-    throw new AppError("Mirror sync credentials invalid", {
+    throw new AppError("Přihlašovací údaje pro synchronizaci mirroru nejsou platné", {
       code: "UNAUTHORIZED",
       status: 401,
       expose: true,

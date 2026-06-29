@@ -7,7 +7,7 @@ export const GET: APIRoute = async ({ params }) =>
   withApiErrorHandling(async () => {
     const slug = params.slug?.trim().toLowerCase();
     if (!slug || !/^[a-z0-9-]{3,120}$/.test(slug)) {
-      throw new AppError("Invalid event slug", {
+      throw new AppError("Neplatný slug akce", {
         code: "INVALID_SLUG",
         status: 400,
         expose: true,
@@ -16,7 +16,7 @@ export const GET: APIRoute = async ({ params }) =>
 
     const event = await getNostrEventRepository().getPublishedEvent(slug);
     if (!event) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,

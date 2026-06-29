@@ -23,7 +23,7 @@ const optionalHttpUrlSchema = z.preprocess(
   z
     .string()
     .max(2048)
-    .refine(isHttpUrl, { message: "Only http and https URLs are allowed" })
+    .refine(isHttpUrl, { message: "Povolené jsou jen http a https URL" })
     .optional(),
 );
 
@@ -63,7 +63,7 @@ const httpUrlListSchema = z.preprocess(
       .map((item) => (typeof item === "string" ? item.trim() : ""))
       .filter(Boolean);
   },
-  z.array(z.string().max(2048).refine(isHttpUrl, { message: "Only http and https URLs are allowed" })).max(20).default([]),
+  z.array(z.string().max(2048).refine(isHttpUrl, { message: "Povolené jsou jen http a https URL" })).max(20).default([]),
 );
 
 export const createEventSchema = z
@@ -98,7 +98,7 @@ export const createEventSchema = z
     if ((value.publicLatitude === undefined) !== (value.publicLongitude === undefined)) {
       ctx.addIssue({
         code: "custom",
-        message: "Latitude and longitude must be provided together",
+        message: "Šířka a délka musí být vyplněné společně",
         path: ["publicLatitude"],
       });
     }
@@ -122,7 +122,7 @@ export const createEventSchema = z
       if (missing) {
         ctx.addIssue({
           code: "custom",
-          message: "Required for code-gated events",
+          message: "Povinné pro akce na kód",
           path: [field],
         });
       }
@@ -131,7 +131,7 @@ export const createEventSchema = z
     if (value.unlockCode && value.unlockCode.length < 8) {
       ctx.addIssue({
         code: "custom",
-        message: "Unlock code must be at least 8 characters",
+        message: "Kód k odemknutí musí mít alespoň 8 znaků",
         path: ["unlockCode"],
       });
     }
@@ -147,7 +147,7 @@ export const deleteEventSchema = z
     if (value.slug !== value.confirmSlug) {
       ctx.addIssue({
         code: "custom",
-        message: "Confirmation slug must match event slug",
+        message: "Potvrzovací slug se musí shodovat se slugem akce",
         path: ["confirmSlug"],
       });
     }
@@ -209,7 +209,7 @@ export const publicSubmitEventSchema = z
     if ((value.publicLatitude === undefined) !== (value.publicLongitude === undefined)) {
       ctx.addIssue({
         code: "custom",
-        message: "Latitude and longitude must be provided together",
+        message: "Šířka a délka musí být vyplněné společně",
         path: ["publicLatitude"],
       });
     }
@@ -233,7 +233,7 @@ export const publicSubmitEventSchema = z
       if (missing) {
         ctx.addIssue({
           code: "custom",
-          message: "Required for code-gated events",
+          message: "Povinné pro akce na kód",
           path: [field],
         });
       }
@@ -242,7 +242,7 @@ export const publicSubmitEventSchema = z
     if (value.unlockCode && value.unlockCode.length < 8) {
       ctx.addIssue({
         code: "custom",
-        message: "Unlock code must be at least 8 characters",
+        message: "Kód k odemknutí musí mít alespoň 8 znaků",
         path: ["unlockCode"],
       });
     }

@@ -16,7 +16,7 @@ export const POST: APIRoute = async ({ params, request }) =>
   withApiErrorHandling(async () => {
     const slug = params.slug?.trim().toLowerCase();
     if (!slug || !/^[a-z0-9-]{3,120}$/.test(slug)) {
-      throw new AppError("Invalid event slug", {
+      throw new AppError("Neplatný slug akce", {
         code: "INVALID_SLUG",
         status: 400,
         expose: true,
@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ params, request }) =>
           ok: false,
           error: {
             code: "TOO_MANY_ATTEMPTS",
-            message: "Too many failed unlock attempts. Try again later.",
+            message: "Příliš mnoho neúspěšných pokusů. Zkus to později.",
           },
         }),
         {
@@ -51,7 +51,7 @@ export const POST: APIRoute = async ({ params, request }) =>
     const event = await getNostrEventRepository().getPublishedEvent(slug);
     const secretBundle = event ? await getNostrEventRepository().getSecretBundle(slug) : null;
     if (!event || !secretBundle) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,
@@ -61,7 +61,7 @@ export const POST: APIRoute = async ({ params, request }) =>
     const isValidCode = await verifyUnlockCode(unlockCode, secretBundle.codeHash);
     if (!isValidCode) {
       await recordUnlockFailure(slug, ipHash);
-      throw new AppError("Unlock code is invalid", {
+      throw new AppError("Kód k odemknutí není platný", {
         code: "INVALID_UNLOCK_CODE",
         status: 401,
         expose: true,

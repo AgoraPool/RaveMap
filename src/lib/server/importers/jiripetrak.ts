@@ -47,7 +47,7 @@ type SyncResult = {
 const SOURCE_NAME = "Jiri Petrak freetekno calendar";
 const SOURCE_DISPLAY_NAME = "Jiří Petrák.cz";
 const SOURCE_IMPORT_VERSION = "jiripetrak-description-lineup-coordinates-v2";
-const DEFAULT_LOCATION = "Czech Republic";
+const DEFAULT_LOCATION = "Česko";
 const DETAIL_FETCH_CONCURRENCY = 2;
 const DETAIL_FETCH_DELAY_MS = 350;
 const DETAIL_FETCH_TIMEOUT_MS = 8000;
@@ -1191,7 +1191,7 @@ function eventFromJsonLd(raw: Record<string, unknown>, sourceUrl: string): Impor
       ? rawLocation
       : typeof rawLocation === "object" && rawLocation && "name" in rawLocation
         ? String((rawLocation as { name: unknown }).name)
-        : "Czech Republic";
+        : "Česko";
   const externalUrl =
     absoluteUrl(typeof raw.url === "string" ? raw.url : undefined, sourceUrl) ??
     `${sourceUrl}#${slugify(title)}-${startsAt.toISOString().slice(0, 10)}`;
@@ -1513,7 +1513,7 @@ export async function fetchJiriPetrakEvents(options: { knownSourceIds?: Set<stri
   });
 
   if (!response.ok) {
-    throw new Error(`Mirror source returned ${response.status}`);
+    throw new Error(`Zdroj mirroru vrátil stav ${response.status}`);
   }
 
   const indexEvents = parseJiriPetrakEvents(await response.text(), env.MIRROR_SOURCE_URL);
@@ -1525,7 +1525,7 @@ export async function fetchJiriPetrakEvents(options: { knownSourceIds?: Set<stri
     return enriched;
   });
   if (events.length === 0) {
-    throw new Error("Mirror source was fetched, but no calendar events were recognized.");
+    throw new Error("Zdroj mirroru se načetl, ale nepodařilo se rozpoznat žádné akce z kalendáře.");
   }
 
   return events;
@@ -1549,7 +1549,7 @@ function toCreateCommand(event: ImportedEvent, slug: string, isPublished = false
   return {
     slug,
     title: event.title,
-    summary: event.summary.length >= 10 ? event.summary : `${event.title} from ${event.sourceName}`,
+    summary: event.summary.length >= 10 ? event.summary : `${event.title} ze zdroje ${event.sourceName}`,
     publicLocation: event.publicLocation,
     publicLatitude: event.publicLatitude,
     publicLongitude: event.publicLongitude,
@@ -1565,7 +1565,7 @@ function toCreateCommand(event: ImportedEvent, slug: string, isPublished = false
     },
     genres: event.genres,
     lineup: event.lineup,
-    tags: uniq([...event.tags, event.isHighlightedOnSource ? "highlighted by source" : ""]),
+    tags: uniq([...event.tags, event.isHighlightedOnSource ? "zvýrazněno zdrojem" : ""]),
     galleryImageUrls: [],
     accessType: "public",
     isPublished,
@@ -1631,7 +1631,7 @@ function enrichedExistingCommand(existing: AdminEventDto, imported: ImportedEven
   const nextPublicLongitude = existing.publicLongitude ?? imported.publicLongitude;
   const nextLineup = existing.lineup.length > 0 ? uniq([...existing.lineup, ...imported.lineup]) : imported.lineup;
   const nextGenres = uniq([...existing.genres, ...imported.genres]);
-  const nextTags = uniq([...existing.tags, ...imported.tags, imported.isHighlightedOnSource ? "highlighted by source" : ""]);
+  const nextTags = uniq([...existing.tags, ...imported.tags, imported.isHighlightedOnSource ? "zvýrazněno zdrojem" : ""]);
   const nextContentHash = isCurrentSourceHash(imported.sourceContentHash) ? imported.sourceContentHash : existing.source?.contentHash;
   const nextSource = {
     name: existing.source?.name || imported.sourceName,

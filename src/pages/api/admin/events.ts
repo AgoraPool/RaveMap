@@ -19,7 +19,7 @@ async function createUniqueSlug(base: string): Promise<string> {
     }
   }
 
-  throw new AppError("Could not allocate unique slug", {
+  throw new AppError("Nepodařilo se vytvořit unikátní slug", {
     code: "SLUG_COLLISION",
     status: 409,
     expose: true,
@@ -41,7 +41,7 @@ export const POST: APIRoute = async ({ request }) =>
     const input = await parseJsonBody(request, createEventSchema);
     const startsAt = new Date(input.startsAt);
     if (Number.isNaN(startsAt.getTime())) {
-      throw new AppError("Event start date is invalid", {
+      throw new AppError("Začátek akce není platný", {
         code: "INVALID_START_DATE",
         status: 400,
         expose: true,
@@ -50,7 +50,7 @@ export const POST: APIRoute = async ({ request }) =>
 
     const endAt = input.endAt ? new Date(input.endAt) : undefined;
     if (endAt && Number.isNaN(endAt.getTime())) {
-      throw new AppError("Event end date is invalid", {
+      throw new AppError("Konec akce není platný", {
         code: "INVALID_END_DATE",
         status: 400,
         expose: true,
@@ -72,7 +72,7 @@ export const POST: APIRoute = async ({ request }) =>
       externalUrl: input.externalUrl,
       source: input.sourceUrl
         ? {
-            name: input.sourceName || "Imported",
+            name: input.sourceName || "Import",
             url: input.sourceUrl,
           }
         : undefined,
@@ -105,7 +105,7 @@ export const PATCH: APIRoute = async ({ request }) =>
 
     const input = await parseJsonBody(request, eventActionSchema);
     if (input.action !== "publish") {
-      throw new AppError("Unsupported event action", {
+      throw new AppError("Nepodporovaná akce", {
         code: "UNSUPPORTED_ACTION",
         status: 400,
         expose: true,

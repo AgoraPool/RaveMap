@@ -3,17 +3,17 @@ const items = [
   {
     question: "Co je Kam Na Rave?",
     answer:
-      "RaveMap je jednoduchý rozcestník pro underground akce. Veřejně ukáže vibe, termín a meeting point, ale přesnou lokaci nechá zamčenou pro lidi s kódem.",
+      "RaveMap je jednoduchý rozcestník pro underground akce. Veřejně ukáže vibe, termín a místo srazu, ale přesnou lokaci nechá zamčenou pro lidi s kódem.",
   },
   {
     question: "Kde najdu přesnou lokaci akce?",
     answer:
-      "Přesná lokace se odemyká až na detailu konkrétní akce po zadání secret kódu. Bez něj zůstává veřejná jen základní orientace a čas.",
+      "Přesná lokace se odemyká až na detailu konkrétní akce po zadání tajného kódu. Bez něj zůstává veřejná jen základní orientace a čas.",
   },
   {
     question: "Jak získám unlock kód?",
     answer:
-      "Kód typicky sdílí organizátor přes svůj komunitní kanál, zprávu nebo ticket flow. Tahle demo verze počítá s tím, že distribuce kódu probíhá mimo web.",
+      "Kód typicky sdílí organizátor přes svůj komunitní kanál, zprávu nebo vstupenkový proces. Tahle demo verze počítá s tím, že distribuce kódu probíhá mimo web.",
   },
   {
     question: "Co když zadám špatný kód?",
@@ -28,7 +28,7 @@ const items = [
   {
     question: "Je tohle hotový produkční systém?",
     answer:
-      "Zatím ne. Je to bezpečnostně zaměřené MVP, které ukazuje princip oddělení public a secret dat, admin tvorbu akcí a chráněné odemykání lokace.",
+      "Zatím ne. Je to bezpečnostně zaměřené MVP, které ukazuje princip oddělení veřejných a tajných dat, admin tvorbu akcí a chráněné odemykání lokace.",
   },
 ];
 ---
@@ -47,7 +47,7 @@ const items = [
       </details>
     ))}
   </div>
-  <img src="/bunkr.png" class="bunkr" alt="Decorative bunker" />
+  <img src="/bunkr.png" class="bunkr" alt="Dekorativní bunkr" />
 </section>
 
 <style>

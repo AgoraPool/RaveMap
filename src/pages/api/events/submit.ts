@@ -30,7 +30,7 @@ function rateLimitResponse(retryAfterSeconds: number | undefined): Response {
       ok: false,
       error: {
         code: "SUBMIT_RATE_LIMITED",
-        message: "Too many submissions. Try again later.",
+        message: "Příliš mnoho odeslání. Zkus to později.",
       },
     }),
     {
@@ -50,7 +50,7 @@ export const POST: APIRoute = async ({ request }) =>
     const startsAt = new Date(input.startsAt);
     const endAt = input.endAt ? new Date(input.endAt) : undefined;
     if (Number.isNaN(startsAt.getTime()) || (endAt && Number.isNaN(endAt.getTime()))) {
-      throw new AppError("Event date is invalid", {
+      throw new AppError("Datum akce není platné", {
         code: "INVALID_EVENT_DATE",
         status: 400,
         expose: true,
@@ -58,7 +58,7 @@ export const POST: APIRoute = async ({ request }) =>
     }
 
     if (endAt && endAt <= startsAt) {
-      throw new AppError("End date must be after start date", {
+      throw new AppError("Konec akce musí být po začátku", {
         code: "INVALID_EVENT_RANGE",
         status: 400,
         expose: true,

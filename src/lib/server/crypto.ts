@@ -78,7 +78,7 @@ function getEncryptionKey(): Buffer {
 export async function hashUnlockCode(code: string): Promise<string> {
   const normalizedCode = code.trim();
   if (normalizedCode.length < 8 || normalizedCode.length > 128) {
-    throw new AppError("Unlock code does not meet security policy", {
+    throw new AppError("Kód k odemknutí nesplňuje bezpečnostní pravidla", {
       code: "INVALID_UNLOCK_CODE",
       status: 400,
       expose: true,

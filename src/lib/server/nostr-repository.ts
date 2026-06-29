@@ -134,7 +134,7 @@ function commentAuthorName(event: NostrEvent): string {
     return nickname;
   }
 
-  return tagValue(event, "anonymous") === "true" ? "Anonymous" : `${event.pubkey.slice(0, 8)}...`;
+  return tagValue(event, "anonymous") === "true" ? "Anonym" : `${event.pubkey.slice(0, 8)}...`;
 }
 
 function parseCommentEvent(event: NostrEvent): EventCommentDto | null {
@@ -353,7 +353,7 @@ function secretFromCommand(input: CreateEventCommand): SecretPayload {
     input.secretLatitude === undefined ||
     input.secretLongitude === undefined
   ) {
-    throw new AppError("Code-gated events require unlock and secret location fields", {
+    throw new AppError("Akce na kód vyžadují kód k odemknutí a tajnou lokaci", {
       code: "GATED_SECRET_REQUIRED",
       status: 400,
       expose: true,
@@ -376,7 +376,7 @@ function relayRequest(relay: string, filters: NostrFilter[], timeoutMs: number):
         relay,
         ok: false,
         events: [],
-        message: "WebSocket is not available in this runtime",
+        message: "WebSocket není v tomto prostředí dostupný",
       });
       return;
     }
@@ -407,7 +407,7 @@ function relayRequest(relay: string, filters: NostrFilter[], timeoutMs: number):
     };
 
     const timer = setTimeout(() => {
-      finish(true, "read timeout reached");
+      finish(true, "dosažen časový limit čtení");
     }, timeoutMs);
 
     socket.addEventListener("open", () => {
@@ -435,7 +435,7 @@ function relayRequest(relay: string, filters: NostrFilter[], timeoutMs: number):
     });
 
     socket.addEventListener("error", () => {
-      finish(false, "relay read failed");
+      finish(false, "čtení z relaye selhalo");
     });
   });
 }
@@ -446,7 +446,7 @@ function relayPublish(relay: string, event: NostrEvent, timeoutMs: number): Prom
       resolve({
         relay,
         ok: false,
-        message: "WebSocket is not available in this runtime",
+        message: "WebSocket není v tomto prostředí dostupný",
       });
       return;
     }
@@ -472,7 +472,7 @@ function relayPublish(relay: string, event: NostrEvent, timeoutMs: number): Prom
     };
 
     const timer = setTimeout(() => {
-      finish(false, "relay write timeout reached");
+      finish(false, "dosažen časový limit zápisu");
     }, timeoutMs);
 
     socket.addEventListener("open", () => {
@@ -493,7 +493,7 @@ function relayPublish(relay: string, event: NostrEvent, timeoutMs: number): Prom
     });
 
     socket.addEventListener("error", () => {
-      finish(false, "relay write failed");
+      finish(false, "zápis na relay selhal");
     });
   });
 }
@@ -541,7 +541,7 @@ export class NostrEventRepository {
     const successes = results.filter((result) => result.ok).length;
 
     if (successes < this.writeMinSuccess) {
-      throw new AppError("Nostr relay write quorum was not reached", {
+      throw new AppError("Nepodařilo se dosáhnout zapisovacího kvóra Nostr relayů", {
         code: "NOSTR_WRITE_FAILED",
         status: 502,
         expose: import.meta.env.DEV,
@@ -667,7 +667,7 @@ export class NostrEventRepository {
   async listComments(slug: string): Promise<EventCommentDto[]> {
     const event = await this.getPublishedEvent(slug);
     if (!event) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,
@@ -693,7 +693,7 @@ export class NostrEventRepository {
   async createAnonymousComment(input: CreateCommentCommand): Promise<{ id: string; writes: RelayWriteResult[] }> {
     const event = await this.getPublishedEvent(input.slug);
     if (!event) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,
@@ -726,7 +726,7 @@ export class NostrEventRepository {
   async publishSignedComment(slug: string, event: NostrEvent): Promise<{ id: string; writes: RelayWriteResult[] }> {
     const target = await this.getPublishedEvent(slug);
     if (!target) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,
@@ -743,7 +743,7 @@ export class NostrEventRepository {
       event.created_at > nowSeconds() + 10 * 60 ||
       !verifyEvent(event)
     ) {
-      throw new AppError("Signed comment is invalid", {
+      throw new AppError("Podepsaný komentář není platný", {
         code: "INVALID_SIGNED_COMMENT",
         status: 400,
         expose: true,
@@ -759,7 +759,7 @@ export class NostrEventRepository {
   async getRsvpSummary(slug: string): Promise<EventRsvpSummaryDto> {
     const event = await this.getPublishedEvent(slug);
     if (!event) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,
@@ -802,7 +802,7 @@ export class NostrEventRepository {
   async createAnonymousRsvp(input: CreateRsvpCommand): Promise<{ id: string; writes: RelayWriteResult[] }> {
     const event = await this.getPublishedEvent(input.slug);
     if (!event) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,
@@ -835,7 +835,7 @@ export class NostrEventRepository {
   async publishSignedRsvp(slug: string, event: NostrEvent): Promise<{ id: string; writes: RelayWriteResult[] }> {
     const target = await this.getPublishedEvent(slug);
     if (!target) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,
@@ -851,7 +851,7 @@ export class NostrEventRepository {
       event.created_at > nowSeconds() + 10 * 60 ||
       !verifyEvent(event)
     ) {
-      throw new AppError("Signed RSVP is invalid", {
+      throw new AppError("Podepsaná odpověď k účasti není platná", {
         code: "INVALID_SIGNED_RSVP",
         status: 400,
         expose: true,
@@ -878,7 +878,7 @@ export class NostrEventRepository {
   async publishSignedPublicSubmission(input: PublicSubmitEventCommand): Promise<CreatedEventResult> {
     const event = input.signedEvent;
     if (!event) {
-      throw new AppError("Signed event is missing", {
+      throw new AppError("Chybí podepsaná akce", {
         code: "SIGNED_EVENT_MISSING",
         status: 400,
         expose: true,
@@ -905,7 +905,7 @@ export class NostrEventRepository {
       event.created_at > nowSeconds() + 10 * 60 ||
       !verifyEvent(event)
     ) {
-      throw new AppError("Signed event is invalid", {
+      throw new AppError("Podepsaná akce není platná", {
         code: "INVALID_SIGNED_EVENT",
         status: 400,
         expose: true,
@@ -914,14 +914,14 @@ export class NostrEventRepository {
 
     const existing = await this.getPublishedEvent(slug);
     if (existing && existing.authorPubkey !== event.pubkey) {
-      throw new AppError("This event URL is already taken", {
+      throw new AppError("Tahle URL akce už je obsazená", {
         code: "SLUG_TAKEN",
         status: 409,
         expose: true,
       });
     }
     if (!existing && (await this.slugExists(slug))) {
-      throw new AppError("This event URL is already taken", {
+      throw new AppError("Tahle URL akce už je obsazená", {
         code: "SLUG_TAKEN",
         status: 409,
         expose: true,
@@ -1151,7 +1151,7 @@ export class NostrEventRepository {
   async publishDraft(slug: string): Promise<CreatedEventResult> {
     const tombstones = await this.listTombstonedSlugs([slug]);
     if (tombstones.has(slug)) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,
@@ -1168,7 +1168,7 @@ export class NostrEventRepository {
     ]);
     const latest = this.latestByD(events).get(slug);
     if (!latest) {
-      throw new AppError("Draft not found", {
+      throw new AppError("Koncept nenalezen", {
         code: "DRAFT_NOT_FOUND",
         status: 404,
         expose: true,
@@ -1190,7 +1190,7 @@ export class NostrEventRepository {
     }
 
     if (!draft.codeHash || !draft.secret) {
-      throw new AppError("Gated draft is missing secret payload", {
+      throw new AppError("Koncept na kód nemá tajná data", {
         code: "DRAFT_SECRET_MISSING",
         status: 409,
         expose: true,
@@ -1233,7 +1233,7 @@ export class NostrEventRepository {
     ]);
 
     if (existing.length === 0) {
-      throw new AppError("Event not found", {
+      throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
         expose: true,

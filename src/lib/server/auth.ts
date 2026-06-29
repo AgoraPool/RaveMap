@@ -18,7 +18,7 @@ export function requireAdmin(request: Request): void {
 
   const providedSecret = headerSecret?.trim() || bearerSecret;
   if (!providedSecret) {
-    throw new AppError("Admin credentials missing", {
+    throw new AppError("Chybí admin přihlašovací údaje", {
       code: "UNAUTHORIZED",
       status: 401,
       expose: true,
@@ -26,7 +26,7 @@ export function requireAdmin(request: Request): void {
   }
 
   if (!safeEqual(providedSecret, env.ADMIN_SECRET)) {
-    throw new AppError("Admin credentials invalid", {
+    throw new AppError("Admin přihlašovací údaje nejsou platné", {
       code: "UNAUTHORIZED",
       status: 401,
       expose: true,

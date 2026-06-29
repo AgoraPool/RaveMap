@@ -12,21 +12,21 @@ import Layout from "../layouts/Layout.astro";
     <section class="submit-panel">
       <div class="panel-head">
         <div>
-          <p class="kicker">PUBLIC EVENT</p>
+          <p class="kicker">VEŘEJNÁ AKCE</p>
           <h1>Přidat akci</h1>
         </div>
-        <span id="submit-mode" class="mode-pill">App signed</span>
+        <span id="submit-mode" class="mode-pill">Podepíše appka</span>
       </div>
 
       <form id="submit-form" class="submit-form">
-        <div class="segmented" role="group" aria-label="Event access type">
+        <div class="segmented" role="group" aria-label="Typ přístupu k akci">
           <label>
             <input type="radio" name="accessType" value="public" checked />
-            <span>Public only</span>
+            <span>Veřejná</span>
           </label>
           <label>
             <input type="radio" name="accessType" value="gated" />
-            <span>Code gated</span>
+            <span>Na kód</span>
           </label>
         </div>
 
@@ -37,7 +37,7 @@ import Layout from "../layouts/Layout.astro";
 
         <div class="field-row">
           <label>
-            <span>Start</span>
+            <span>Začátek</span>
             <input id="startsAt" name="startsAt" type="datetime-local" required />
           </label>
           <label>
@@ -53,11 +53,11 @@ import Layout from "../layouts/Layout.astro";
 
         <div class="field-row">
           <label>
-            <span>Latitude</span>
+            <span>Šířka</span>
             <input id="publicLatitude" name="publicLatitude" type="number" step="0.000001" min="-90" max="90" />
           </label>
           <label>
-            <span>Longitude</span>
+            <span>Délka</span>
             <input id="publicLongitude" name="publicLongitude" type="number" step="0.000001" min="-180" max="180" />
           </label>
         </div>
@@ -69,18 +69,18 @@ import Layout from "../layouts/Layout.astro";
 
         <div class="field-row">
           <label>
-            <span>Genres</span>
+            <span>Žánry</span>
             <input id="genres" name="genres" type="text" placeholder="tekno, freetekno" />
           </label>
           <label>
             <span>Lineup</span>
-            <input id="lineup" name="lineup" type="text" placeholder="artist, crew" />
+            <input id="lineup" name="lineup" type="text" placeholder="umělec, crew" />
           </label>
         </div>
 
         <div class="field-row">
           <label>
-            <span>Poster URL</span>
+            <span>URL plakátu</span>
             <input id="coverImageUrl" name="coverImageUrl" type="url" inputmode="url" placeholder="https://..." />
           </label>
           <label>
@@ -91,47 +91,47 @@ import Layout from "../layouts/Layout.astro";
 
         <label>
           <span>Tagy</span>
-          <input id="tags" name="tags" type="text" placeholder="festival, crew, venue" />
+          <input id="tags" name="tags" type="text" placeholder="festival, crew, místo" />
         </label>
 
         <fieldset id="gated-fields" class="gated-fields" hidden>
-          <legend>Secret layer</legend>
+          <legend>Tajná vrstva</legend>
           <div class="field-row">
             <label>
-              <span>Unlock code</span>
+              <span>Kód k odemknutí</span>
               <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" />
             </label>
             <label>
-              <span>Secret location</span>
+              <span>Tajná lokace</span>
               <input id="secretLocationName" name="secretLocationName" type="text" maxlength="180" />
             </label>
           </div>
           <div class="field-row">
             <label>
-              <span>Secret latitude</span>
+              <span>Tajná šířka</span>
               <input id="secretLatitude" name="secretLatitude" type="number" step="0.000001" min="-90" max="90" />
             </label>
             <label>
-              <span>Secret longitude</span>
+              <span>Tajná délka</span>
               <input id="secretLongitude" name="secretLongitude" type="number" step="0.000001" min="-180" max="180" />
             </label>
           </div>
           <label>
-            <span>Secret info</span>
+            <span>Tajné info</span>
             <textarea id="secretInfo" name="secretInfo" maxlength="4400"></textarea>
           </label>
           <label>
-            <span>Secret map note</span>
+            <span>Poznámka k mapě</span>
             <textarea id="secretMapNote" name="secretMapNote" maxlength="500"></textarea>
           </label>
         </fieldset>
 
         <div class="action-row">
-          <button id="submit-event" type="submit">Publish event</button>
-          <button id="use-signer" type="button">Use my account</button>
+          <button id="submit-event" type="submit">Publikovat akci</button>
+          <button id="use-signer" type="button">Použít můj účet</button>
         </div>
 
-        <p id="submit-status" class="submit-status" role="status" aria-live="polite">Ready.</p>
+        <p id="submit-status" class="submit-status" role="status" aria-live="polite">Připraveno.</p>
       </form>
     </section>
   </main>
@@ -195,20 +195,20 @@ import Layout from "../layouts/Layout.astro";
       }
     }
     if (submitButton instanceof HTMLButtonElement) {
-      submitButton.textContent = gated ? "Publish gated event" : "Publish event";
+      submitButton.textContent = gated ? "Publikovat akci na kód" : "Publikovat akci";
     }
   }
 
   async function parseResponse(response) {
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
-      throw new Error(payload?.error?.message || "Could not publish event.");
+      throw new Error(payload?.error?.message || "Akci se nepodařilo publikovat.");
     }
     return payload.data;
   }
 
   function payloadFromForm() {
-    if (!(form instanceof HTMLFormElement)) throw new Error("Form is unavailable.");
+    if (!(form instanceof HTMLFormElement)) throw new Error("Formulář není dostupný.");
     const data = new FormData(form);
     const accessType = selectedAccessType();
     return {
@@ -237,7 +237,7 @@ import Layout from "../layouts/Layout.astro";
   async function signedEventFromPayload(payload) {
     const nostr = /** @type {any} */ (window).nostr;
     if (!nostr?.signEvent) {
-      throw new Error("No browser signer found. Normal publishing still works.");
+      throw new Error("V prohlížeči není Nostr rozšíření. Normální publikování pořád funguje.");
     }
 
     const slug = slugFromPayload(payload);
@@ -279,23 +279,23 @@ import Layout from "../layouts/Layout.astro";
     try {
       const nostr = /** @type {any} */ (window).nostr;
       if (!nostr?.getPublicKey || !nostr?.signEvent) {
-        setStatus("No browser signer found. Normal publishing still works.", "warning");
+        setStatus("V prohlížeči není Nostr rozšíření. Normální publikování pořád funguje.", "warning");
         return;
       }
 
       await nostr.getPublicKey();
       signerMode = true;
-      if (modeEl instanceof HTMLElement) modeEl.textContent = "Your account";
-      setStatus("Publishing with your account.", "positive");
+      if (modeEl instanceof HTMLElement) modeEl.textContent = "Tvůj účet";
+      setStatus("Publikování půjde přes tvůj účet.", "positive");
     } catch {
-      setStatus("Could not connect to your account. Normal publishing still works.", "warning");
+      setStatus("Nepodařilo se připojit účet. Normální publikování pořád funguje.", "warning");
     }
   });
 
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
-    setStatus("Publishing...", "warning");
+    setStatus("Publikuji...", "warning");
 
     try {
       const payload = payloadFromForm();
@@ -306,10 +306,10 @@ import Layout from "../layouts/Layout.astro";
         body: JSON.stringify({ ...payload, signedEvent }),
       });
       const result = await parseResponse(response);
-      setStatus("Event published.", "positive");
+      setStatus("Akce publikována.", "positive");
       window.location.href = `/akce/${result.slug}`;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Could not publish event.", "danger");
+      setStatus(error instanceof Error ? error.message : "Akci se nepodařilo publikovat.", "danger");
     } finally {
       if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
     }

@@ -19,7 +19,7 @@ export function jsonError(error: AppError | Error): Response {
         ok: false,
         error: {
           code: error.code,
-          message: error.expose ? error.message : "Request failed.",
+          message: error.expose ? error.message : "Požadavek selhal.",
         },
       }),
       {
@@ -34,7 +34,7 @@ export function jsonError(error: AppError | Error): Response {
       ok: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: "Request failed.",
+        message: "Požadavek selhal.",
         ...(import.meta.env.DEV
           ? {
               debug: {
@@ -60,6 +60,6 @@ export async function withApiErrorHandling(handler: () => Promise<Response>): Pr
       return jsonError(error);
     }
 
-    return jsonError(new AppError("Unknown server error"));
+    return jsonError(new AppError("Neznámá chyba serveru"));
   }
 }
