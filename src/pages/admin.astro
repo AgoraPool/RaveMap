@@ -765,8 +765,15 @@ import Layout from "../layouts/Layout.astro";
         headers: adminHeaders(),
       });
       const data = await parseResponse(response);
-      if (importState instanceof HTMLElement) importState.textContent = `${data.created} nových / ${data.updated} upraveno`;
-      setStatus(importStatus, `Synchronizováno ${data.imported} akcí ze zdroje.`, "positive");
+      if (importState instanceof HTMLElement) {
+        importState.textContent = `${data.created} nových / ${data.updated} upraveno / ${data.pending || 0} čeká`;
+      }
+      const pendingText = data.pending ? ` ${data.pending} dalších čeká, spusť synchronizaci znovu.` : "";
+      setStatus(
+        importStatus,
+        `Zpracováno ${data.created + data.updated} změn z ${data.imported} akcí.${pendingText}`,
+        data.pending ? "warning" : "positive",
+      );
       await loadEvents();
     } catch (error) {
       setStatus(importStatus, error instanceof Error ? error.message : "Synchronizace importu selhala.", "danger");

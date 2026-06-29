@@ -35,11 +35,12 @@ type SyncResult = {
   created: number;
   updated: number;
   skipped: number;
+  pending: number;
   events: Array<{
     slug?: string;
     title: string;
     sourceUrl: string;
-    action: "created" | "updated" | "skipped";
+    action: "created" | "updated" | "skipped" | "pending";
     reason?: string;
   }>;
 };
@@ -51,6 +52,8 @@ const DEFAULT_LOCATION = "Česko";
 const DETAIL_FETCH_CONCURRENCY = 2;
 const DETAIL_FETCH_DELAY_MS = 350;
 const DETAIL_FETCH_TIMEOUT_MS = 8000;
+const SYNC_WRITE_LIMIT = 3;
+const SYNC_SOFT_TIMEOUT_MS = 14_000;
 const EVENT_HINT_RE = /(tekno|techno|freetekno|free tekno|party|parties|rave|soundsystem|sound system|festival|open air|dnb|drum|bass|hardtek|jungle|acid|core)/i;
 const GENERIC_TITLE_RE = /^(?:detail|více|vice|read more|zobrazit více|more|info|calendar|kalendář|kalendar)$/i;
 const NAVIGATION_TEXT_RE =
@@ -1501,15 +1504,19 @@ async function fetchDetailEvent(event: ImportedEvent, sourceUrl: string, headers
   }
 }
 
-export async function fetchJiriPetrakEvents(options: { knownSourceIds?: Set<string> } = {}): Promise<ImportedEvent[]> {
+function mirrorHeaders(): HeadersInit {
   const env = getEnv();
-  const headers = {
+  return {
     "User-Agent": env.MIRROR_USER_AGENT,
     Accept: "text/html,application/xhtml+xml",
     "Accept-Language": "cs,en;q=0.8",
   };
+}
+
+export async function fetchJiriPetrakIndexEvents(): Promise<ImportedEvent[]> {
+  const env = getEnv();
   const response = await fetch(env.MIRROR_SOURCE_URL, {
-    headers,
+    headers: mirrorHeaders(),
   });
 
   if (!response.ok) {
@@ -1517,6 +1524,17 @@ export async function fetchJiriPetrakEvents(options: { knownSourceIds?: Set<stri
   }
 
   const indexEvents = parseJiriPetrakEvents(await response.text(), env.MIRROR_SOURCE_URL);
+  if (indexEvents.length === 0) {
+    throw new Error("Zdroj mirroru se načetl, ale nepodařilo se rozpoznat žádné akce z kalendáře.");
+  }
+
+  return indexEvents;
+}
+
+export async function fetchJiriPetrakEvents(options: { knownSourceIds?: Set<string> } = {}): Promise<ImportedEvent[]> {
+  const env = getEnv();
+  const headers = mirrorHeaders();
+  const indexEvents = await fetchJiriPetrakIndexEvents();
   const events = await mapWithConcurrency(indexEvents, DETAIL_FETCH_CONCURRENCY, async (event) => {
     const enriched = await fetchDetailEvent(event, env.MIRROR_SOURCE_URL, headers, options.knownSourceIds);
     if (!options.knownSourceIds?.has(event.sourceEventId)) {
@@ -1531,18 +1549,18 @@ export async function fetchJiriPetrakEvents(options: { knownSourceIds?: Set<stri
   return events;
 }
 
-async function createUniqueSlug(base: string): Promise<string> {
-  const repository = getNostrEventRepository();
-
+function createUniqueSlugFromSet(base: string, usedSlugs: Set<string>): string {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const candidate = attempt === 0 ? base : `${base}-${randomSlugSuffix(6)}`;
-    const exists = await repository.slugExists(candidate);
-    if (!exists) {
+    if (!usedSlugs.has(candidate)) {
+      usedSlugs.add(candidate);
       return candidate;
     }
   }
 
-  return `${base}-${randomSlugSuffix(10)}`;
+  const fallback = `${base}-${randomSlugSuffix(10)}`;
+  usedSlugs.add(fallback);
+  return fallback;
 }
 
 function toCreateCommand(event: ImportedEvent, slug: string, isPublished = false): CreateEventCommand {
@@ -1679,41 +1697,69 @@ export async function syncJiriPetrakEvents(): Promise<SyncResult> {
   const sourceUrl = getEnv().MIRROR_SOURCE_URL;
   const repository = getNostrEventRepository();
   const existingEvents = await repository.listAdminEvents();
+  const usedSlugs = new Set(existingEvents.map((event) => event.slug));
   const existingSourceId = (event: { source?: { id?: string; url?: string } }) =>
     event.source?.id ?? (event.source?.url ? sourceEventIdFromUrl(event.source.url) : undefined);
+  const existingBySourceId = new Map<string, AdminEventDto>();
+  const existingBySourceUrl = new Map<string, AdminEventDto>();
+  for (const event of existingEvents) {
+    const sourceId = existingSourceId(event);
+    if (sourceId) {
+      existingBySourceId.set(sourceId, event);
+    }
+    if (event.source?.url) {
+      existingBySourceUrl.set(event.source.url, event);
+    }
+  }
   const knownSourceIds = new Set(
     existingEvents
       .filter((event) => isImportedFromJiriPetrak(event) && isCurrentSourceHash(event.source?.contentHash))
       .map(existingSourceId)
       .filter((id): id is string => Boolean(id)),
   );
-  const importedEvents = await fetchJiriPetrakEvents({ knownSourceIds });
+  const indexEvents = await fetchJiriPetrakIndexEvents();
+  const headers = mirrorHeaders();
+  const startedAt = Date.now();
   const result: SyncResult = {
     sourceUrl,
-    imported: importedEvents.length,
+    imported: indexEvents.length,
     created: 0,
     updated: 0,
     skipped: 0,
+    pending: 0,
     events: [],
   };
 
-  for (const event of importedEvents) {
-    const existing = event.sourceEventId
-      ? existingEvents.find((candidate) => existingSourceId(candidate) === event.sourceEventId)
-      : await repository.findEventBySourceUrl(event.sourceUrl);
+  for (const indexEvent of indexEvents) {
+    const writes = result.created + result.updated;
+    const existing = indexEvent.sourceEventId ? existingBySourceId.get(indexEvent.sourceEventId) : existingBySourceUrl.get(indexEvent.sourceUrl);
+
     if (existing) {
-      if (event.sourceEventId && knownSourceIds.has(event.sourceEventId)) {
+      if (indexEvent.sourceEventId && knownSourceIds.has(indexEvent.sourceEventId)) {
         result.skipped += 1;
         result.events.push({
           slug: existing.slug,
           title: existing.title,
-          sourceUrl: event.sourceUrl,
+          sourceUrl: indexEvent.sourceUrl,
           action: "skipped",
           reason: "already imported",
         });
         continue;
       }
 
+      if (writes >= SYNC_WRITE_LIMIT || Date.now() - startedAt > SYNC_SOFT_TIMEOUT_MS) {
+        result.pending += 1;
+        result.events.push({
+          slug: existing.slug,
+          title: existing.title,
+          sourceUrl: indexEvent.sourceUrl,
+          action: "pending",
+          reason: "batch limit",
+        });
+        continue;
+      }
+
+      const event = await fetchDetailEvent(indexEvent, sourceUrl, headers);
       const enriched = enrichedExistingCommand(existing, event);
       if (enriched) {
         await repository.createEvent(enriched);
@@ -1733,7 +1779,20 @@ export async function syncJiriPetrakEvents(): Promise<SyncResult> {
       continue;
     }
 
-    const slug = await createUniqueSlug(`${slugify(event.title)}-${event.startsAt.toISOString().slice(0, 10)}`);
+    if (writes >= SYNC_WRITE_LIMIT || Date.now() - startedAt > SYNC_SOFT_TIMEOUT_MS) {
+      result.pending += 1;
+      result.events.push({
+        title: indexEvent.title,
+        sourceUrl: indexEvent.sourceUrl,
+        action: "pending",
+        reason: "batch limit",
+      });
+      continue;
+    }
+
+    const event = await fetchDetailEvent(indexEvent, sourceUrl, headers);
+    await sleep(DETAIL_FETCH_DELAY_MS);
+    const slug = createUniqueSlugFromSet(`${slugify(event.title)}-${event.startsAt.toISOString().slice(0, 10)}`, usedSlugs);
 
     await repository.createEvent(toCreateCommand(event, slug, false));
 
