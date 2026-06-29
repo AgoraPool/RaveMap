@@ -293,6 +293,7 @@ function publicEventTemplate(input: CreateEventCommand): NostrUnsignedEvent {
     ["location", input.publicLocation],
     ["start", String(Math.floor(input.startsAt.getTime() / 1000))],
     ["access", input.accessType],
+    ["client", "RaveMap"],
   ];
 
   if (input.endAt) {
@@ -351,7 +352,7 @@ function publicSubmissionTemplate(input: CreateEventCommand): NostrUnsignedEvent
   const event = publicEventTemplate(input);
   return {
     ...event,
-    tags: [...event.tags, ["client", "RaveMap"], ["submission", "public"], ["t", "ravemap"]],
+    tags: [...event.tags, ["submission", "public"], ["t", "ravemap"]],
   };
 }
 

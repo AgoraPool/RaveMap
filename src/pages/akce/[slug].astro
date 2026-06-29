@@ -2,7 +2,9 @@
 export const prerender = false;
 
 import Layout from "../../layouts/Layout.astro";
+import { nip19 } from "nostr-tools";
 import { getNostrEventRepository } from "../../lib/server/nostr-repository";
+import { PUBLIC_EVENT_KIND } from "../../lib/server/nostr-types";
 
 const slug = Astro.params.slug?.trim().toLowerCase() ?? "";
 const slugValid = /^[a-z0-9-]{3,120}$/.test(slug);
@@ -49,6 +51,25 @@ const publicMapUrl =
         event.publicLongitude + 0.01
       }%2C${event.publicLatitude + 0.01}&layer=mapnik&marker=${event.publicLatitude}%2C${event.publicLongitude}`
     : "";
+const nostrRelays = repository.getRelays().slice(0, 3);
+const nostrAddress = event
+  ? nip19.naddrEncode({
+      identifier: event.slug,
+      pubkey: event.authorPubkey,
+      kind: PUBLIC_EVENT_KIND,
+      relays: nostrRelays,
+    })
+  : "";
+const nostrEvent = event
+  ? nip19.neventEncode({
+      id: event.id,
+      author: event.authorPubkey,
+      kind: PUBLIC_EVENT_KIND,
+      relays: nostrRelays,
+    })
+  : "";
+const nostrAuthor = event ? nip19.npubEncode(event.authorPubkey) : "";
+const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
 ---
 
 <Layout bodyClass="event-body">
@@ -279,6 +300,28 @@ const publicMapUrl =
             <p id="rsvp-status" class="comment-status" role="status" aria-live="polite"></p>
           </article>
 
+          <details class="event-card nostr-card">
+            <summary>
+              <span>Nostr</span>
+              <small>přenosný odkaz a autor</small>
+            </summary>
+            <div class="nostr-grid">
+              <div>
+                <span class="secret-label">Akce</span>
+                <code>{nostrAddress}</code>
+              </div>
+              <div>
+                <span class="secret-label">Autor</span>
+                <code>{nostrAuthor}</code>
+              </div>
+            </div>
+            <div class="nostr-actions">
+              <a href={nostrWebUrl} target="_blank" rel="noreferrer">Otevřít v Nostr</a>
+              <button type="button" data-copy-nostr={nostrAddress}>Kopírovat naddr</button>
+              <button type="button" data-copy-nostr={nostrEvent}>Kopírovat nevent</button>
+            </div>
+          </details>
+
           <article class="event-card comments-card" id="comments" data-slug={event.slug} data-coordinate={commentCoordinate}>
             <div class="card-head">
               <div>
@@ -422,6 +465,7 @@ const publicMapUrl =
   const rsvpGoing = document.getElementById("rsvp-going");
   const rsvpMaybe = document.getElementById("rsvp-maybe");
   const rsvpSigner = document.getElementById("rsvp-signer");
+  const nostrCopyButtons = document.querySelectorAll("[data-copy-nostr]");
   let signedCommentMode = false;
   let signedRsvpMode = false;
   let signedPubkey = "";
@@ -571,6 +615,26 @@ const publicMapUrl =
       setRsvpStatus("Nepodařilo se připojit účet. Anonymní odpověď pořád funguje.", "warning");
     }
   });
+
+  for (const button of nostrCopyButtons) {
+    button.addEventListener("click", async () => {
+      if (!(button instanceof HTMLButtonElement) || !button.dataset.copyNostr) return;
+      const originalText = button.textContent || "Kopírovat";
+      try {
+        await navigator.clipboard.writeText(button.dataset.copyNostr);
+        button.textContent = "Zkopírováno";
+        button.dataset.copied = "true";
+      } catch {
+        button.textContent = "Kopírování selhalo";
+        button.dataset.copied = "false";
+      } finally {
+        window.setTimeout(() => {
+          button.textContent = originalText;
+          delete button.dataset.copied;
+        }, 1600);
+      }
+    });
+  }
 
   for (const button of document.querySelectorAll("[data-rsvp-status]")) {
     button.addEventListener("click", async () => {
@@ -985,6 +1049,105 @@ const publicMapUrl =
     cursor: not-allowed;
   }
 
+  .nostr-card {
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .nostr-card summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .nostr-card summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .nostr-card summary::before {
+    content: "+";
+    border: 2px solid #000;
+    background: #000;
+    color: #c00;
+    width: 28px;
+    height: 28px;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+
+  .nostr-card[open] summary::before {
+    content: "-";
+  }
+
+  .nostr-card summary span {
+    margin-right: auto;
+  }
+
+  .nostr-card summary small {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 700;
+  }
+
+  .nostr-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .nostr-grid div {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .nostr-grid code {
+    border: 2px solid #000;
+    background: #fffef8;
+    padding: 10px;
+    font: inherit;
+    font-size: 0.84rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .nostr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .nostr-actions a,
+  .nostr-actions button {
+    border: 2px solid #000;
+    background: #fffef8;
+    color: #000;
+    padding: 10px 12px;
+    font: inherit;
+    font-weight: 900;
+    text-decoration: none;
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  .nostr-actions a,
+  .nostr-actions button[data-copied="true"] {
+    background: #000;
+    color: #c00;
+  }
+
+  .nostr-actions a:hover,
+  .nostr-actions button:hover {
+    background: #c00;
+    color: #000;
+  }
+
   .comment-item,
   .empty-comments {
     border: 2px solid #000;
@@ -1259,8 +1422,24 @@ const publicMapUrl =
     }
 
     .comment-actions button,
-    .rsvp-actions button {
+    .rsvp-actions button,
+    .nostr-actions a,
+    .nostr-actions button {
       width: 100%;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    .nostr-card summary {
+      align-items: start;
+    }
+
+    .nostr-card summary small {
+      display: none;
+    }
+
+    .nostr-grid {
+      grid-template-columns: 1fr;
     }
 
     .public-map {
