@@ -40,7 +40,13 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
           <section class="crew-hero">
             {crew.bannerUrl ? <img class="crew-banner" src={crew.bannerUrl} alt="" loading="eager" decoding="async" referrerpolicy="no-referrer" /> : null}
             <div class="crew-title-row">
-              {crew.avatarUrl ? <img class="crew-avatar" src={crew.avatarUrl} alt={crew.name} loading="eager" decoding="async" referrerpolicy="no-referrer" /> : null}
+              {
+                crew.avatarUrl ? (
+                  <img class="crew-avatar" src={crew.avatarUrl} alt={crew.name} loading="eager" decoding="async" referrerpolicy="no-referrer" />
+                ) : (
+                  <span class="crew-avatar crew-avatar-placeholder" aria-hidden="true">{crew.name.slice(0, 1)}</span>
+                )
+              }
               <div>
                 <p class="kicker">Crew</p>
                 <h1>{crew.name}</h1>
@@ -132,17 +138,37 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 
 <style>
   .crew-shell {
+    position: relative;
     min-height: 100svh;
-    padding: 24px;
-    color: #f4f0e8;
-    background: #101010;
+    padding: clamp(18px, 4vw, 42px);
+    color: #000;
+    background: #c00;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .crew-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url("/bg.jpeg") center / cover;
+    opacity: 0.035;
+    pointer-events: none;
   }
 
   .crew-nav,
-  .crew-actions {
+  .crew-hero,
+  .event-section {
+    position: relative;
+    z-index: 1;
+  }
+
+  .crew-nav,
+  .crew-actions,
+  .crew-title-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
   }
 
   .crew-nav {
@@ -151,79 +177,122 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 
   .crew-nav a,
   .crew-actions a,
-  .crew-actions button,
-  .event-row {
-    color: inherit;
+  .crew-actions button {
+    border: 2px solid #000;
+    background: #fff6df;
+    color: #000;
+    padding: 9px 11px;
     text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+    font-weight: 900;
+    font-family: var(--font-body);
+    cursor: pointer;
   }
 
-  .crew-actions a,
+  .crew-nav a:last-child,
   .crew-actions button {
-    border: 1px solid rgba(244, 240, 232, 0.22);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
-    padding: 10px 14px;
-    font: inherit;
-    cursor: pointer;
+    background: #000;
+    color: #c00;
+  }
+
+  .crew-nav a:hover,
+  .crew-actions a:hover,
+  .crew-actions button:hover,
+  .event-row:hover {
+    background: #000;
+    color: #c00;
   }
 
   .crew-hero,
   .event-section {
     max-width: 980px;
-    margin: 36px auto;
+    margin: 22px auto;
+    border: 3px solid #000;
+    background: rgba(255, 246, 223, 0.96);
+    box-shadow: 10px 10px 0 #000;
+    padding: clamp(16px, 4vw, 28px);
+  }
+
+  .crew-hero {
+    display: grid;
+    gap: 18px;
+    margin-top: clamp(42px, 7vw, 76px);
   }
 
   .crew-banner {
     width: 100%;
-    max-height: 260px;
+    aspect-ratio: 16 / 5;
+    max-height: 300px;
     object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 18px;
+    border: 3px solid #000;
+    background: #fff6df;
   }
 
   .crew-title-row {
-    display: flex;
     align-items: center;
-    gap: 18px;
   }
 
   .crew-avatar {
-    width: 88px;
-    height: 88px;
+    width: clamp(76px, 12vw, 112px);
+    height: clamp(76px, 12vw, 112px);
     object-fit: cover;
-    border-radius: 8px;
+    border: 3px solid #000;
+    background: #c00;
+    flex: 0 0 auto;
+  }
+
+  .crew-avatar-placeholder {
+    display: grid;
+    place-items: center;
+    color: #000;
+    font-size: clamp(2rem, 7vw, 4rem);
+    font-weight: 900;
+    text-transform: uppercase;
   }
 
   .kicker {
     margin: 0 0 8px;
-    color: #f0cf65;
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    font-size: 0.78rem;
+    font-weight: 900;
   }
 
   h1 {
     margin: 0;
-    font-size: clamp(2.4rem, 8vw, 6rem);
+    font-size: clamp(3rem, 10vw, 8rem);
+    line-height: 0.86;
+    overflow-wrap: anywhere;
   }
 
   h2 {
-    font-size: clamp(1.6rem, 4vw, 3rem);
+    margin: 0 0 14px;
+    font-size: clamp(1.8rem, 5vw, 3.8rem);
+    line-height: 0.92;
   }
 
   .crew-summary {
     max-width: 720px;
-    color: rgba(244, 240, 232, 0.78);
     line-height: 1.55;
+    font-size: clamp(1rem, 2vw, 1.15rem);
+    font-weight: 650;
   }
 
   .promo-line,
   .empty-state {
-    color: rgba(244, 240, 232, 0.68);
+    font-weight: 900;
+  }
+
+  .promo-line {
+    border-left: 6px solid #000;
+    padding-left: 12px;
   }
 
   .event-list {
     display: grid;
-    gap: 10px;
+    gap: 8px;
   }
 
   .event-row {
@@ -231,18 +300,51 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     grid-template-columns: 1fr auto auto;
     gap: 12px;
     align-items: center;
-    padding: 14px;
-    border: 1px solid rgba(244, 240, 232, 0.16);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
+    padding: 12px 14px;
+    border: 2px solid #000;
+    background: #fffef8;
+    color: #000;
+    text-decoration: none;
   }
 
-  .event-row small,
-  .event-row span {
-    color: rgba(244, 240, 232, 0.68);
+  .event-row strong {
+    overflow-wrap: anywhere;
+  }
+
+  .event-row span,
+  .event-row small {
+    font-weight: 800;
+  }
+
+  .event-row small {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.74rem;
+  }
+
+  .empty-state {
+    border: 2px solid #000;
+    background: #fffef8;
+    padding: 14px;
   }
 
   @media (max-width: 760px) {
+    .crew-shell {
+      padding: 14px;
+    }
+
+    .crew-nav {
+      justify-content: flex-start;
+    }
+
+    .crew-title-row {
+      align-items: flex-start;
+    }
+
+    .crew-banner {
+      aspect-ratio: 4 / 3;
+    }
+
     .event-row {
       grid-template-columns: 1fr;
     }

@@ -47,95 +47,202 @@ const crews = await repository.listCrewProfiles();
 
 <style>
   .crew-shell {
+    position: relative;
     min-height: 100svh;
-    padding: 24px;
-    color: #f4f0e8;
-    background: #101010;
+    padding: clamp(18px, 4vw, 42px);
+    color: #000;
+    background: #c00;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .crew-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url("/bg.jpeg") center / cover;
+    opacity: 0.035;
+    pointer-events: none;
+  }
+
+  .crew-nav,
+  .crew-header,
+  .crew-list {
+    position: relative;
+    z-index: 1;
   }
 
   .crew-nav {
     display: flex;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
     justify-content: flex-end;
   }
 
-  .crew-nav a,
-  .crew-card {
-    color: inherit;
+  .crew-nav a {
+    border: 2px solid #000;
+    background: #000;
+    color: #c00;
+    padding: 9px 11px;
     text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+    font-weight: 900;
+  }
+
+  .crew-nav a:first-child {
+    background: #fff6df;
+    color: #000;
+  }
+
+  .crew-nav a:hover,
+  .crew-card:hover {
+    background: #000;
+    color: #c00;
   }
 
   .crew-header {
     max-width: 960px;
-    margin: 48px auto 24px;
+    margin: clamp(42px, 8vw, 92px) auto 22px;
+    border: 3px solid #000;
+    background: rgba(255, 246, 223, 0.96);
+    box-shadow: 10px 10px 0 #000;
+    padding: clamp(16px, 4vw, 28px);
   }
 
   .kicker {
     margin: 0 0 8px;
-    color: #f0cf65;
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    font-size: 0.78rem;
+    font-weight: 900;
   }
 
   h1 {
     margin: 0;
-    font-size: clamp(2.4rem, 8vw, 6rem);
+    font-size: clamp(3rem, 10vw, 8rem);
+    line-height: 0.86;
   }
 
   .crew-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 14px;
+    gap: 10px;
     max-width: 960px;
     margin: 0 auto;
   }
 
   .crew-card {
     display: grid;
-    grid-template-columns: 74px 1fr;
+    grid-template-columns: 82px minmax(0, 1fr) auto;
+    align-items: center;
     gap: 14px;
     padding: 14px;
-    border: 1px solid rgba(244, 240, 232, 0.18);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
+    border: 3px solid #000;
+    background: rgba(255, 246, 223, 0.96);
+    color: #000;
+    box-shadow: 6px 6px 0 #000;
+    text-decoration: none;
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease,
+      background 120ms ease;
+  }
+
+  .crew-card:hover {
+    transform: translate(3px, 3px);
+    box-shadow: 3px 3px 0 #000;
   }
 
   .crew-card img,
   .crew-avatar-placeholder {
-    width: 74px;
-    height: 74px;
-    border-radius: 8px;
+    width: 82px;
+    height: 82px;
+    border: 2px solid #000;
   }
 
   .crew-card img {
     object-fit: cover;
+    background: #fff6df;
   }
 
   .crew-avatar-placeholder {
     display: grid;
     place-items: center;
-    border: 1px solid rgba(244, 240, 232, 0.18);
     background: #c00;
-    color: #fff6df;
+    color: #000;
     font-size: 2rem;
     font-weight: 900;
     text-transform: uppercase;
   }
 
-  .crew-card strong {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 1.1rem;
+  .crew-card > div {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
   }
 
-  .crew-card p,
-  .crew-card small,
-  .empty-state {
-    color: rgba(244, 240, 232, 0.72);
+  .crew-card strong {
+    display: block;
+    font-family: var(--font-display);
+    font-size: clamp(1.3rem, 3vw, 2.2rem);
+    line-height: 0.95;
+    overflow-wrap: anywhere;
+  }
+
+  .crew-card::after {
+    content: "Otevřít";
+    border: 2px solid currentColor;
+    padding: 8px 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.76rem;
+    font-weight: 900;
   }
 
   .crew-card p {
-    margin: 0 0 10px;
+    margin: 0;
     line-height: 1.45;
+    font-weight: 600;
+  }
+
+  .crew-card small,
+  .empty-state {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.74rem;
+    font-weight: 900;
+  }
+
+  .empty-state {
+    border: 3px solid #000;
+    background: #fff6df;
+    padding: 18px;
+    box-shadow: 6px 6px 0 #000;
+  }
+
+  @media (max-width: 720px) {
+    .crew-shell {
+      padding: 14px;
+    }
+
+    .crew-nav {
+      justify-content: flex-start;
+    }
+
+    .crew-card {
+      grid-template-columns: 64px minmax(0, 1fr);
+    }
+
+    .crew-card img,
+    .crew-avatar-placeholder {
+      width: 64px;
+      height: 64px;
+    }
+
+    .crew-card::after {
+      grid-column: 1 / -1;
+      text-align: center;
+    }
   }
 </style>

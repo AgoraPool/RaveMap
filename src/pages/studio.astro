@@ -24,7 +24,7 @@ const cspNonce = Astro.locals.cspNonce;
       </div>
     </section>
 
-    <section id="studio-workspace" class="studio-workspace" hidden>
+    <section id="studio-workspace" class="studio-workspace" tabindex="-1" hidden>
       <header class="studio-topbar">
         <div>
           <p class="kicker">Crew studio</p>
@@ -505,7 +505,10 @@ const cspNonce = Astro.locals.cspNonce;
       await loadEvents();
       if (gate instanceof HTMLElement) gate.hidden = true;
       if (workspace instanceof HTMLElement) workspace.hidden = false;
+      setStatus(authStatus, "Crew přístup ověřen.", "positive");
       setStatus(globalStatus, state.crew?.name ? `Studio načteno pro ${state.crew.name}.` : "Studio načteno.", "positive");
+      window.scrollTo({ top: 0, behavior: "auto" });
+      if (workspace instanceof HTMLElement) workspace.focus({ preventScroll: true });
     } catch (error) {
       state.crewSlug = "";
       state.secret = "";
@@ -647,6 +650,15 @@ const cspNonce = Astro.locals.cspNonce;
   .studio-workspace {
     position: relative;
     z-index: 1;
+  }
+
+  .studio-gate[hidden],
+  .studio-workspace[hidden] {
+    display: none !important;
+  }
+
+  .studio-workspace:focus {
+    outline: 0;
   }
 
   .studio-gate {
