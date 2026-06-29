@@ -90,6 +90,11 @@ import Layout from "../layouts/Layout.astro";
         </div>
 
         <label>
+          <span>SimpleX kontakt</span>
+          <input id="simplexUrl" name="simplexUrl" type="text" inputmode="url" placeholder="https://simplex.chat/contact#..." />
+        </label>
+
+        <label>
           <span>Tagy</span>
           <input id="tags" name="tags" type="text" placeholder="festival, crew, místo" />
         </label>
@@ -221,6 +226,7 @@ import Layout from "../layouts/Layout.astro";
       endAt: toIsoFromLocal(data.get("endAt")),
       coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
       externalUrl: String(data.get("externalUrl") || "").trim() || undefined,
+      simplexUrl: String(data.get("simplexUrl") || "").trim() || undefined,
       genres: listFromInput(data.get("genres")),
       lineup: listFromInput(data.get("lineup")),
       tags: listFromInput(data.get("tags")),
@@ -258,6 +264,10 @@ import Layout from "../layouts/Layout.astro";
     }
     if (payload.coverImageUrl) tags.push(["image", payload.coverImageUrl]);
     if (payload.externalUrl) tags.push(["external", payload.externalUrl], ["r", payload.externalUrl]);
+    if (payload.simplexUrl) {
+      tags.push(["simplex", payload.simplexUrl]);
+      if (payload.simplexUrl.startsWith("https://")) tags.push(["r", payload.simplexUrl]);
+    }
     for (const genre of payload.genres) tags.push(["genre", genre]);
     for (const artist of payload.lineup) tags.push(["artist", artist]);
     for (const tag of payload.tags) tags.push(["tag", tag], ["t", tag]);

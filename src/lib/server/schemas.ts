@@ -11,6 +11,15 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+function isSimplexUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === "https:" && (url.hostname === "simplex.chat" || url.hostname === "www.simplex.chat")) || url.protocol === "simplex:";
+  } catch {
+    return false;
+  }
+}
+
 const optionalHttpUrlSchema = z.preprocess(
   (value) => {
     if (typeof value !== "string") {
@@ -24,6 +33,22 @@ const optionalHttpUrlSchema = z.preprocess(
     .string()
     .max(2048)
     .refine(isHttpUrl, { message: "Povolené jsou jen http a https URL" })
+    .optional(),
+);
+
+const optionalSimplexUrlSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? undefined : trimmed;
+  },
+  z
+    .string()
+    .max(2048)
+    .refine(isSimplexUrl, { message: "Použij SimpleX odkaz ze simplex.chat nebo simplex: invite" })
     .optional(),
 );
 
@@ -77,6 +102,7 @@ export const createEventSchema = z
     endAt: z.string().trim().datetime({ offset: true }).optional(),
     coverImageUrl: optionalHttpUrlSchema,
     externalUrl: optionalHttpUrlSchema,
+    simplexUrl: optionalSimplexUrlSchema,
     sourceName: optionalTrimmedString(80),
     sourceUrl: optionalHttpUrlSchema,
     genres: stringListSchema,
@@ -192,6 +218,7 @@ export const publicSubmitEventSchema = z
     endAt: z.string().trim().datetime({ offset: true }).optional(),
     coverImageUrl: optionalHttpUrlSchema,
     externalUrl: optionalHttpUrlSchema,
+    simplexUrl: optionalSimplexUrlSchema,
     genres: stringListSchema,
     lineup: stringListSchema,
     tags: stringListSchema,

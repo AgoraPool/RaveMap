@@ -58,6 +58,7 @@ export type PublicEventDto = {
   endAt?: Date;
   coverImageUrl?: string;
   externalUrl?: string;
+  simplexUrl?: string;
   source?: EventSource;
   genres: string[];
   lineup: string[];
@@ -77,6 +78,7 @@ export type PublicSubmitEventCommand = {
   endAt?: Date;
   coverImageUrl?: string;
   externalUrl?: string;
+  simplexUrl?: string;
   genres?: string[];
   lineup?: string[];
   tags?: string[];
@@ -147,6 +149,7 @@ export type CreateEventCommand = {
   endAt?: Date;
   coverImageUrl?: string;
   externalUrl?: string;
+  simplexUrl?: string;
   source?: EventSource;
   genres?: string[];
   lineup?: string[];

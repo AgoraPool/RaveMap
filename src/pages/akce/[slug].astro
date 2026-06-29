@@ -191,6 +191,18 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
                     </div>
                   )
                 }
+
+                {
+                  event.simplexUrl && (
+                    <div class="simplex-contact">
+                      <div>
+                        <span>SimpleX</span>
+                        <strong>Soukromý kontakt k akci</strong>
+                      </div>
+                      <a href={event.simplexUrl} target="_blank" rel="noreferrer">Otevřít chat</a>
+                    </div>
+                  )
+                }
               </div>
             </div>
 
@@ -999,6 +1011,49 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     color: #c00;
   }
 
+  .simplex-contact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 3px solid #000;
+    background: #8ef1b0;
+    padding: 12px;
+    max-width: 620px;
+  }
+
+  .simplex-contact div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .simplex-contact span {
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 900;
+  }
+
+  .simplex-contact strong {
+    overflow-wrap: anywhere;
+  }
+
+  .simplex-contact a {
+    flex: 0 0 auto;
+    border: 2px solid #000;
+    background: #000;
+    color: #c00;
+    padding: 10px 12px;
+    text-decoration: none;
+    font-weight: 900;
+  }
+
+  .simplex-contact a:hover {
+    background: #c00;
+    color: #000;
+  }
+
   .comment-list {
     display: grid;
     gap: 10px;
@@ -1424,10 +1479,17 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     .comment-actions button,
     .rsvp-actions button,
     .nostr-actions a,
-    .nostr-actions button {
+    .nostr-actions button,
+    .simplex-contact a {
       width: 100%;
       box-sizing: border-box;
       text-align: center;
+    }
+
+    .simplex-contact {
+      flex-direction: column;
+      align-items: stretch;
+      border-width: 2px;
     }
 
     .nostr-card summary {

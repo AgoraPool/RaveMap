@@ -70,6 +70,7 @@ export const POST: APIRoute = async ({ request }) =>
       endAt,
       coverImageUrl: input.coverImageUrl,
       externalUrl: input.externalUrl,
+      simplexUrl: input.simplexUrl,
       source: input.sourceUrl
         ? {
             name: input.sourceName || "Import",

@@ -37,6 +37,7 @@ export type DraftBundle = {
     endAt?: string;
     coverImageUrl?: string;
     externalUrl?: string;
+    simplexUrl?: string;
     source?: {
       name: string;
       url: string;

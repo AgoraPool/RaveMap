@@ -185,6 +185,7 @@ function publicFieldsFromCommand(input: CreateEventCommand, createdAt = new Date
     endAt: input.endAt?.toISOString(),
     coverImageUrl: input.coverImageUrl,
     externalUrl: input.externalUrl,
+    simplexUrl: input.simplexUrl,
     source: input.source,
     genres: input.genres ?? [],
     lineup: input.lineup ?? [],
@@ -209,6 +210,7 @@ function publicDtoFromFields(fields: DraftBundle["public"], id: string, authorPu
     endAt: fields.endAt ? new Date(fields.endAt) : undefined,
     coverImageUrl: fields.coverImageUrl,
     externalUrl: fields.externalUrl,
+    simplexUrl: fields.simplexUrl,
     source: fields.source,
     genres: fields.genres ?? [],
     lineup: fields.lineup ?? [],
@@ -231,6 +233,7 @@ function commandFromFields(fields: DraftBundle["public"], isPublished: boolean):
     endAt: fields.endAt ? new Date(fields.endAt) : undefined,
     coverImageUrl: fields.coverImageUrl,
     externalUrl: fields.externalUrl,
+    simplexUrl: fields.simplexUrl,
     source: fields.source,
     genres: fields.genres,
     lineup: fields.lineup,
@@ -264,6 +267,7 @@ function parsePublicEvent(event: NostrEvent): PublicEventDto | null {
     endAt: parseDateFromSeconds(tagValue(event, "end")) ?? undefined,
     coverImageUrl: tagValue(event, "image"),
     externalUrl: tagValue(event, "external"),
+    simplexUrl: tagValue(event, "simplex"),
     source: tagValue(event, "source-url")
       ? {
           name: tagValue(event, "source") || "Imported",
@@ -311,6 +315,13 @@ function publicEventTemplate(input: CreateEventCommand): NostrUnsignedEvent {
   if (input.externalUrl) {
     tags.push(["external", input.externalUrl]);
     tags.push(["r", input.externalUrl]);
+  }
+
+  if (input.simplexUrl) {
+    tags.push(["simplex", input.simplexUrl]);
+    if (input.simplexUrl.startsWith("https://")) {
+      tags.push(["r", input.simplexUrl]);
+    }
   }
 
   if (input.source) {
@@ -1062,6 +1073,7 @@ export class NostrEventRepository {
               endAt: input.endAt,
               coverImageUrl: input.coverImageUrl,
               externalUrl: input.externalUrl,
+              simplexUrl: input.simplexUrl,
               genres: input.genres,
               lineup: input.lineup,
               tags: input.tags,

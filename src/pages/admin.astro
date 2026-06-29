@@ -148,6 +148,13 @@ import Layout from "../layouts/Layout.astro";
                   <input id="externalUrl" name="externalUrl" type="url" inputmode="url" placeholder="https://..." />
                 </label>
                 <label>
+                  <span>SimpleX kontakt</span>
+                  <input id="simplexUrl" name="simplexUrl" type="text" inputmode="url" placeholder="https://simplex.chat/contact#..." />
+                </label>
+              </div>
+
+              <div class="field-row">
+                <label>
                   <span>URL zdroje</span>
                   <input id="sourceUrl" name="sourceUrl" type="url" inputmode="url" placeholder="https://..." />
                 </label>
@@ -461,6 +468,7 @@ import Layout from "../layouts/Layout.astro";
       galleryImageUrls: (item.galleryImageUrls || []).join(", "),
       coverImageUrl: item.coverImageUrl || "",
       externalUrl: item.externalUrl || "",
+      simplexUrl: item.simplexUrl || "",
       sourceUrl: item.source?.url || "",
       sourceName: item.source?.name || "",
     };
@@ -682,6 +690,7 @@ import Layout from "../layouts/Layout.astro";
       summary: String(data.get("summary") || ""),
       coverImageUrl: String(data.get("coverImageUrl") || "").trim() || undefined,
       externalUrl: String(data.get("externalUrl") || "").trim() || undefined,
+      simplexUrl: String(data.get("simplexUrl") || "").trim() || undefined,
       sourceUrl: String(data.get("sourceUrl") || "").trim() || undefined,
       sourceName: String(data.get("sourceName") || "").trim() || undefined,
       genres: listFromInput(data.get("genres")),
