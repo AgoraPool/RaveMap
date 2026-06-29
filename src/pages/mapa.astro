@@ -1,0 +1,458 @@
+---
+export const prerender = false;
+
+import { hasPrecisePublicLocation, osmEmbedUrl, osmMarkerUrl } from "../lib/location";
+import { getNostrEventRepository } from "../lib/server/nostr-repository";
+import Layout from "../layouts/Layout.astro";
+
+const repository = getNostrEventRepository();
+const now = Date.now();
+const events = (await repository.listPublishedEvents())
+  .filter((event) => (event.endAt ?? event.startsAt).getTime() >= now)
+  .filter(hasPrecisePublicLocation);
+
+const formatter = new Intl.DateTimeFormat("cs-CZ", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+const selected = events[0];
+const selectedMapUrl = selected ? osmEmbedUrl(selected) : "";
+const selectedOsmUrl = selected ? osmMarkerUrl(selected) : "";
+---
+
+<Layout bodyClass="map-body">
+  <main class="map-shell">
+    <div class="map-bg"></div>
+
+    <header class="map-topbar">
+      <a class="nav-link" href="/">Domů</a>
+      <a class="nav-link" href="/akce">Akce</a>
+      <a class="nav-link nav-link-soft" href="/submit">Přidat akci</a>
+    </header>
+
+    <section class="map-hero" aria-labelledby="map-title">
+      <div>
+        <p class="kicker">Přesné lokace</p>
+        <h1 id="map-title">MAPA AKCÍ</h1>
+      </div>
+      <p>{events.length} akcí má přesnou veřejnou lokaci.</p>
+    </section>
+
+    {
+      events.length === 0 ? (
+        <section class="empty-map">
+          <p>Žádná publikovaná akce zatím nemá přesnou veřejnou lokaci.</p>
+          <a href="/akce">Zpět na seznam</a>
+        </section>
+      ) : (
+        <section class="map-board" aria-label="Mapa přesných lokací">
+          <div class="map-list" aria-label="Akce na mapě">
+            {events.map((event, index) => {
+              const embedUrl = osmEmbedUrl(event);
+              const markerUrl = osmMarkerUrl(event);
+              return (
+                <article class:list={["map-event", index === 0 && "active"]} data-map-event>
+                  <button
+                    type="button"
+                    data-map-src={embedUrl}
+                    data-osm-url={markerUrl}
+                    data-title={event.title}
+                    aria-pressed={index === 0 ? "true" : "false"}
+                  >
+                    <span class="event-index">{String(index + 1).padStart(2, "0")}</span>
+                    <strong>{event.title}</strong>
+                    <span>{formatter.format(event.startsAt)}</span>
+                    <small>{event.publicLocation}</small>
+                  </button>
+                  <div class="event-actions">
+                    <span>{event.accessType === "gated" ? "na kód" : event.source ? "import" : "veřejná"}</span>
+                    <a href={`/akce/${event.slug}`}>Detail</a>
+                    <a href={markerUrl} target="_blank" rel="noreferrer">OSM</a>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div class="map-frame-panel">
+            <div class="map-frame-head">
+              <div>
+                <span>Vybraná akce</span>
+                <strong id="selected-title">{selected?.title}</strong>
+              </div>
+              <a id="selected-osm" href={selectedOsmUrl} target="_blank" rel="noreferrer">Otevřít v OSM</a>
+            </div>
+            <iframe
+              id="map-frame"
+              class="map-frame"
+              title="Mapa vybrané akce"
+              loading="lazy"
+              referrerpolicy="no-referrer"
+              src={selectedMapUrl}
+            ></iframe>
+          </div>
+        </section>
+      )
+    }
+  </main>
+</Layout>
+
+<script>
+  const mapFrame = document.getElementById("map-frame");
+  const selectedTitle = document.getElementById("selected-title");
+  const selectedOsm = document.getElementById("selected-osm");
+  const rows = [...document.querySelectorAll("[data-map-event]")];
+
+  for (const row of rows) {
+    const button = row.querySelector("[data-map-src]");
+    button?.addEventListener("click", () => {
+      if (!(button instanceof HTMLButtonElement)) return;
+      const mapSrc = button.dataset.mapSrc || "";
+      const osmUrl = button.dataset.osmUrl || "";
+      const title = button.dataset.title || "";
+
+      if (mapFrame instanceof HTMLIFrameElement && mapSrc) {
+        mapFrame.src = mapSrc;
+      }
+      if (selectedTitle instanceof HTMLElement) {
+        selectedTitle.textContent = title;
+      }
+      if (selectedOsm instanceof HTMLAnchorElement && osmUrl) {
+        selectedOsm.href = osmUrl;
+      }
+
+      for (const candidate of rows) {
+        candidate.classList.toggle("active", candidate === row);
+        const candidateButton = candidate.querySelector("[data-map-src]");
+        if (candidateButton instanceof HTMLButtonElement) {
+          candidateButton.setAttribute("aria-pressed", String(candidate === row));
+        }
+      }
+    });
+  }
+</script>
+
+<style>
+  :global(body.map-body) {
+    scroll-snap-type: none;
+  }
+
+  .map-shell {
+    position: relative;
+    min-height: 100svh;
+    padding: 24px;
+    box-sizing: border-box;
+    overflow-x: clip;
+  }
+
+  .map-bg {
+    position: absolute;
+    inset: 0;
+    opacity: 0.035;
+    background: url("/bg.jpeg") center / cover;
+    z-index: 0;
+  }
+
+  .map-topbar,
+  .map-hero,
+  .map-board,
+  .empty-map {
+    position: relative;
+    z-index: 1;
+  }
+
+  .map-topbar {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .nav-link,
+  .empty-map a,
+  .event-actions a,
+  .map-frame-head a {
+    border: 2px solid #000;
+    background: #fff6df;
+    color: #000;
+    padding: 9px 11px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+
+  .nav-link:first-child,
+  .map-frame-head a {
+    background: #000;
+    color: #c00;
+  }
+
+  .nav-link:hover,
+  .empty-map a:hover,
+  .event-actions a:hover,
+  .map-frame-head a:hover {
+    background: #000;
+    color: #c00;
+  }
+
+  .map-frame-head a:hover {
+    background: #fff6df;
+    color: #000;
+  }
+
+  .map-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 18px;
+    margin-bottom: 18px;
+    border: 3px solid #000;
+    background: rgba(255, 246, 223, 0.58);
+    padding: 16px;
+  }
+
+  .kicker {
+    font-size: 0.82rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .map-hero h1 {
+    font-size: 4.6rem;
+    line-height: 0.9;
+  }
+
+  .map-hero p {
+    max-width: 260px;
+    font-weight: 900;
+    text-align: right;
+  }
+
+  .map-board {
+    display: grid;
+    grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+  }
+
+  .map-list,
+  .map-frame-panel,
+  .empty-map {
+    border: 3px solid #000;
+    background: #c00;
+    box-shadow: 8px 8px 0 #000;
+  }
+
+  .map-list {
+    max-height: calc(100svh - 210px);
+    overflow: auto;
+    scrollbar-color: #000 #c00;
+  }
+
+  .map-event {
+    display: grid;
+    gap: 0;
+    border-bottom: 2px solid #000;
+  }
+
+  .map-event:last-child {
+    border-bottom: 0;
+  }
+
+  .map-event button {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 5px 12px;
+    border: 0;
+    background: transparent;
+    color: #000;
+    padding: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .map-event.active button,
+  .map-event button:hover {
+    background: #000;
+    color: #c00;
+  }
+
+  .event-index {
+    grid-row: 1 / span 3;
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    line-height: 1;
+  }
+
+  .map-event strong {
+    font-size: 1.18rem;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+
+  .map-event small,
+  .map-event button span:not(.event-index) {
+    overflow-wrap: anywhere;
+  }
+
+  .event-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 12px 12px 72px;
+  }
+
+  .event-actions span {
+    border: 1px solid #000;
+    padding: 3px 6px;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    font-weight: 900;
+  }
+
+  .event-actions a {
+    padding: 4px 7px;
+    font-size: 0.68rem;
+  }
+
+  .map-frame-panel {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+  }
+
+  .map-frame-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    border-bottom: 3px solid #000;
+    background: rgba(255, 246, 223, 0.86);
+    padding: 12px;
+    min-width: 0;
+  }
+
+  .map-frame-head div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .map-frame-head span {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 900;
+  }
+
+  .map-frame-head strong {
+    overflow-wrap: anywhere;
+  }
+
+  .map-frame {
+    width: 100%;
+    min-height: 540px;
+    height: 100%;
+    border: 0;
+    background: #fff6df;
+  }
+
+  .empty-map {
+    display: grid;
+    gap: 14px;
+    max-width: 760px;
+    padding: 18px;
+  }
+
+  .empty-map p {
+    font-size: 1.35rem;
+    font-weight: 900;
+  }
+
+  @media (max-width: 900px) {
+    .map-shell {
+      padding: 10px;
+    }
+
+    .map-topbar {
+      justify-content: stretch;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-bottom: 12px;
+    }
+
+    .nav-link {
+      text-align: center;
+      padding: 8px 6px;
+      font-size: 0.68rem;
+    }
+
+    .map-hero {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border-width: 2px;
+    }
+
+    .map-hero h1 {
+      font-size: 2.8rem;
+    }
+
+    .map-hero p {
+      max-width: none;
+      text-align: left;
+    }
+
+    .map-board {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .map-list,
+    .map-frame-panel,
+    .empty-map {
+      border-width: 2px;
+      box-shadow: 4px 4px 0 #000;
+    }
+
+    .map-list {
+      max-height: none;
+      overflow: visible;
+    }
+
+    .map-event button {
+      grid-template-columns: 42px minmax(0, 1fr);
+      padding: 10px;
+    }
+
+    .event-index {
+      font-size: 1.45rem;
+    }
+
+    .event-actions {
+      padding: 0 10px 10px 64px;
+    }
+
+    .map-frame-head {
+      align-items: stretch;
+      display: grid;
+      border-bottom-width: 2px;
+    }
+
+    .map-frame-head a {
+      text-align: center;
+    }
+
+    .map-frame {
+      min-height: 320px;
+    }
+  }
+</style>

@@ -1,5 +1,6 @@
 ---
 import { getNostrEventRepository } from "../lib/server/nostr-repository";
+import { hasPrecisePublicLocation, osmMarkerUrl } from "../lib/location";
 
 const {
   limit = 80,
@@ -17,62 +18,13 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   timeStyle: "short",
 });
 
-const cityOnlyLocations = new Set([
-  "brno",
-  "bratislava",
-  "czech republic",
-  "czechia",
-  "česko",
-  "cesko",
-  "dresden",
-  "germany",
-  "ostrava",
-  "plzen",
-  "plzeň",
-  "poland",
-  "polsko",
-  "praha",
-  "prague",
-  "rakousko",
-  "slovakia",
-  "slovensko",
-  "vienna",
-  "wien",
-]);
-
-function normalizedLocation(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function hasPrecisePublicLocation(item: (typeof list)[number]): boolean {
-  if (item.publicLatitude === undefined || item.publicLongitude === undefined) {
-    return false;
-  }
-
-  const normalized = normalizedLocation(item.publicLocation);
-  if (!normalized || cityOnlyLocations.has(normalized)) {
-    return false;
-  }
-
-  return true;
-}
-
-function osmUrl(item: (typeof list)[number]): string {
-  const lat = item.publicLatitude;
-  const lon = item.publicLongitude;
-  return lat === undefined || lon === undefined ? "" : `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
-}
 ---
 
 <section class:list={["akce", isPreview && "akce-preview"]} id="akce">
   <div class="akce-bg"></div>
   <div class="akce-actions">
     {!isPreview && <a class="home-link" href="/">Domů</a>}
+    {!isPreview && <a class="map-link" href="/mapa">Mapa</a>}
     <a class="submit-link" href="/submit">Přidat akci</a>
     {isPreview && <a class="all-events-link" href="/akce">Všechny akce</a>}
   </div>
@@ -106,7 +58,7 @@ function osmUrl(item: (typeof list)[number]): string {
             const rsvp = rsvpSummaries[item.slug] ?? { accepted: 0, tentative: 0 };
             const rsvpTotal = rsvp.accepted + rsvp.tentative;
             const eventHref = `/akce/${item.slug}`;
-            const mapHref = hasPrecisePublicLocation(item) ? osmUrl(item) : "";
+            const mapHref = hasPrecisePublicLocation(item) ? osmMarkerUrl(item) : "";
             return (
               <article
                 class:list={["akce-item", mapHref && "has-map"]}
@@ -271,7 +223,8 @@ function osmUrl(item: (typeof list)[number]): string {
   }
   .submit-link,
   .all-events-link,
-  .home-link {
+  .home-link,
+  .map-link {
     border: 2px solid #000;
     background: #fff6df;
     color: #000;
@@ -283,18 +236,21 @@ function osmUrl(item: (typeof list)[number]): string {
     font-weight: 900;
   }
   .all-events-link,
-  .home-link {
+  .home-link,
+  .map-link {
     background: #000;
     color: #c00;
   }
   .submit-link:hover,
   .all-events-link:hover,
-  .home-link:hover {
+  .home-link:hover,
+  .map-link:hover {
     background: #000;
     color: #c00;
   }
   .all-events-link:hover,
-  .home-link:hover {
+  .home-link:hover,
+  .map-link:hover {
     background: #fff6df;
     color: #000;
   }
@@ -580,7 +536,8 @@ function osmUrl(item: (typeof list)[number]): string {
     }
     .submit-link,
     .all-events-link,
-    .home-link {
+    .home-link,
+    .map-link {
       font-size: 0.7rem;
       padding: 7px 8px;
     }
