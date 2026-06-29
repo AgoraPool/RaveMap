@@ -392,7 +392,6 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       box-sizing: border-box;
       max-height: calc(100svh - 130px);
     }
-    .akce-sort-row,
     .akce-item {
       grid-template-columns: 56px 1fr;
       grid-template-areas:
@@ -405,27 +404,27 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       font-size: 0.95rem;
     }
     .akce-sort-row {
-      grid-template-areas:
-        "img name"
-        "img date"
-        "img rsvp";
-      padding: 8px 12px;
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
+      padding: 8px;
+      min-height: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
     }
     .akce-sort-row button {
-      font-size: 0.68rem;
-      padding: 6px 7px;
-    }
-    .akce-sort-row button[data-sort-key="name"] {
-      grid-area: name;
-    }
-    .akce-sort-row button[data-sort-key="date"] {
-      grid-area: date;
-    }
-    .akce-sort-row button[data-sort-key="rsvp"] {
-      grid-area: rsvp;
+      width: auto;
+      flex: 0 0 auto;
+      min-width: 72px;
+      font-size: 0.66rem;
+      padding: 6px 8px;
+      white-space: nowrap;
     }
     .akce-sort-spacer {
-      grid-area: img;
+      display: none;
+    }
+    .akce-sort-row::-webkit-scrollbar {
+      display: none;
     }
     .akce-poster-cell {
       grid-area: img;
