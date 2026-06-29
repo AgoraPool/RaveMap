@@ -21,6 +21,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 <section class:list={["akce", isPreview && "akce-preview"]} id="akce">
   <div class="akce-bg"></div>
   <div class="akce-actions">
+    {!isPreview && <a class="home-link" href="/">Domů</a>}
     <a class="submit-link" href="/submit">Přidat akci</a>
     {isPreview && <a class="all-events-link" href="/akce">Všechny akce</a>}
   </div>
@@ -206,7 +207,8 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     gap: 8px;
   }
   .submit-link,
-  .all-events-link {
+  .all-events-link,
+  .home-link {
     border: 2px solid #000;
     background: #fff6df;
     color: #000;
@@ -217,16 +219,19 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     font-size: 0.8rem;
     font-weight: 900;
   }
-  .all-events-link {
+  .all-events-link,
+  .home-link {
     background: #000;
     color: #c00;
   }
   .submit-link:hover,
-  .all-events-link:hover {
+  .all-events-link:hover,
+  .home-link:hover {
     background: #000;
     color: #c00;
   }
-  .all-events-link:hover {
+  .all-events-link:hover,
+  .home-link:hover {
     background: #fff6df;
     color: #000;
   }
@@ -457,7 +462,8 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       left: 10px;
     }
     .submit-link,
-    .all-events-link {
+    .all-events-link,
+    .home-link {
       font-size: 0.7rem;
       padding: 7px 8px;
     }
