@@ -279,17 +279,7 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
                   ></iframe>
                 </div>
               </article>
-            ) : (
-              <article class="event-card public-access-card">
-                <div class="card-head">
-                  <p class="card-kicker">VEŘEJNÁ AKCE</p>
-                  <span class="meta-pill meta-pill-positive">BEZ KÓDU</span>
-                </div>
-                <p class="card-copy">
-                  Tahle akce je veřejný záznam z hudebního kalendáře. Tajná vrstva není potřeba.
-                </p>
-              </article>
-            )
+            ) : null
           }
 
           <article class="event-card rsvp-card" id="rsvp" data-slug={event.slug} data-coordinate={commentCoordinate}>
@@ -311,28 +301,6 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
             </div>
             <p id="rsvp-status" class="comment-status" role="status" aria-live="polite"></p>
           </article>
-
-          <details class="event-card nostr-card">
-            <summary>
-              <span>Nostr</span>
-              <small>přenosný odkaz a autor</small>
-            </summary>
-            <div class="nostr-grid">
-              <div>
-                <span class="secret-label">Akce</span>
-                <code>{nostrAddress}</code>
-              </div>
-              <div>
-                <span class="secret-label">Autor</span>
-                <code>{nostrAuthor}</code>
-              </div>
-            </div>
-            <div class="nostr-actions">
-              <a href={nostrWebUrl} target="_blank" rel="noreferrer">Otevřít v Nostr</a>
-              <button type="button" data-copy-nostr={nostrAddress}>Kopírovat naddr</button>
-              <button type="button" data-copy-nostr={nostrEvent}>Kopírovat nevent</button>
-            </div>
-          </details>
 
           <article class="event-card comments-card" id="comments" data-slug={event.slug} data-coordinate={commentCoordinate}>
             <div class="card-head">
@@ -371,6 +339,28 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
               <p id="comment-status" class="comment-status" role="status" aria-live="polite"></p>
             </form>
           </article>
+
+          <details class="event-card nostr-card">
+            <summary>
+              <span>Nostr</span>
+              <small>přenosný odkaz a autor</small>
+            </summary>
+            <div class="nostr-grid">
+              <div>
+                <span class="secret-label">Akce</span>
+                <code>{nostrAddress}</code>
+              </div>
+              <div>
+                <span class="secret-label">Autor</span>
+                <code>{nostrAuthor}</code>
+              </div>
+            </div>
+            <div class="nostr-actions">
+              <a href={nostrWebUrl} target="_blank" rel="noreferrer">Otevřít v Nostr</a>
+              <button type="button" data-copy-nostr={nostrAddress}>Kopírovat naddr</button>
+              <button type="button" data-copy-nostr={nostrEvent}>Kopírovat nevent</button>
+            </div>
+          </details>
         </div>
       )
     }
@@ -846,10 +836,6 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
       linear-gradient(135deg, rgba(20, 20, 20, 0.96), rgba(70, 12, 12, 0.96)),
       #111;
     color: #fff5e1;
-  }
-
-  .public-access-card {
-    background: rgba(255, 255, 255, 0.86);
   }
 
   .comments-card {
