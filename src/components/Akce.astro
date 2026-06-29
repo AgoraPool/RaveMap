@@ -1,12 +1,16 @@
 ---
 import { getNostrEventRepository } from "../lib/server/nostr-repository";
 
-const { limit = 80 } = Astro.props as { limit?: number };
+const {
+  limit = 80,
+  variant = "full",
+} = Astro.props as { limit?: number; variant?: "full" | "preview" };
+const isPreview = variant === "preview";
 const repository = getNostrEventRepository();
 const list = await repository.listPublishedEvents(limit);
-const rsvpSummaries: Record<string, { accepted: number; tentative: number }> = await repository
-  .getRsvpSummariesForEvents(list)
-  .catch(() => ({}));
+const rsvpSummaries: Record<string, { accepted: number; tentative: number }> = isPreview
+  ? {}
+  : await repository.getRsvpSummariesForEvents(list).catch(() => ({}));
 
 const formatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "medium",
@@ -14,30 +18,37 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 });
 ---
 
-<section class="akce" id="akce">
+<section class:list={["akce", isPreview && "akce-preview"]} id="akce">
   <div class="akce-bg"></div>
-  <a class="submit-link" href="/submit">Přidat akci</a>
+  <div class="akce-actions">
+    <a class="submit-link" href="/submit">Přidat akci</a>
+    {isPreview && <a class="all-events-link" href="/akce">Všechny akce</a>}
+  </div>
   <h2 class="akce-title">AKCE</h2>
   <div class="akce-table">
     {list.length === 0 ? (
       <div class="empty-state">Žádné akce zatím nejsou publikované.</div>
     ) : (
       <>
-        <div class="akce-sort-row" aria-label="Řazení akcí">
-          <span class="akce-sort-spacer" aria-hidden="true"></span>
-          <button type="button" data-sort-key="name" aria-label="Seřadit podle názvu">
-            Název <span data-sort-indicator="name">-</span>
-          </button>
-          <button type="button" data-sort-key="date" aria-label="Seřadit podle data">
-            Datum <span data-sort-indicator="date">↑</span>
-          </button>
-          <button type="button" data-sort-key="rsvp" aria-label="Seřadit podle účasti">
-            Účast <span data-sort-indicator="rsvp">-</span>
-          </button>
-          <button type="button" data-sort-key="location" aria-label="Seřadit podle lokality">
-            Lokalita <span data-sort-indicator="location">-</span>
-          </button>
-        </div>
+        {
+          !isPreview && (
+            <div class="akce-sort-row" aria-label="Řazení akcí">
+              <span class="akce-sort-spacer" aria-hidden="true"></span>
+              <button type="button" data-sort-key="name" aria-label="Seřadit podle názvu">
+                Název <span data-sort-indicator="name">-</span>
+              </button>
+              <button type="button" data-sort-key="date" aria-label="Seřadit podle data">
+                Datum <span data-sort-indicator="date">↑</span>
+              </button>
+              <button type="button" data-sort-key="rsvp" aria-label="Seřadit podle účasti">
+                Účast <span data-sort-indicator="rsvp">-</span>
+              </button>
+              <button type="button" data-sort-key="location" aria-label="Seřadit podle lokality">
+                Lokalita <span data-sort-indicator="location">-</span>
+              </button>
+            </div>
+          )
+        }
         <div class="akce-list" data-akce-list>
           {list.map((item) => {
             const rsvp = rsvpSummaries[item.slug] ?? { accepted: 0, tentative: 0 };
@@ -67,10 +78,16 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
                 </span>
                 <h3 class="akce-name">{item.title}</h3>
                 <div class="akce-date">{formatter.format(item.startsAt)}</div>
-                <div class="akce-rsvp" aria-label={`${rsvp.accepted} jde, ${rsvp.tentative} možná`}>
-                  <strong>{rsvpTotal}</strong>
-                  <small>{rsvp.accepted} jde / {rsvp.tentative} možná</small>
-                </div>
+                {
+                  !isPreview && (
+                    <div class="akce-rsvp" aria-label={`${rsvp.accepted} jde, ${rsvp.tentative} možná`}>
+                      <strong>{rsvpTotal}</strong>
+                      <small>
+                        {rsvp.accepted} jde / {rsvp.tentative} možná
+                      </small>
+                    </div>
+                  )
+                }
                 <div class="akce-location">
                   <span>{item.publicLocation}</span>
                   <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
@@ -178,11 +195,18 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     writing-mode: vertical-rl;
     text-orientation: upright;
   }
-  .submit-link {
+  .akce-actions {
     position: absolute;
     z-index: 2;
     top: 24px;
     right: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .submit-link,
+  .all-events-link {
     border: 2px solid #000;
     background: #fff6df;
     color: #000;
@@ -193,9 +217,18 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     font-size: 0.8rem;
     font-weight: 900;
   }
-  .submit-link:hover {
+  .all-events-link {
     background: #000;
     color: #c00;
+  }
+  .submit-link:hover,
+  .all-events-link:hover {
+    background: #000;
+    color: #c00;
+  }
+  .all-events-link:hover {
+    background: #fff6df;
+    color: #000;
   }
   .akce-table {
     position: relative;
@@ -316,6 +349,34 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     font-size: 0.7rem;
     font-weight: 700;
   }
+  .akce-preview {
+    align-items: stretch;
+    padding-top: 64px;
+    overflow: visible;
+  }
+  .akce-preview .akce-table {
+    width: min(1040px, 76%);
+    max-height: none;
+    overflow: visible;
+  }
+  .akce-preview .akce-list {
+    display: block;
+  }
+  .akce-preview .akce-item {
+    grid-template-columns: 96px minmax(0, 1.5fr) minmax(150px, 0.7fr) minmax(150px, 0.8fr);
+    min-height: 88px;
+    border-bottom-width: 2px;
+  }
+  .akce-preview .akce-item:last-child {
+    border-bottom: 0;
+  }
+  .akce-preview .akce-name {
+    font-size: 1.95rem;
+    line-height: 0.95;
+  }
+  .akce-preview .akce-date {
+    font-weight: 700;
+  }
   .empty-state {
     padding: 24px;
     font-size: 1.4rem;
@@ -359,6 +420,18 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       width: 72px;
       height: 52px;
     }
+    .akce-preview .akce-table {
+      width: 78%;
+    }
+    .akce-preview .akce-item {
+      grid-template-columns: 72px minmax(0, 1fr) minmax(120px, 0.8fr) minmax(120px, 0.8fr);
+    }
+    .akce-preview .akce-location {
+      display: grid;
+    }
+    .akce-preview .akce-name {
+      font-size: 1.45rem;
+    }
   }
 
   @media (max-width: 768px) {
@@ -378,9 +451,13 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       line-height: 0.9;
       padding: 0;
     }
-    .submit-link {
+    .akce-actions {
       top: 10px;
       right: 10px;
+      left: 10px;
+    }
+    .submit-link,
+    .all-events-link {
       font-size: 0.7rem;
       padding: 7px 8px;
     }
@@ -391,6 +468,10 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       margin: 0;
       box-sizing: border-box;
       max-height: calc(100svh - 130px);
+      display: block;
+    }
+    .akce-list {
+      display: block;
     }
     .akce-item {
       grid-template-columns: 56px 1fr;
@@ -404,21 +485,25 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       font-size: 0.95rem;
     }
     .akce-sort-row {
-      display: flex;
+      position: static;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: stretch;
       gap: 6px;
-      padding: 8px;
+      padding: 10px;
       min-height: 0;
-      overflow-x: auto;
-      scrollbar-width: none;
+      overflow: visible;
     }
     .akce-sort-row button {
-      width: auto;
-      flex: 0 0 auto;
-      min-width: 72px;
+      width: 100%;
+      min-width: 0;
+      min-height: 42px;
       font-size: 0.66rem;
-      padding: 6px 8px;
+      padding: 10px 9px;
       white-space: nowrap;
+    }
+    .akce-sort-row button[data-sort-key="rsvp"] {
+      grid-column: 1 / -1;
     }
     .akce-sort-spacer {
       display: none;
@@ -451,6 +536,36 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     }
     .akce-rsvp small {
       font-size: 0.68rem;
+    }
+    .akce-preview {
+      min-height: auto;
+      padding: 58px 10px 32px;
+    }
+    .akce-preview .akce-table {
+      max-height: none;
+      overflow: visible;
+    }
+    .akce-preview .akce-item {
+      grid-template-columns: 56px minmax(0, 1fr);
+      grid-template-areas:
+        "img name"
+        "img date"
+        "img location";
+      min-height: 76px;
+    }
+    .akce-preview .akce-name {
+      font-size: 1.2rem;
+    }
+    .akce-preview .akce-location {
+      grid-area: location;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+    }
+    .akce-preview .akce-location small {
+      flex: 0 0 auto;
+      font-size: 0.58rem;
     }
     .bunkr {
       width: 210px;

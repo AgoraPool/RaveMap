@@ -42,22 +42,24 @@ a {
   font-family: var(--font-body);
 }
 body.home-body {
-  scroll-snap-type: y proximity;
+  scroll-snap-type: none;
 }
 
 body.home-body section {
   min-height: 100vh;
-  scroll-snap-align: start;
-  scroll-snap-stop: normal;
   perspective: 1200px;
   transform-style: preserve-3d;
 }
 
 body.home-body section {
   transform-origin: left center;
-  will-change: transform, opacity, filter;
+  will-change: transform, opacity;
   backface-visibility: hidden;
-  transition: filter 160ms ease;
+}
+
+body.home-body section + section {
+  content-visibility: auto;
+  contain-intrinsic-size: 100vh;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -73,7 +75,6 @@ body.home-body section {
   body.home-body section {
     transform: none !important;
     opacity: 1 !important;
-    filter: none !important;
   }
 }
 .grid-canvas {
@@ -83,6 +84,7 @@ body.home-body section {
   width: 100%;
   pointer-events: none; /* grid never blocks clicks */
   z-index: 0;
+  contain: paint;
 }
 
 .grid-canvas .v,

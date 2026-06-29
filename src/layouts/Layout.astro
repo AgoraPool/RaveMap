@@ -73,7 +73,6 @@ const htmlClass = bodyClass.split(/\s+/).includes("admin-body") ? "admin-html" :
 			  for (const s of sections) {
 			    s.style.transform = "";
 			    s.style.opacity = "";
-			    s.style.filter = "";
 			  }
 			}
 
@@ -91,21 +90,18 @@ const htmlClass = bodyClass.split(/\s+/).includes("admin-body") ? "admin-html" :
 			  for (const s of sections) {
 			    const r = s.getBoundingClientRect();
 			    const sc = r.top + r.height / 2;
-			    const t = clamp((sc - vc) / Math.max(vh * 0.92, 1), -1, 1);
+			    const t = clamp((sc - vc) / Math.max(vh, 1), -1, 1);
 			    const distance = Math.abs(t);
 			    const eased = easeOutCubic(distance);
 
-			    const rotY = -t * 14;
-			    const rotX = t * 2.5;
-			    const z = -eased * 90;
-			    const y = -t * 18;
-			    const scale = 1 - eased * 0.045;
-			    const opacity = 1 - eased * 0.16;
-			    const blur = eased * 0.9;
+			    const rotY = -t * 6;
+			    const z = -eased * 34;
+			    const y = -t * 8;
+			    const scale = 1 - eased * 0.018;
+			    const opacity = 1 - eased * 0.08;
 
-			    s.style.transform = `translate3d(0, ${y}px, ${z}px) rotateY(${rotY}deg) rotateX(${rotX}deg) scale(${scale})`;
+			    s.style.transform = `translate3d(0, ${y}px, ${z}px) rotateY(${rotY}deg) scale(${scale})`;
 			    s.style.opacity = opacity;
-			    s.style.filter = `blur(${blur}px)`;
 			  }
 			}
 
@@ -117,11 +113,13 @@ const htmlClass = bodyClass.split(/\s+/).includes("admin-body") ? "admin-html" :
 			  frame = requestAnimationFrame(update);
 			}
 
-			window.addEventListener("scroll", scheduleUpdate, { passive: true });
-			window.addEventListener("resize", scheduleUpdate);
-			mobileQuery.addEventListener("change", scheduleUpdate);
-			reducedMotionQuery.addEventListener("change", scheduleUpdate);
-			update();
+			if (sections.length > 0) {
+			  window.addEventListener("scroll", scheduleUpdate, { passive: true });
+			  window.addEventListener("resize", scheduleUpdate);
+			  mobileQuery.addEventListener("change", scheduleUpdate);
+			  reducedMotionQuery.addEventListener("change", scheduleUpdate);
+			  update();
+			}
 		</script>
 	)
 }
