@@ -16,6 +16,57 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+
+const cityOnlyLocations = new Set([
+  "brno",
+  "bratislava",
+  "czech republic",
+  "czechia",
+  "česko",
+  "cesko",
+  "dresden",
+  "germany",
+  "ostrava",
+  "plzen",
+  "plzeň",
+  "poland",
+  "polsko",
+  "praha",
+  "prague",
+  "rakousko",
+  "slovakia",
+  "slovensko",
+  "vienna",
+  "wien",
+]);
+
+function normalizedLocation(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasPrecisePublicLocation(item: (typeof list)[number]): boolean {
+  if (item.publicLatitude === undefined || item.publicLongitude === undefined) {
+    return false;
+  }
+
+  const normalized = normalizedLocation(item.publicLocation);
+  if (!normalized || cityOnlyLocations.has(normalized)) {
+    return false;
+  }
+
+  return true;
+}
+
+function osmUrl(item: (typeof list)[number]): string {
+  const lat = item.publicLatitude;
+  const lon = item.publicLongitude;
+  return lat === undefined || lon === undefined ? "" : `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
+}
 ---
 
 <section class:list={["akce", isPreview && "akce-preview"]} id="akce">
@@ -54,16 +105,17 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
           {list.map((item) => {
             const rsvp = rsvpSummaries[item.slug] ?? { accepted: 0, tentative: 0 };
             const rsvpTotal = rsvp.accepted + rsvp.tentative;
+            const eventHref = `/akce/${item.slug}`;
+            const mapHref = hasPrecisePublicLocation(item) ? osmUrl(item) : "";
             return (
-              <a
-                class="akce-item"
-                href={`/akce/${item.slug}`}
+              <article
+                class:list={["akce-item", mapHref && "has-map"]}
                 data-name={item.title.toLocaleLowerCase("cs-CZ")}
                 data-date={item.startsAt.getTime()}
                 data-rsvp={rsvpTotal}
                 data-location={item.publicLocation.toLocaleLowerCase("cs-CZ")}
               >
-                <span class="akce-poster-cell" aria-hidden={!item.coverImageUrl}>
+                <a class="akce-poster-cell" href={eventHref} aria-label={`Otevřít akci ${item.title}`}>
                   {
                     item.coverImageUrl && (
                       <img
@@ -76,8 +128,10 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
                       />
                     )
                   }
-                </span>
-                <h3 class="akce-name">{item.title}</h3>
+                </a>
+                <h3 class="akce-name">
+                  <a href={eventHref}>{item.title}</a>
+                </h3>
                 <div class="akce-date">{formatter.format(item.startsAt)}</div>
                 {
                   !isPreview && (
@@ -91,9 +145,18 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
                 }
                 <div class="akce-location">
                   <span>{item.publicLocation}</span>
-                  <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
+                  <div class="akce-location-actions">
+                    <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
+                    {
+                      mapHref && (
+                        <a class="osm-link" href={mapHref} target="_blank" rel="noreferrer">
+                          OSM mapa
+                        </a>
+                      )
+                    }
+                  </div>
                 </div>
-              </a>
+              </article>
             );
           })}
         </div>
@@ -299,8 +362,6 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     border-bottom: 1px solid black;
     font-size: 1.1rem;
     position: relative;
-    cursor: pointer;
-    text-decoration: none;
     color: black;
   }
   .akce-item:hover {
@@ -311,6 +372,8 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     width: 100px;
     height: 64px;
     display: block;
+    color: inherit;
+    text-decoration: none;
   }
   .akce-img {
     width: 100%;
@@ -321,6 +384,16 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     font-size: 1.7rem;
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+  .akce-name a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .akce-name a:hover,
+  .akce-name a:focus-visible {
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 4px;
   }
   .akce-date,
   .akce-rsvp,
@@ -346,13 +419,31 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     display: grid;
     gap: 3px;
   }
-  .akce-location small {
+  .akce-location-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+  }
+  .akce-location small,
+  .osm-link {
     width: fit-content;
     border: 1px solid currentColor;
     padding: 2px 5px;
     text-transform: uppercase;
     font-size: 0.7rem;
     font-weight: 700;
+    line-height: 1.1;
+  }
+  .osm-link {
+    background: #fff6df;
+    color: #000;
+    text-decoration: none;
+  }
+  .osm-link:hover,
+  .osm-link:focus-visible {
+    background: #000;
+    color: #c00;
   }
   .akce-preview {
     align-items: stretch;
@@ -411,6 +502,32 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     .akce-sort-row button[data-sort-key="location"],
     .akce-location {
       display: none;
+    }
+    .akce-item.has-map {
+      grid-template-columns: 80px minmax(0, 1fr) minmax(110px, 0.8fr) minmax(72px, 0.5fr);
+      grid-template-areas:
+        "img name date rsvp"
+        "img location location location";
+      align-items: start;
+    }
+    .akce-item.has-map .akce-poster-cell {
+      grid-area: img;
+    }
+    .akce-item.has-map .akce-name {
+      grid-area: name;
+    }
+    .akce-item.has-map .akce-date {
+      grid-area: date;
+    }
+    .akce-item.has-map .akce-rsvp {
+      grid-area: rsvp;
+    }
+    .akce-item.has-map .akce-location {
+      grid-area: location;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
     }
     .akce-name {
       font-size: 1.4rem;
@@ -542,6 +659,27 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     }
     .akce-rsvp small {
       font-size: 0.68rem;
+    }
+    .akce-item.has-map {
+      grid-template-columns: 56px minmax(0, 1fr);
+      grid-template-areas:
+        "img name"
+        "img date"
+        "img rsvp"
+        "img location";
+    }
+    .akce-item.has-map .akce-location {
+      font-size: 0.78rem;
+    }
+    .akce-item.has-map .akce-location span {
+      display: none;
+    }
+    .akce-item.has-map .akce-location-actions {
+      gap: 6px;
+    }
+    .akce-item.has-map .osm-link,
+    .akce-item.has-map .akce-location small {
+      font-size: 0.58rem;
     }
     .akce-preview {
       min-height: auto;
