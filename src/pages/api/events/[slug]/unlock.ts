@@ -23,7 +23,6 @@ export const POST: APIRoute = async ({ params, request }) =>
       });
     }
 
-    const { unlockCode } = await parseJsonBody(request, unlockSchema);
     const clientIp = getClientIp(request);
     const ipHash = hashIpAddress(clientIp);
 
@@ -48,6 +47,7 @@ export const POST: APIRoute = async ({ params, request }) =>
       );
     }
 
+    const { unlockCode } = await parseJsonBody(request, unlockSchema);
     const event = await getNostrEventRepository().getPublishedEvent(slug);
     const secretBundle = event ? await getNostrEventRepository().getSecretBundle(slug) : null;
     if (!event || !secretBundle) {

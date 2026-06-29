@@ -1,8 +1,10 @@
 import type { APIRoute } from "astro";
-import { requireOrganizer } from "../../../lib/server/auth";
-import { AppError } from "../../../lib/server/errors";
+import { recordAuthFailureRateLimit } from "../../../lib/server/api-security";
+import { readCrewCredentials } from "../../../lib/server/auth";
+import { AppError, isAppError } from "../../../lib/server/errors";
 import { jsonOk, withApiErrorHandling } from "../../../lib/server/http";
 import { getNostrEventRepository } from "../../../lib/server/nostr-repository";
+import type { CrewSessionDto } from "../../../lib/server/nostr-types";
 import { studioEventActionSchema, studioEventSchema } from "../../../lib/server/schemas";
 import { randomSlugSuffix, slugify } from "../../../lib/server/slug";
 import { parseJsonBody } from "../../../lib/server/validation";
@@ -43,21 +45,45 @@ function readDateRange(startsAtRaw: string, endAtRaw: string | undefined): { sta
   return { startsAt, endAt };
 }
 
+async function authenticateCrewForRequest(request: Request): Promise<CrewSessionDto | Response> {
+  try {
+    const credentials = readCrewCredentials(request);
+    return await getNostrEventRepository().authenticateCrew(credentials.slug, credentials.secret);
+  } catch (error) {
+    if (isAppError(error) && error.status === 401) {
+      const limited = await recordAuthFailureRateLimit(request, "crew-auth", {
+        code: "CREW_AUTH_RATE_LIMITED",
+        message: "Příliš mnoho neúspěšných pokusů o crew přístup. Zkus to později.",
+      });
+      if (limited) return limited;
+    }
+    throw error;
+  }
+}
+
+function isResponse(value: CrewSessionDto | Response): value is Response {
+  return value instanceof Response;
+}
+
 export const GET: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
-    requireOrganizer(request);
-    const events = await getNostrEventRepository().listStudioEvents();
-    return jsonOk({ events });
+    const crew = await authenticateCrewForRequest(request);
+    if (isResponse(crew)) return crew;
+    const repository = getNostrEventRepository();
+    const events = await repository.listStudioEvents(crew.slug);
+    return jsonOk({ crew, events });
   });
 
 export const POST: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
-    requireOrganizer(request);
+    const crew = await authenticateCrewForRequest(request);
+    if (isResponse(crew)) return crew;
+    const repository = getNostrEventRepository();
     const input = await parseJsonBody(request, studioEventSchema);
     const { startsAt, endAt } = readDateRange(input.startsAt, input.endAt);
     const slug = input.slug ?? (await createUniqueStudioSlug(input.title, startsAt));
 
-    const created = await getNostrEventRepository().createStudioEvent({
+    const created = await repository.createStudioEvent({
       slug,
       title: input.title,
       summary: input.summary,
@@ -82,22 +108,23 @@ export const POST: APIRoute = async ({ request }) =>
       secretLatitude: input.accessType === "gated" ? input.secretLatitude : undefined,
       secretLongitude: input.accessType === "gated" ? input.secretLongitude : undefined,
       secretMapNote: input.accessType === "gated" ? input.secretMapNote : undefined,
-    });
+    }, crew.slug);
 
     return jsonOk({ id: created.id, slug: created.slug }, 201);
   });
 
 export const PATCH: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
-    requireOrganizer(request);
-    const input = await parseJsonBody(request, studioEventActionSchema);
+    const crew = await authenticateCrewForRequest(request);
+    if (isResponse(crew)) return crew;
     const repository = getNostrEventRepository();
+    const input = await parseJsonBody(request, studioEventActionSchema);
 
     if (input.action === "publish") {
-      const published = await repository.publishStudioDraft(input.slug);
+      const published = await repository.publishStudioDraft(input.slug, crew.slug);
       return jsonOk({ id: published.id, slug: published.slug });
     }
 
-    const archived = await repository.archiveStudioEvent(input.slug);
+    const archived = await repository.archiveStudioEvent(input.slug, crew.slug);
     return jsonOk({ id: archived.id, slug: archived.slug });
   });

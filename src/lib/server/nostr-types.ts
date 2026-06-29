@@ -4,7 +4,11 @@ export const COMMENT_EVENT_KIND = 1111;
 export const SECRET_EVENT_KIND = 30420;
 export const DRAFT_EVENT_KIND = 30421;
 export const TOMBSTONE_EVENT_KIND = 30422;
+export const CREW_PROFILE_KIND = 30430;
+export const CREW_ACCOUNT_KIND = 30431;
 export const DELETE_EVENT_KIND = 5;
+export const ZAP_REQUEST_KIND = 9734;
+export const ZAP_RECEIPT_KIND = 9735;
 export const RSVP_SIGNALS = ["hledám partu", "mám místo v autě", "jedu vlakem", "beru distro", "uvidíme se u stage"] as const;
 
 export type NostrEvent = {
@@ -34,6 +38,7 @@ export type NostrFilter = {
   "#d"?: string[];
   "#e"?: string[];
   "#a"?: string[];
+  "#p"?: string[];
   "#t"?: string[];
 };
 
@@ -68,7 +73,31 @@ export type PublicEventDto = {
   galleryImageUrls: string[];
   accessType: EventAccessType;
   origin?: EventOrigin;
+  crewSlug?: string;
+  crewName?: string;
+  crewLightningAddress?: string;
   createdAt: Date;
+};
+
+export type CrewProfileDto = {
+  id: string;
+  slug: string;
+  name: string;
+  summary: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
+  simplexUrl?: string;
+  websiteUrl?: string;
+  lightningAddress?: string;
+  archived: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type CrewSessionDto = {
+  slug: string;
+  name: string;
+  lightningAddress?: string;
 };
 
 export type PublicSubmitEventCommand = {
@@ -175,10 +204,39 @@ export type CreateEventCommand = {
   accessType: EventAccessType;
   isPublished: boolean;
   origin?: EventOrigin;
+  crewSlug?: string;
   unlockCode?: string;
   secretInfo?: string;
   secretLocationName?: string;
   secretLatitude?: number;
   secretLongitude?: number;
   secretMapNote?: string;
+};
+
+export type UpsertCrewProfileCommand = {
+  slug: string;
+  name?: string;
+  summary?: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
+  simplexUrl?: string;
+  websiteUrl?: string;
+  lightningAddress?: string;
+  crewCode?: string;
+  archived?: boolean;
+};
+
+export type PromoZapTargetType = "event" | "crew";
+
+export type PromoZapSummaryDto = {
+  targetType: PromoZapTargetType;
+  slug: string;
+  receipts: number;
+  totalMsats: number;
+  score: number;
+  recentReceipts: Array<{
+    id: string;
+    amountMsats: number;
+    createdAt: Date;
+  }>;
 };

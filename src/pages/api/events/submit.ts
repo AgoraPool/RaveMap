@@ -3,8 +3,7 @@ import { AppError } from "../../../lib/server/errors";
 import { jsonOk, withApiErrorHandling } from "../../../lib/server/http";
 import { getNostrEventRepository } from "../../../lib/server/nostr-repository";
 import type { NostrEvent } from "../../../lib/server/nostr-types";
-import { enforceCommentRateLimit } from "../../../lib/server/rate-limit";
-import { getClientIp, hashIpAddress } from "../../../lib/server/request";
+import { enforceRequestRateLimit } from "../../../lib/server/api-security";
 import { publicSubmitEventSchema } from "../../../lib/server/schemas";
 import { slugify, randomSlugSuffix } from "../../../lib/server/slug";
 import { parseJsonBody } from "../../../lib/server/validation";
@@ -24,28 +23,16 @@ async function createUniquePublicSlug(title: string, startsAt: Date): Promise<st
   return `${base}-${randomSlugSuffix(10)}`;
 }
 
-function rateLimitResponse(retryAfterSeconds: number | undefined): Response {
-  return new Response(
-    JSON.stringify({
-      ok: false,
-      error: {
-        code: "SUBMIT_RATE_LIMITED",
-        message: "Příliš mnoho odeslání. Zkus to později.",
-      },
-    }),
-    {
-      status: 429,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "no-store",
-        "Retry-After": String(retryAfterSeconds ?? 60),
-      },
-    },
-  );
-}
-
 export const POST: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
+    const limited = await enforceRequestRateLimit(request, "public-submit", {
+      limit: 3,
+      windowMs: 30 * 60 * 1000,
+      code: "SUBMIT_RATE_LIMITED",
+      message: "Příliš mnoho odeslání. Zkus to později.",
+    });
+    if (limited) return limited;
+
     const input = await parseJsonBody(request, publicSubmitEventSchema);
     const startsAt = new Date(input.startsAt);
     const endAt = input.endAt ? new Date(input.endAt) : undefined;
@@ -63,12 +50,6 @@ export const POST: APIRoute = async ({ request }) =>
         status: 400,
         expose: true,
       });
-    }
-
-    const clientIp = getClientIp(request);
-    const rateState = await enforceCommentRateLimit("public-submit", hashIpAddress(clientIp));
-    if (rateState.blocked) {
-      return rateLimitResponse(rateState.retryAfterSeconds);
     }
 
     const repository = getNostrEventRepository();

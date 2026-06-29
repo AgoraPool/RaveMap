@@ -2,6 +2,8 @@
 export const prerender = false;
 
 import Layout from "../layouts/Layout.astro";
+
+const cspNonce = Astro.locals.cspNonce;
 ---
 
 <Layout bodyClass="submit-body">
@@ -104,7 +106,7 @@ import Layout from "../layouts/Layout.astro";
           <div class="field-row">
             <label>
               <span>Kód k odemknutí</span>
-              <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" />
+              <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" autocomplete="new-password" />
             </label>
             <label>
               <span>Tajná lokace</span>
@@ -142,7 +144,7 @@ import Layout from "../layouts/Layout.astro";
   </main>
 </Layout>
 
-<script>
+<script nonce={cspNonce}>
   const form = document.getElementById("submit-form");
   const statusEl = document.getElementById("submit-status");
   const modeEl = document.getElementById("submit-mode");

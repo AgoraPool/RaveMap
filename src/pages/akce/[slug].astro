@@ -7,6 +7,7 @@ import { getNostrEventRepository } from "../../lib/server/nostr-repository";
 import { PUBLIC_EVENT_KIND } from "../../lib/server/nostr-types";
 
 const slug = Astro.params.slug?.trim().toLowerCase() ?? "";
+const cspNonce = Astro.locals.cspNonce;
 const slugValid = /^[a-z0-9-]{3,120}$/.test(slug);
 const repository = getNostrEventRepository();
 
@@ -14,6 +15,7 @@ const pageData = slugValid
   ? await repository.getPublishedEventPageData(slug)
   : { event: null, comments: [], rsvp: { accepted: 0, tentative: 0, signals: 0 }, rsvpEntries: [] };
 const { event, comments, rsvp, rsvpEntries } = pageData;
+const eventPromo = event?.crewLightningAddress ? await repository.getPromoZapSummary("event", event.slug).catch(() => null) : null;
 if (!event) {
   Astro.response.status = 404;
 }
@@ -205,6 +207,26 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
                     </div>
                   )
                 }
+
+                {
+                  event.crewSlug && event.crewName && (
+                    <div class="crew-contact">
+                      <div>
+                        <span>Crew</span>
+                        <strong>{event.crewName}</strong>
+                        {eventPromo && eventPromo.score > 0 ? <small>{eventPromo.receipts} promo zapů za posledních 14 dní</small> : null}
+                      </div>
+                      <div class="crew-contact-actions">
+                        <a href={`/crew/${event.crewSlug}`}>Profil crew</a>
+                        {
+                          event.crewLightningAddress ? (
+                            <button type="button" data-zap-button data-target-type="event" data-slug={event.slug}>Zap promo</button>
+                          ) : null
+                        }
+                      </div>
+                    </div>
+                  )
+                }
               </div>
             </div>
 
@@ -247,6 +269,7 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
                       class="secret-input"
                       name="unlockCode"
                       type="password"
+                      autocomplete="current-password"
                       placeholder="TAJNÝ KÓD"
                       minlength="8"
                       maxlength="128"
@@ -404,7 +427,7 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
   </div>
 </Layout>
 
-<script>
+<script nonce={cspNonce}>
   const form = document.getElementById("unlock-form");
   if (form instanceof HTMLFormElement) {
     const input = document.getElementById("unlockCode");
@@ -490,7 +513,49 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
   }
 </script>
 
-<script>
+<script nonce={cspNonce}>
+  async function requestPromoInvoice(button) {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const amount = Number(window.prompt("Kolik sats poslat na promo?", "210"));
+    if (!Number.isInteger(amount) || amount < 21) return;
+
+    const originalText = button.textContent || "Zap promo";
+    button.disabled = true;
+    button.textContent = "Vytvářím fakturu";
+
+    try {
+      const response = await fetch("/api/zaps/promo-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetType: button.dataset.targetType,
+          slug: button.dataset.slug,
+          amountSats: amount,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || "Faktura není dostupná");
+      }
+
+      await navigator.clipboard.writeText(payload.data.invoice);
+      button.textContent = "Faktura zkopírována";
+    } catch (error) {
+      button.textContent = error instanceof Error ? error.message : "Chyba";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = false;
+        button.textContent = originalText;
+      }, 2400);
+    }
+  }
+
+  for (const button of document.querySelectorAll("[data-zap-button]")) {
+    button.addEventListener("click", () => requestPromoInvoice(button));
+  }
+</script>
+
+<script nonce={cspNonce}>
   const commentsCard = document.getElementById("comments");
   const commentForm = document.getElementById("comment-form");
   const commentList = document.getElementById("comment-list");
@@ -1110,7 +1175,8 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     color: #c00;
   }
 
-  .simplex-contact {
+  .simplex-contact,
+  .crew-contact {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1121,24 +1187,45 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     max-width: 620px;
   }
 
-  .simplex-contact div {
+  .crew-contact {
+    background: #fff6df;
+  }
+
+  .simplex-contact div,
+  .crew-contact div {
     display: grid;
     gap: 4px;
     min-width: 0;
   }
 
-  .simplex-contact span {
+  .simplex-contact span,
+  .crew-contact span {
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
     font-weight: 900;
   }
 
-  .simplex-contact strong {
+  .simplex-contact strong,
+  .crew-contact strong {
     overflow-wrap: anywhere;
   }
 
-  .simplex-contact a {
+  .crew-contact small {
+    color: rgba(0, 0, 0, 0.68);
+    font-weight: 700;
+  }
+
+  .crew-contact-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .simplex-contact a,
+  .crew-contact a,
+  .crew-contact button {
     flex: 0 0 auto;
     border: 2px solid #000;
     background: #000;
@@ -1146,9 +1233,13 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     padding: 10px 12px;
     text-decoration: none;
     font-weight: 900;
+    font: inherit;
+    cursor: pointer;
   }
 
-  .simplex-contact a:hover {
+  .simplex-contact a:hover,
+  .crew-contact a:hover,
+  .crew-contact button:hover {
     background: #c00;
     color: #000;
   }
@@ -1701,13 +1792,16 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     .rsvp-actions button,
     .nostr-actions a,
     .nostr-actions button,
-    .simplex-contact a {
+    .simplex-contact a,
+    .crew-contact a,
+    .crew-contact button {
       width: 100%;
       box-sizing: border-box;
       text-align: center;
     }
 
-    .simplex-contact {
+    .simplex-contact,
+    .crew-contact {
       flex-direction: column;
       align-items: stretch;
       border-width: 2px;

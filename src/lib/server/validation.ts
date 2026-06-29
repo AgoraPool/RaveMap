@@ -24,7 +24,10 @@ export async function parseJsonBody<TSchema extends z.ZodTypeAny>(
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    throw new AppError("Neplatné tělo požadavku", {
+    const firstIssue = parsed.error.issues[0];
+    const path = firstIssue?.path.length ? `${firstIssue.path.join(".")}: ` : "";
+    const message = firstIssue ? `Neplatné tělo požadavku: ${path}${firstIssue.message}` : "Neplatné tělo požadavku";
+    throw new AppError(message, {
       code: "VALIDATION_ERROR",
       status: 400,
       expose: true,

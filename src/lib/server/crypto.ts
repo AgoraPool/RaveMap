@@ -50,10 +50,18 @@ export type DraftBundle = {
     galleryImageUrls?: string[];
     accessType?: "public" | "gated";
     origin?: "studio" | "admin" | "public" | "import";
+    crewSlug?: string;
     createdAt: string;
   };
   codeHash?: string;
   secret?: SecretPayload;
+};
+
+export type CrewAccountBundle = {
+  slug: string;
+  codeHash: string;
+  archived?: boolean;
+  updatedAt: string;
 };
 
 type SecretPayloadContext = {
@@ -77,11 +85,11 @@ function getEncryptionKey(): Buffer {
   return key;
 }
 
-export async function hashUnlockCode(code: string): Promise<string> {
-  const normalizedCode = code.trim();
-  if (normalizedCode.length < 8 || normalizedCode.length > 128) {
-    throw new AppError("Kód k odemknutí nesplňuje bezpečnostní pravidla", {
-      code: "INVALID_UNLOCK_CODE",
+async function hashSecretValue(value: string, minLength: number, maxLength: number, errorMessage: string): Promise<string> {
+  const normalizedCode = value.trim();
+  if (normalizedCode.length < minLength || normalizedCode.length > maxLength) {
+    throw new AppError(errorMessage, {
+      code: "INVALID_SECRET",
       status: 400,
       expose: true,
     });
@@ -105,7 +113,20 @@ export async function hashUnlockCode(code: string): Promise<string> {
   ].join("$");
 }
 
-export async function verifyUnlockCode(code: string, storedHash: string): Promise<boolean> {
+export async function hashUnlockCode(code: string): Promise<string> {
+  return hashSecretValue(code, 8, 128, "Kód k odemknutí nesplňuje bezpečnostní pravidla");
+}
+
+export async function hashCrewCode(code: string): Promise<string> {
+  return hashSecretValue(code, 12, 160, "Crew kód musí mít alespoň 12 znaků");
+}
+
+export async function verifyCrewCode(code: string, storedHash: string): Promise<boolean> {
+  return verifyStoredSecret(code, storedHash);
+}
+
+async function verifyStoredSecret(code: string, storedHash: string): Promise<boolean> {
+  const normalizedCode = code.trim();
   const parts = storedHash.split("$");
   if (parts.length !== 6 || parts[0] !== HASH_PREFIX) {
     throw new AppError("Stored hash format is invalid", {
@@ -128,7 +149,7 @@ export async function verifyUnlockCode(code: string, storedHash: string): Promis
 
   const salt = Buffer.from(saltB64, "base64");
   const expectedHash = Buffer.from(hashB64, "base64");
-  const computedHash = (await scrypt(code.trim(), salt, expectedHash.length, {
+  const computedHash = (await scrypt(normalizedCode, salt, expectedHash.length, {
     N: n,
     r,
     p,
@@ -140,6 +161,10 @@ export async function verifyUnlockCode(code: string, storedHash: string): Promis
   }
 
   return timingSafeEqual(computedHash, expectedHash);
+}
+
+export async function verifyUnlockCode(code: string, storedHash: string): Promise<boolean> {
+  return verifyStoredSecret(code, storedHash);
 }
 
 function encryptJsonPayload(payload: unknown, context: SecretPayloadContext): string {
@@ -225,4 +250,12 @@ export function encryptDraftBundle(payload: DraftBundle, context: SecretPayloadC
 
 export function decryptDraftBundle(serialized: string, context: SecretPayloadContext): DraftBundle {
   return decryptJsonPayload<DraftBundle>(serialized, context);
+}
+
+export function encryptCrewAccountBundle(payload: CrewAccountBundle, context: SecretPayloadContext): string {
+  return encryptJsonPayload(payload, context);
+}
+
+export function decryptCrewAccountBundle(serialized: string, context: SecretPayloadContext): CrewAccountBundle {
+  return decryptJsonPayload<CrewAccountBundle>(serialized, context);
 }

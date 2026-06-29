@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { timingSafeEqual, createHash } from "node:crypto";
+import { enforceRequestRateLimit } from "../../../../lib/server/api-security";
 import { AppError } from "../../../../lib/server/errors";
 import { getEnv } from "../../../../lib/server/env";
 import { syncJiriPetrakEvents } from "../../../../lib/server/importers/jiripetrak";
@@ -31,6 +32,14 @@ function requireMirrorSecret(request: Request): void {
 
 export const POST: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
+    const limited = await enforceRequestRateLimit(request, "mirror-sync", {
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+      code: "MIRROR_SYNC_RATE_LIMITED",
+      message: "Příliš mnoho požadavků na synchronizaci mirroru. Zkus to později.",
+    });
+    if (limited) return limited;
+
     requireMirrorSecret(request);
     return jsonOk(await syncJiriPetrakEvents());
   });

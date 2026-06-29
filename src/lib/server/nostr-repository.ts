@@ -1,18 +1,25 @@
 import { verifyEvent } from "nostr-tools";
 import {
   decryptDraftBundle,
+  decryptCrewAccountBundle,
   decryptSecretBundle,
+  encryptCrewAccountBundle,
   encryptDraftBundle,
   encryptSecretBundle,
+  hashCrewCode,
   hashUnlockCode,
+  verifyCrewCode,
   type DraftBundle,
   type SecretPayload,
 } from "./crypto";
 import { AppError } from "./errors";
 import { getEnv } from "./env";
 import { getAppManagedSigner, type NostrSigner } from "./nostr-signer";
+import { safeFetchJson, validateSafeUrl } from "./safe-fetch";
 import {
   COMMENT_EVENT_KIND,
+  CREW_ACCOUNT_KIND,
+  CREW_PROFILE_KIND,
   DELETE_EVENT_KIND,
   DRAFT_EVENT_KIND,
   PUBLIC_EVENT_KIND,
@@ -22,6 +29,8 @@ import {
   type CreateCommentCommand,
   type CreateEventCommand,
   type CreateRsvpCommand,
+  type CrewProfileDto,
+  type CrewSessionDto,
   type EventCommentDto,
   type EventOrigin,
   type EventRsvpEntryDto,
@@ -31,12 +40,17 @@ import {
   type NostrUnsignedEvent,
   type PublicEventDto,
   type PublicSubmitEventCommand,
+  type PromoZapSummaryDto,
+  type PromoZapTargetType,
   RSVP_EVENT_KIND,
   RSVP_SIGNALS,
   type RelayReadResult,
   type RelayWriteResult,
   type RsvpSignal,
   type RsvpStatus,
+  type UpsertCrewProfileCommand,
+  ZAP_RECEIPT_KIND,
+  ZAP_REQUEST_KIND,
 } from "./nostr-types";
 
 type RelayRequestResult = {
@@ -118,6 +132,10 @@ function nostrCoordinate(kind: number, pubkey: string, slug: string): string {
 
 function eventCoordinate(pubkey: string, slug: string): string {
   return nostrCoordinate(PUBLIC_EVENT_KIND, pubkey, slug);
+}
+
+function crewCoordinate(pubkey: string, slug: string): string {
+  return nostrCoordinate(CREW_PROFILE_KIND, pubkey, slug);
 }
 
 function parseDateFromSeconds(value: string | undefined): Date | null {
@@ -221,6 +239,69 @@ function eventOriginFromTag(value: string | undefined, source: CreateEventComman
   return source ? "import" : undefined;
 }
 
+function parseCrewProfile(event: NostrEvent): CrewProfileDto | null {
+  const slug = tagValue(event, "d");
+  if (!slug) {
+    return null;
+  }
+
+  return {
+    id: event.id,
+    slug,
+    name: tagValue(event, "name") || slug,
+    summary: tagValue(event, "summary") || event.content.trim(),
+    avatarUrl: tagValue(event, "image"),
+    bannerUrl: tagValue(event, "banner"),
+    simplexUrl: tagValue(event, "simplex"),
+    websiteUrl: tagValue(event, "website"),
+    lightningAddress: tagValue(event, "lud16"),
+    archived: tagValue(event, "archived") === "true",
+    createdAt: parseDateFromSeconds(tagValue(event, "created")) ?? new Date(event.created_at * 1000),
+    updatedAt: new Date(event.created_at * 1000),
+  };
+}
+
+function crewProfileTemplate(input: UpsertCrewProfileCommand, createdAt: Date): NostrUnsignedEvent {
+  const name = input.name?.trim() || input.slug;
+  const summary = input.summary?.trim() || "";
+  const tags: string[][] = [
+    ["d", input.slug],
+    ["name", name],
+    ["created", String(Math.floor(createdAt.getTime() / 1000))],
+    ["client", "RaveMap"],
+  ];
+
+  if (summary) {
+    tags.push(["summary", summary]);
+  }
+  if (input.avatarUrl) {
+    tags.push(["image", input.avatarUrl]);
+  }
+  if (input.bannerUrl) {
+    tags.push(["banner", input.bannerUrl]);
+  }
+  if (input.simplexUrl) {
+    tags.push(["simplex", input.simplexUrl]);
+  }
+  if (input.websiteUrl) {
+    tags.push(["website", input.websiteUrl]);
+    tags.push(["r", input.websiteUrl]);
+  }
+  if (input.lightningAddress) {
+    tags.push(["lud16", input.lightningAddress]);
+  }
+  if (input.archived) {
+    tags.push(["archived", "true"]);
+  }
+
+  return {
+    kind: CREW_PROFILE_KIND,
+    created_at: nowSeconds(),
+    tags,
+    content: summary,
+  };
+}
+
 function publicFieldsFromCommand(input: CreateEventCommand, createdAt = new Date().toISOString()): DraftBundle["public"] {
   return {
     slug: input.slug,
@@ -241,6 +322,7 @@ function publicFieldsFromCommand(input: CreateEventCommand, createdAt = new Date
     galleryImageUrls: input.galleryImageUrls ?? [],
     accessType: input.accessType,
     origin: input.origin,
+    crewSlug: input.crewSlug,
     createdAt,
   };
 }
@@ -267,6 +349,7 @@ function publicDtoFromFields(fields: DraftBundle["public"], id: string, authorPu
     galleryImageUrls: fields.galleryImageUrls ?? [],
     accessType: fields.accessType ?? "gated",
     origin: fields.origin,
+    crewSlug: fields.crewSlug,
     createdAt: new Date(fields.createdAt),
   };
 }
@@ -292,6 +375,7 @@ function commandFromFields(fields: DraftBundle["public"], isPublished: boolean):
     accessType: fields.accessType ?? "gated",
     isPublished,
     origin: fields.origin,
+    crewSlug: fields.crewSlug,
   };
 }
 
@@ -343,6 +427,7 @@ function parsePublicEvent(event: NostrEvent): PublicEventDto | null {
           }
         : undefined,
     ),
+    crewSlug: tagValue(event, "crew"),
     createdAt: new Date(event.created_at * 1000),
   };
 }
@@ -398,6 +483,10 @@ function publicEventTemplate(input: CreateEventCommand): NostrUnsignedEvent {
 
   if (input.origin) {
     tags.push(["origin", input.origin]);
+  }
+
+  if (input.crewSlug) {
+    tags.push(["crew", input.crewSlug]);
   }
 
   for (const genre of input.genres ?? []) {
@@ -586,6 +675,60 @@ function relayPublish(relay: string, event: NostrEvent, timeoutMs: number): Prom
   });
 }
 
+function lightningAddressMetadataUrl(address: string): string {
+  const [name, domain] = address.split("@");
+  if (!name || !domain) {
+    throw new AppError("Lightning adresa není platná", {
+      code: "LIGHTNING_ADDRESS_INVALID",
+      status: 400,
+      expose: true,
+    });
+  }
+
+  return `https://${domain}/.well-known/lnurlp/${encodeURIComponent(name)}`;
+}
+
+function parseZapReceipt(event: NostrEvent, targetCoordinate: string): { id: string; amountMsats: number; createdAt: Date } | null {
+  if (event.kind !== ZAP_RECEIPT_KIND || !tagValues(event, "a").includes(targetCoordinate)) {
+    return null;
+  }
+
+  const description = tagValue(event, "description");
+  if (!description) {
+    return null;
+  }
+
+  let request: NostrEvent;
+  try {
+    request = JSON.parse(description) as NostrEvent;
+  } catch {
+    return null;
+  }
+
+  const amountMsats = Number(tagValue(request, "amount"));
+  if (
+    request.kind !== ZAP_REQUEST_KIND ||
+    !verifyEvent(request) ||
+    !tagValues(request, "a").includes(targetCoordinate) ||
+    !Number.isFinite(amountMsats) ||
+    amountMsats <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    id: event.id,
+    amountMsats,
+    createdAt: new Date(event.created_at * 1000),
+  };
+}
+
+function promoScore(amountMsats: number, createdAt: Date): number {
+  const ageDays = Math.max(0, (Date.now() - createdAt.getTime()) / 86_400_000);
+  const decay = Math.max(0, 1 - ageDays / 14);
+  return (amountMsats / 1000) * decay;
+}
+
 export class NostrEventRepository {
   private readonly relays: string[];
   private readonly readTimeoutMs: number;
@@ -711,6 +854,26 @@ export class NostrEventRepository {
     return bySlug;
   }
 
+  private async enrichEventsWithCrews<T extends PublicEventDto>(events: T[]): Promise<T[]> {
+    const crewSlugs = [...new Set(events.map((event) => event.crewSlug).filter((slug): slug is string => Boolean(slug)))];
+    if (crewSlugs.length === 0) {
+      return events;
+    }
+
+    const crews = await this.listCrewProfiles({ includeArchived: true }).catch(() => []);
+    const crewBySlug = new Map(crews.map((crew) => [crew.slug, crew]));
+    return events.map((event) => {
+      const crew = event.crewSlug ? crewBySlug.get(event.crewSlug) : undefined;
+      return crew
+        ? {
+            ...event,
+            crewName: crew.name,
+            crewLightningAddress: crew.lightningAddress,
+          }
+        : event;
+    });
+  }
+
   private latestPublishedByD(events: NostrEvent[]): Map<string, NostrEvent> {
     const bySlug = new Map<string, NostrEvent>();
 
@@ -753,6 +916,169 @@ export class NostrEventRepository {
     return new Set(this.cacheSet(cacheKey, tombstones, EVENT_READ_CACHE_TTL_MS));
   }
 
+  async listCrewProfiles(options: { includeArchived?: boolean } = {}): Promise<CrewProfileDto[]> {
+    const cacheKey = `crews:${options.includeArchived ? "all" : "active"}`;
+    const cached = this.cacheGet<CrewProfileDto[]>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const events = await this.fetchEvents([
+      {
+        authors: [this.pubkey],
+        kinds: [CREW_PROFILE_KIND],
+        limit: 500,
+      },
+    ]);
+
+    const crews = [...this.latestByD(events).values()]
+      .map(parseCrewProfile)
+      .filter((crew): crew is CrewProfileDto => Boolean(crew && (options.includeArchived || !crew.archived)))
+      .sort((left, right) => left.name.localeCompare(right.name, "cs-CZ"));
+
+    return this.cacheSet(cacheKey, crews, LIST_READ_CACHE_TTL_MS);
+  }
+
+  async getCrewProfile(slug: string, options: { includeArchived?: boolean } = {}): Promise<CrewProfileDto | null> {
+    const crews = await this.listCrewProfiles({ includeArchived: true });
+    const crew = crews.find((item) => item.slug === slug) ?? null;
+    if (!crew || (!options.includeArchived && crew.archived)) {
+      return null;
+    }
+    return crew;
+  }
+
+  private async getCrewAccount(slug: string): Promise<{ slug: string; codeHash: string; archived?: boolean } | null> {
+    const events = await this.fetchEvents([
+      {
+        authors: [this.pubkey],
+        kinds: [CREW_ACCOUNT_KIND],
+        "#d": [slug],
+        limit: 20,
+      },
+    ]);
+    const latest = this.latestByD(events).get(slug);
+    if (!latest) {
+      return null;
+    }
+
+    return decryptCrewAccountBundle(latest.content, {
+      coordinate: nostrCoordinate(CREW_ACCOUNT_KIND, this.pubkey, slug),
+    });
+  }
+
+  async authenticateCrew(slug: string, secret: string): Promise<CrewSessionDto> {
+    const [profile, account] = await Promise.all([this.getCrewProfile(slug), this.getCrewAccount(slug)]);
+    if (!profile || !account || account.archived || !(await verifyCrewCode(secret, account.codeHash))) {
+      throw new AppError("Crew přihlašovací údaje nejsou platné", {
+        code: "UNAUTHORIZED",
+        status: 401,
+        expose: true,
+      });
+    }
+
+    return {
+      slug: profile.slug,
+      name: profile.name,
+      lightningAddress: profile.lightningAddress,
+    };
+  }
+
+  private async writeCrewAccount(slug: string, crewCode: string, archived = false): Promise<RelayWriteResult[]> {
+    const accountEvent = await this.signer.sign({
+      kind: CREW_ACCOUNT_KIND,
+      created_at: nowSeconds(),
+      tags: [
+        ["d", slug],
+        ["client", "RaveMap"],
+        ...(archived ? [["archived", "true"]] : []),
+      ],
+      content: encryptCrewAccountBundle(
+        {
+          slug,
+          codeHash: await hashCrewCode(crewCode),
+          archived,
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          coordinate: nostrCoordinate(CREW_ACCOUNT_KIND, this.pubkey, slug),
+        },
+      ),
+    });
+
+    return this.publish(accountEvent);
+  }
+
+  async upsertCrewProfile(input: UpsertCrewProfileCommand): Promise<{ id: string; slug: string; writes: RelayWriteResult[] }> {
+    const existing = await this.getCrewProfile(input.slug, { includeArchived: true });
+    if (!existing && !input.crewCode) {
+      throw new AppError("Nová crew potřebuje crew kód pro Studio přístup", {
+        code: "CREW_CODE_REQUIRED",
+        status: 400,
+        expose: true,
+      });
+    }
+
+    const profileEvent = await this.signer.sign(crewProfileTemplate(input, existing?.createdAt ?? new Date()));
+    const profileWrites = await this.publish(profileEvent);
+    const accountWrites = input.crewCode ? await this.writeCrewAccount(input.slug, input.crewCode, Boolean(input.archived)) : [];
+    return {
+      id: profileEvent.id,
+      slug: input.slug,
+      writes: [...profileWrites, ...accountWrites],
+    };
+  }
+
+  async rotateCrewCode(slug: string, crewCode: string): Promise<{ slug: string; writes: RelayWriteResult[] }> {
+    const crew = await this.getCrewProfile(slug, { includeArchived: true });
+    if (!crew) {
+      throw new AppError("Crew nenalezena", {
+        code: "CREW_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+
+    return {
+      slug,
+      writes: await this.writeCrewAccount(slug, crewCode, crew.archived),
+    };
+  }
+
+  async archiveCrew(slug: string): Promise<{ id: string; slug: string; writes: RelayWriteResult[] }> {
+    const crew = await this.getCrewProfile(slug, { includeArchived: true });
+    if (!crew) {
+      throw new AppError("Crew nenalezena", {
+        code: "CREW_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+
+    const profileEvent = await this.signer.sign(
+      crewProfileTemplate(
+        {
+          slug: crew.slug,
+          name: crew.name,
+          summary: crew.summary,
+          avatarUrl: crew.avatarUrl,
+          bannerUrl: crew.bannerUrl,
+          simplexUrl: crew.simplexUrl,
+          websiteUrl: crew.websiteUrl,
+          lightningAddress: crew.lightningAddress,
+          archived: true,
+        },
+        crew.createdAt,
+      ),
+    );
+    const profileWrites = await this.publish(profileEvent);
+    return {
+      id: profileEvent.id,
+      slug,
+      writes: profileWrites,
+    };
+  }
+
   async listPublishedEvents(limit?: number): Promise<PublicEventDto[]> {
     const cacheKey = `published:${limit ?? "all"}`;
     const cached = this.cacheGet<PublicEventDto[]>(cacheKey);
@@ -782,7 +1108,7 @@ export class NostrEventRepository {
       .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime())
       .slice(0, limit);
 
-    return this.cacheSet(cacheKey, published, LIST_READ_CACHE_TTL_MS);
+    return this.cacheSet(cacheKey, await this.enrichEventsWithCrews(published), LIST_READ_CACHE_TTL_MS);
   }
 
   async getPublishedEvent(slug: string): Promise<PublicEventDto | null> {
@@ -814,7 +1140,9 @@ export class NostrEventRepository {
     }
 
     const latest = this.latestPublishedByD(events).get(slug);
-    return this.cacheSet(cacheKey, latest ? parsePublicEvent(latest) : null, EVENT_READ_CACHE_TTL_MS);
+    const parsed = latest ? parsePublicEvent(latest) : null;
+    const enriched = parsed ? (await this.enrichEventsWithCrews([parsed]))[0] : null;
+    return this.cacheSet(cacheKey, enriched, EVENT_READ_CACHE_TTL_MS);
   }
 
   private async listCommentsForEvent(event: PublicEventDto): Promise<EventCommentDto[]> {
@@ -1010,6 +1338,188 @@ export class NostrEventRepository {
     ]);
 
     return { event, comments, rsvp, rsvpEntries };
+  }
+
+  private async getPromoTarget(
+    targetType: PromoZapTargetType,
+    slug: string,
+  ): Promise<{ coordinate: string; lightningAddress: string; name: string }> {
+    if (targetType === "crew") {
+      const crew = await this.getCrewProfile(slug);
+      if (!crew) {
+        throw new AppError("Crew nenalezena", {
+          code: "CREW_NOT_FOUND",
+          status: 404,
+          expose: true,
+        });
+      }
+      if (!crew.lightningAddress) {
+        throw new AppError("Crew nemá nastavenou Lightning adresu", {
+          code: "CREW_ZAP_UNAVAILABLE",
+          status: 409,
+          expose: true,
+        });
+      }
+      return {
+        coordinate: crewCoordinate(this.pubkey, crew.slug),
+        lightningAddress: crew.lightningAddress,
+        name: crew.name,
+      };
+    }
+
+    const event = await this.getPublishedEvent(slug);
+    if (!event) {
+      throw new AppError("Akce nenalezena", {
+        code: "EVENT_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+    if (!event.crewSlug || !event.crewLightningAddress) {
+      throw new AppError("Akce nemá crew s Lightning adresou", {
+        code: "EVENT_ZAP_UNAVAILABLE",
+        status: 409,
+        expose: true,
+      });
+    }
+
+    return {
+      coordinate: eventCoordinate(event.authorPubkey, event.slug),
+      lightningAddress: event.crewLightningAddress,
+      name: event.title,
+    };
+  }
+
+  async createPromoInvoice(input: {
+    targetType: PromoZapTargetType;
+    slug: string;
+    amountSats: number;
+    comment?: string;
+  }): Promise<{ invoice: string; targetName: string; callback: string; zapRequest: NostrEvent }> {
+    const target = await this.getPromoTarget(input.targetType, input.slug);
+    const msats = input.amountSats * 1000;
+    const metadataResult = await safeFetchJson<{
+      callback?: string;
+      minSendable?: number;
+      maxSendable?: number;
+      allowsNostr?: boolean;
+      nostrPubkey?: string;
+    }>(lightningAddressMetadataUrl(target.lightningAddress), {
+      timeoutMs: 5000,
+      maxBytes: 64 * 1024,
+    });
+    const metadataResponse = metadataResult.response;
+    if (!metadataResponse.ok) {
+      throw new AppError("Lightning adresa neodpovídá", {
+        code: "LIGHTNING_ADDRESS_UNAVAILABLE",
+        status: 502,
+        expose: true,
+      });
+    }
+
+    const metadata = metadataResult.json;
+    if (
+      !metadata.callback ||
+      !metadata.allowsNostr ||
+      !metadata.nostrPubkey ||
+      !/^[0-9a-f]{64}$/.test(metadata.nostrPubkey) ||
+      msats < Number(metadata.minSendable ?? 0) ||
+      msats > Number(metadata.maxSendable ?? Number.MAX_SAFE_INTEGER)
+    ) {
+      throw new AppError("Lightning adresa nepodporuje ověřitelné Nostr zaps pro promo", {
+        code: "NOSTR_ZAP_UNAVAILABLE",
+        status: 409,
+        expose: true,
+      });
+    }
+
+    const zapRequest = await this.signer.sign({
+      kind: ZAP_REQUEST_KIND,
+      created_at: nowSeconds(),
+      tags: [
+        ["relays", ...this.relays.slice(0, 5)],
+        ["amount", String(msats)],
+        ["p", metadata.nostrPubkey],
+        ["a", target.coordinate],
+        ["client", "RaveMap"],
+        ["promo", "true"],
+      ],
+      content: input.comment?.trim() ?? "",
+    });
+    const callbackUrl = validateSafeUrl(metadata.callback, { requireHttps: true });
+    callbackUrl.searchParams.set("amount", String(msats));
+    callbackUrl.searchParams.set("nostr", JSON.stringify(zapRequest));
+    if (input.comment?.trim()) {
+      callbackUrl.searchParams.set("comment", input.comment.trim());
+    }
+
+    const invoiceResult = await safeFetchJson<{ pr?: string; status?: string; reason?: string }>(callbackUrl, {
+      timeoutMs: 5000,
+      maxBytes: 64 * 1024,
+    });
+    const invoiceResponse = invoiceResult.response;
+    if (!invoiceResponse.ok) {
+      throw new AppError("Lightning fakturu se nepodařilo vytvořit", {
+        code: "LIGHTNING_INVOICE_FAILED",
+        status: 502,
+        expose: true,
+      });
+    }
+    const invoice = invoiceResult.json;
+    if (!invoice.pr || invoice.status === "ERROR") {
+      throw new AppError(invoice.reason || "Lightning faktura není dostupná", {
+        code: "LIGHTNING_INVOICE_FAILED",
+        status: 502,
+        expose: true,
+      });
+    }
+
+    return {
+      invoice: invoice.pr,
+      targetName: target.name,
+      callback: metadata.callback,
+      zapRequest,
+    };
+  }
+
+  async getPromoZapSummary(targetType: PromoZapTargetType, slug: string): Promise<PromoZapSummaryDto> {
+    const target = await this.getPromoTarget(targetType, slug);
+    const events = await this.fetchEvents([
+      {
+        kinds: [ZAP_RECEIPT_KIND],
+        "#a": [target.coordinate],
+        limit: 300,
+      },
+    ]);
+    const receipts = events
+      .map((event) => parseZapReceipt(event, target.coordinate))
+      .filter((receipt): receipt is { id: string; amountMsats: number; createdAt: Date } => Boolean(receipt))
+      .filter((receipt) => Date.now() - receipt.createdAt.getTime() <= 14 * 86_400_000)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+
+    return {
+      targetType,
+      slug,
+      receipts: receipts.length,
+      totalMsats: receipts.reduce((sum, receipt) => sum + receipt.amountMsats, 0),
+      score: Math.round(receipts.reduce((sum, receipt) => sum + promoScore(receipt.amountMsats, receipt.createdAt), 0)),
+      recentReceipts: receipts.slice(0, 10),
+    };
+  }
+
+  async listPromotedEvents(limit = 6): Promise<Array<PublicEventDto & { promo: PromoZapSummaryDto }>> {
+    const events = (await this.listPublishedEvents(120)).filter((event) => event.startsAt.getTime() >= Date.now() && event.crewSlug);
+    const promoted = await Promise.all(
+      events.map(async (event) => {
+        const promo = await this.getPromoZapSummary("event", event.slug).catch(() => null);
+        return promo && promo.score > 0 ? { ...event, promo } : null;
+      }),
+    );
+
+    return promoted
+      .filter((event): event is PublicEventDto & { promo: PromoZapSummaryDto } => Boolean(event))
+      .sort((left, right) => right.promo.score - left.promo.score)
+      .slice(0, limit);
   }
 
   async createAnonymousComment(input: CreateCommentCommand): Promise<{ id: string; writes: RelayWriteResult[] }> {
@@ -1301,16 +1811,19 @@ export class NostrEventRepository {
       },
     ]);
 
-    const publicEvents = [...this.latestByD(events.filter((event) => event.kind === PUBLIC_EVENT_KIND)).values()]
+    const publicEvents = await this.enrichEventsWithCrews(
+      [...this.latestByD(events.filter((event) => event.kind === PUBLIC_EVENT_KIND)).values()]
       .map(parsePublicEvent)
       .filter((event): event is PublicEventDto => Boolean(event && !tombstones.has(event.slug)))
       .map((event) => ({
         ...event,
         isPublished: true,
-      }));
+      })),
+    );
     const publishedSlugs = new Set(publicEvents.map((event) => event.slug));
 
-    const drafts = [...this.latestByD(events.filter((event) => event.kind === DRAFT_EVENT_KIND)).values()]
+    const drafts = await this.enrichEventsWithCrews(
+      [...this.latestByD(events.filter((event) => event.kind === DRAFT_EVENT_KIND)).values()]
       .map((event): AdminEventDto | null => {
         const slug = tagValue(event, "d");
         if (!slug || tombstones.has(slug) || publishedSlugs.has(slug)) {
@@ -1325,7 +1838,8 @@ export class NostrEventRepository {
           isPublished: false,
         };
       })
-      .filter((event): event is AdminEventDto => Boolean(event));
+      .filter((event): event is AdminEventDto => Boolean(event)),
+    );
 
     return [...publicEvents, ...drafts].sort((left, right) => {
       const startsAtDiff = right.startsAt.getTime() - left.startsAt.getTime();
@@ -1333,8 +1847,8 @@ export class NostrEventRepository {
     });
   }
 
-  async listStudioEvents(): Promise<AdminEventDto[]> {
-    return (await this.listAdminEvents()).filter((event) => event.origin === "studio");
+  async listStudioEvents(crewSlug?: string): Promise<AdminEventDto[]> {
+    return (await this.listAdminEvents()).filter((event) => event.origin === "studio" && (!crewSlug || event.crewSlug === crewSlug));
   }
 
   private async getLatestDraftBundle(slug: string): Promise<{ event: NostrEvent; draft: DraftBundle } | null> {
@@ -1359,12 +1873,15 @@ export class NostrEventRepository {
     };
   }
 
-  private async getStudioEvent(slug: string): Promise<AdminEventDto | null> {
-    return (await this.listAdminEvents()).find((event) => event.slug === slug && event.origin === "studio") ?? null;
+  private async getStudioEvent(slug: string, crewSlug?: string): Promise<AdminEventDto | null> {
+    return (
+      (await this.listAdminEvents()).find((event) => event.slug === slug && event.origin === "studio" && (!crewSlug || event.crewSlug === crewSlug)) ??
+      null
+    );
   }
 
-  private async ensureStudioEvent(slug: string): Promise<AdminEventDto> {
-    const event = await this.getStudioEvent(slug);
+  private async ensureStudioEvent(slug: string, crewSlug?: string): Promise<AdminEventDto> {
+    const event = await this.getStudioEvent(slug, crewSlug);
     if (!event) {
       throw new AppError("Studio akce nenalezena", {
         code: "STUDIO_EVENT_NOT_FOUND",
@@ -1478,11 +1995,18 @@ export class NostrEventRepository {
     };
   }
 
-  async createStudioEvent(input: CreateEventCommand): Promise<CreatedEventResult> {
-    const command = { ...input, source: undefined, origin: "studio" as const };
+  async createStudioEvent(input: CreateEventCommand, crewSlug?: string): Promise<CreatedEventResult> {
+    const command = { ...input, source: undefined, origin: "studio" as const, crewSlug };
     const existing = (await this.listAdminEvents()).find((event) => event.slug === command.slug);
     if (existing && existing.origin !== "studio") {
       throw new AppError("Tahle akce nepatří do Studia", {
+        code: "STUDIO_EVENT_FORBIDDEN",
+        status: 403,
+        expose: true,
+      });
+    }
+    if (crewSlug && existing && existing.crewSlug !== crewSlug) {
+      throw new AppError("Tahle akce nepatří téhle crew", {
         code: "STUDIO_EVENT_FORBIDDEN",
         status: 403,
         expose: true,
@@ -1546,6 +2070,7 @@ export class NostrEventRepository {
           ["d", command.slug],
           ["access", command.accessType],
           ["origin", "studio"],
+          ...(crewSlug ? [["crew", crewSlug]] : []),
         ],
         content: encryptDraftBundle(draftBundle, {
           coordinate: nostrCoordinate(DRAFT_EVENT_KIND, this.pubkey, command.slug),
@@ -1692,9 +2217,9 @@ export class NostrEventRepository {
     };
   }
 
-  async publishStudioDraft(slug: string): Promise<CreatedEventResult> {
+  async publishStudioDraft(slug: string, crewSlug?: string): Promise<CreatedEventResult> {
     const draft = await this.getLatestDraftBundle(slug);
-    if (!draft || draft.draft.public.origin !== "studio") {
+    if (!draft || draft.draft.public.origin !== "studio" || (crewSlug && draft.draft.public.crewSlug !== crewSlug)) {
       throw new AppError("Studio koncept nenalezen", {
         code: "STUDIO_DRAFT_NOT_FOUND",
         status: 404,
@@ -1705,9 +2230,93 @@ export class NostrEventRepository {
     return this.publishDraft(slug);
   }
 
-  async archiveStudioEvent(slug: string): Promise<DeletedEventResult> {
-    await this.ensureStudioEvent(slug);
+  async archiveStudioEvent(slug: string, crewSlug?: string): Promise<DeletedEventResult> {
+    await this.ensureStudioEvent(slug, crewSlug);
     return this.deleteEvent(slug);
+  }
+
+  async assignStudioEventToCrew(eventSlug: string, crewSlug: string): Promise<CreatedEventResult> {
+    const crew = await this.getCrewProfile(crewSlug);
+    if (!crew) {
+      throw new AppError("Crew nenalezena", {
+        code: "CREW_NOT_FOUND",
+        status: 404,
+        expose: true,
+      });
+    }
+
+    const event = await this.ensureStudioEvent(eventSlug);
+    if (!event.isPublished) {
+      const draft = await this.getLatestDraftBundle(eventSlug);
+      if (!draft) {
+        throw new AppError("Studio koncept nenalezen", {
+          code: "STUDIO_DRAFT_NOT_FOUND",
+          status: 404,
+          expose: true,
+        });
+      }
+
+      const publicFields = {
+        ...draft.draft.public,
+        origin: "studio" as const,
+        crewSlug,
+      };
+      const draftEvent = await this.signer.sign({
+        kind: DRAFT_EVENT_KIND,
+        created_at: nowSeconds(),
+        tags: [
+          ["d", eventSlug],
+          ["access", publicFields.accessType ?? "public"],
+          ["origin", "studio"],
+          ["crew", crewSlug],
+        ],
+        content: encryptDraftBundle(
+          {
+            ...draft.draft,
+            public: publicFields,
+          },
+          {
+            coordinate: nostrCoordinate(DRAFT_EVENT_KIND, this.pubkey, eventSlug),
+          },
+        ),
+      });
+
+      return {
+        id: draftEvent.id,
+        slug: eventSlug,
+        writes: await this.publish(draftEvent),
+      };
+    }
+
+    const publicEvent = await this.signer.sign(
+      publicEventTemplate({
+        slug: event.slug,
+        title: event.title,
+        summary: event.summary,
+        publicLocation: event.publicLocation,
+        publicLatitude: event.publicLatitude,
+        publicLongitude: event.publicLongitude,
+        startsAt: event.startsAt,
+        endAt: event.endAt,
+        coverImageUrl: event.coverImageUrl,
+        externalUrl: event.externalUrl,
+        simplexUrl: event.simplexUrl,
+        genres: event.genres,
+        lineup: event.lineup,
+        tags: event.tags,
+        galleryImageUrls: event.galleryImageUrls,
+        accessType: event.accessType,
+        isPublished: true,
+        origin: "studio",
+        crewSlug,
+      }),
+    );
+
+    return {
+      id: publicEvent.id,
+      slug: eventSlug,
+      writes: await this.publish(publicEvent),
+    };
   }
 
   async deleteEvent(slug: string): Promise<DeletedEventResult> {

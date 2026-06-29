@@ -51,7 +51,6 @@ export const GET: APIRoute = async ({ params }) =>
 export const POST: APIRoute = async ({ params, request }) =>
   withApiErrorHandling(async () => {
     const slug = readSlug(params.slug);
-    const input = await parseJsonBody(request, createCommentSchema);
     const clientIp = getClientIp(request);
     const ipHash = hashIpAddress(clientIp);
     const rateState = await enforceCommentRateLimit(slug, ipHash);
@@ -59,6 +58,7 @@ export const POST: APIRoute = async ({ params, request }) =>
       return rateLimitResponse(rateState.retryAfterSeconds);
     }
 
+    const input = await parseJsonBody(request, createCommentSchema);
     const repository = getNostrEventRepository();
     const result = input.signedEvent
       ? await repository.publishSignedComment(slug, input.signedEvent as NostrEvent)

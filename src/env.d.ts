@@ -2,7 +2,7 @@
 
 interface ImportMetaEnv {
   readonly ADMIN_SECRET: string;
-  readonly ORGANIZER_SECRET: string;
+  readonly ORGANIZER_SECRET?: string;
   readonly ENCRYPTION_KEY: string;
   readonly RATE_LIMIT_SECRET: string;
   readonly NOSTR_RELAYS: string;
@@ -18,4 +18,10 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
+}
+
+declare namespace App {
+  interface Locals {
+    cspNonce: string;
+  }
 }

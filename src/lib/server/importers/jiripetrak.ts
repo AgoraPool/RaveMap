@@ -1,4 +1,5 @@
 import { getEnv } from "../env";
+import { safeFetchText } from "../safe-fetch";
 import { getNostrEventRepository } from "../nostr-repository";
 import { randomSlugSuffix, slugify } from "../slug";
 import type { AdminEventDto, CreateEventCommand } from "../nostr-types";
@@ -227,11 +228,6 @@ async function mapWithConcurrency<T, U>(items: T[], concurrency: number, worker:
 
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runWorker));
   return results;
-}
-
-function timeoutSignal(ms: number): AbortSignal | undefined {
-  const timeout = (AbortSignal as typeof AbortSignal & { timeout?: (timeoutMs: number) => AbortSignal }).timeout;
-  return timeout ? timeout(ms) : undefined;
 }
 
 function asArray<T>(value: T | T[] | undefined): T[] {
@@ -1490,15 +1486,16 @@ async function fetchDetailEvent(event: ImportedEvent, sourceUrl: string, headers
   }
 
   try {
-    const response = await fetch(event.sourceUrl, {
+    const { response, text } = await safeFetchText(event.sourceUrl, {
       headers,
-      signal: timeoutSignal(DETAIL_FETCH_TIMEOUT_MS),
+      timeoutMs: DETAIL_FETCH_TIMEOUT_MS,
+      maxBytes: 768 * 1024,
     });
     if (!response.ok) {
       return event;
     }
 
-    return eventFromDetailPage(await response.text(), event.sourceUrl, event);
+    return eventFromDetailPage(text, event.sourceUrl, event);
   } catch {
     return event;
   }
@@ -1515,15 +1512,17 @@ function mirrorHeaders(): HeadersInit {
 
 export async function fetchJiriPetrakIndexEvents(): Promise<ImportedEvent[]> {
   const env = getEnv();
-  const response = await fetch(env.MIRROR_SOURCE_URL, {
+  const { response, text } = await safeFetchText(env.MIRROR_SOURCE_URL, {
     headers: mirrorHeaders(),
+    timeoutMs: INDEX_FETCH_TIMEOUT_MS,
+    maxBytes: 1024 * 1024,
   });
 
   if (!response.ok) {
     throw new Error(`Zdroj mirroru vrátil stav ${response.status}`);
   }
 
-  const indexEvents = parseJiriPetrakEvents(await response.text(), env.MIRROR_SOURCE_URL);
+  const indexEvents = parseJiriPetrakEvents(text, env.MIRROR_SOURCE_URL);
   if (indexEvents.length === 0) {
     throw new Error("Zdroj mirroru se načetl, ale nepodařilo se rozpoznat žádné akce z kalendáře.");
   }

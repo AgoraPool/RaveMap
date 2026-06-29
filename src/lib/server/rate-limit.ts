@@ -17,6 +17,7 @@ const MAX_RECORDS = 4400;
 
 const attempts = new Map<string, AttemptRecord>();
 const commentAttempts = new Map<string, number[]>();
+const fixedWindowAttempts = new Map<string, number[]>();
 
 function getKey(eventSlug: string, ipHash: string): string {
   return `${eventSlug}:${ipHash}`;
@@ -129,5 +130,42 @@ export async function enforceCommentRateLimit(eventSlug: string, ipHash: string)
     }
   }
 
+  return { blocked: false };
+}
+
+function pruneFixedWindows(now: number): void {
+  if (fixedWindowAttempts.size <= MAX_RECORDS) {
+    return;
+  }
+
+  for (const [key, timestamps] of fixedWindowAttempts) {
+    if (timestamps.length === 0 || now - timestamps[timestamps.length - 1] > WINDOW_MS) {
+      fixedWindowAttempts.delete(key);
+    }
+    if (fixedWindowAttempts.size <= MAX_RECORDS) {
+      return;
+    }
+  }
+}
+
+export async function enforceFixedWindowRateLimit(
+  scope: string,
+  key: string,
+  options: { limit: number; windowMs: number },
+): Promise<AttemptState> {
+  const now = Date.now();
+  pruneFixedWindows(now);
+
+  const recordKey = `${scope}:${key}`;
+  const recent = (fixedWindowAttempts.get(recordKey) ?? []).filter((timestamp) => now - timestamp < options.windowMs);
+  if (recent.length >= options.limit) {
+    return {
+      blocked: true,
+      retryAfterSeconds: Math.ceil((options.windowMs - (now - recent[0])) / 1000),
+    };
+  }
+
+  recent.push(now);
+  fixedWindowAttempts.set(recordKey, recent);
   return { blocked: false };
 }

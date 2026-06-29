@@ -2,6 +2,8 @@
 export const prerender = false;
 
 import Layout from "../layouts/Layout.astro";
+
+const cspNonce = Astro.locals.cspNonce;
 ---
 
 <Layout bodyClass="studio-body">
@@ -14,10 +16,11 @@ import Layout from "../layouts/Layout.astro";
         <h1>RaveMap Studio</h1>
         <p class="gate-copy">Skrytý prostor pro přípravu akcí. Importy, diagnostika a admin nástroje tady nejsou.</p>
         <form id="studio-access-form" class="access-form">
-          <input id="organizerSecret" name="organizerSecret" type="password" minlength="24" placeholder="Organizer kód" required />
+          <input id="crewSlug" name="crewSlug" type="text" minlength="3" maxlength="120" pattern="[a-z0-9-]+" placeholder="crew-slug" autocomplete="username" required />
+          <input id="crewSecret" name="crewSecret" type="password" minlength="12" placeholder="Crew kód" autocomplete="current-password" required />
           <button id="unlock-studio" type="submit">Odemknout</button>
         </form>
-        <p id="auth-status" class="status-line neutral">Zadej organizer kód.</p>
+        <p id="auth-status" class="status-line neutral">Zadej crew slug a crew kód.</p>
       </div>
     </section>
 
@@ -27,7 +30,10 @@ import Layout from "../layouts/Layout.astro";
           <p class="kicker">Crew studio</p>
           <h1>Správa akcí</h1>
         </div>
-        <button id="new-event" type="button">Nová akce</button>
+        <div class="topbar-actions">
+          <button id="new-event" type="button">Nová akce</button>
+          <button id="clear-studio-secret" type="button">Odhlásit</button>
+        </div>
       </header>
 
       <p id="global-status" class="status-line neutral">Studio připraveno.</p>
@@ -167,7 +173,7 @@ import Layout from "../layouts/Layout.astro";
                 <div class="field-row">
                   <label>
                     <span>Kód k odemknutí</span>
-                    <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" />
+                    <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" autocomplete="new-password" />
                   </label>
                   <label>
                     <span>Název tajné lokace</span>
@@ -230,10 +236,11 @@ import Layout from "../layouts/Layout.astro";
   </main>
 </Layout>
 
-<script>
-  const STORAGE_KEY = "ravemap:studio-secret";
+<script nonce={cspNonce}>
   const state = {
-    secret: sessionStorage.getItem(STORAGE_KEY) || "",
+    crewSlug: "",
+    secret: "",
+    crew: null,
     events: [],
     step: 0,
   };
@@ -241,13 +248,15 @@ import Layout from "../layouts/Layout.astro";
   const gate = document.getElementById("studio-gate");
   const workspace = document.getElementById("studio-workspace");
   const accessForm = document.getElementById("studio-access-form");
-  const secretInput = document.getElementById("organizerSecret");
+  const crewSlugInput = document.getElementById("crewSlug");
+  const secretInput = document.getElementById("crewSecret");
   const unlockButton = document.getElementById("unlock-studio");
   const authStatus = document.getElementById("auth-status");
   const globalStatus = document.getElementById("global-status");
   const reloadButton = document.getElementById("reload-events");
   const eventsEl = document.getElementById("studio-events");
   const newEventButton = document.getElementById("new-event");
+  const clearStudioSecretButton = document.getElementById("clear-studio-secret");
   const form = document.getElementById("studio-form");
   const formStatus = document.getElementById("form-status");
   const editingState = document.getElementById("editing-state");
@@ -285,7 +294,8 @@ import Layout from "../layouts/Layout.astro";
   function headers(json = false) {
     return {
       ...(json ? { "Content-Type": "application/json" } : {}),
-      "x-organizer-secret": state.secret,
+      "x-crew-slug": state.crewSlug,
+      "x-crew-secret": state.secret,
     };
   }
 
@@ -481,27 +491,40 @@ import Layout from "../layouts/Layout.astro";
   async function loadEvents() {
     const response = await fetch("/api/studio/events", { headers: headers() });
     const data = await parseResponse(response);
+    state.crew = data.crew || null;
     state.events = Array.isArray(data.events) ? data.events : [];
     renderEvents();
   }
 
-  async function authenticate(secret) {
+  async function authenticate(crewSlug, secret) {
+    state.crewSlug = crewSlug;
     state.secret = secret;
     setBusy(unlockButton, true);
-    setStatus(authStatus, "Ověřuji kód...", "warning");
+    setStatus(authStatus, "Ověřuji crew přístup...", "warning");
     try {
       await loadEvents();
-      sessionStorage.setItem(STORAGE_KEY, state.secret);
       if (gate instanceof HTMLElement) gate.hidden = true;
       if (workspace instanceof HTMLElement) workspace.hidden = false;
-      setStatus(globalStatus, "Studio načteno.", "positive");
+      setStatus(globalStatus, state.crew?.name ? `Studio načteno pro ${state.crew.name}.` : "Studio načteno.", "positive");
     } catch (error) {
-      sessionStorage.removeItem(STORAGE_KEY);
+      state.crewSlug = "";
       state.secret = "";
       setStatus(authStatus, error instanceof Error ? error.message : "Ověření selhalo.", "danger");
     } finally {
       setBusy(unlockButton, false);
     }
+  }
+
+  function clearStudioSession() {
+    state.crewSlug = "";
+    state.secret = "";
+    state.crew = null;
+    state.events = [];
+    if (crewSlugInput instanceof HTMLInputElement) crewSlugInput.value = "";
+    if (secretInput instanceof HTMLInputElement) secretInput.value = "";
+    if (workspace instanceof HTMLElement) workspace.hidden = true;
+    if (gate instanceof HTMLElement) gate.hidden = false;
+    setStatus(authStatus, "Crew kód vymazán z této záložky.", "neutral");
   }
 
   async function saveEvent(isPublished) {
@@ -543,12 +566,14 @@ import Layout from "../layouts/Layout.astro";
 
   accessForm?.addEventListener("submit", (event) => {
     event.preventDefault();
+    const crewSlug = crewSlugInput instanceof HTMLInputElement ? crewSlugInput.value.trim().toLowerCase() : "";
     const secret = secretInput instanceof HTMLInputElement ? secretInput.value.trim() : "";
-    if (secret) authenticate(secret);
+    if (crewSlug && secret) authenticate(crewSlug, secret);
   });
 
   reloadButton?.addEventListener("click", () => loadEvents().catch((error) => setStatus(globalStatus, error.message, "danger")));
   newEventButton?.addEventListener("click", resetEditor);
+  clearStudioSecretButton?.addEventListener("click", clearStudioSession);
   prevStep?.addEventListener("click", () => setStep(state.step - 1));
   nextStep?.addEventListener("click", () => setStep(state.step + 1));
   saveDraftButton?.addEventListener("click", () => saveEvent(false));
@@ -592,9 +617,6 @@ import Layout from "../layouts/Layout.astro";
 
   syncAccessMode();
   setStep(0);
-  if (state.secret) {
-    authenticate(state.secret);
-  }
 </script>
 
 <style>
@@ -663,6 +685,7 @@ import Layout from "../layouts/Layout.astro";
 
   .access-form,
   .field-row,
+  .topbar-actions,
   .studio-topbar,
   .panel-head,
   .wizard-actions,
@@ -679,6 +702,11 @@ import Layout from "../layouts/Layout.astro";
   .panel-head {
     justify-content: space-between;
     align-items: start;
+  }
+
+  .topbar-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .studio-topbar {

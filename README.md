@@ -39,8 +39,11 @@ Kam Na Rave is a Nostr-backed event app for underground music events. It publish
 ```bash
 npm run dev
 npm run build
+npm run secrets:generate
 npm run preview
 ```
+
+Production secrets belong in Netlify environment variables, not in git. See `docs/security-runbook.md` for rotation and custody notes.
 
 ## Repo Guide
 

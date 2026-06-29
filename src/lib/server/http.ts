@@ -12,6 +12,25 @@ export function jsonOk(data: unknown, status = 200): Response {
   });
 }
 
+export function jsonRateLimited(code: string, message: string, retryAfterSeconds = 60): Response {
+  return new Response(
+    JSON.stringify({
+      ok: false,
+      error: {
+        code,
+        message,
+      },
+    }),
+    {
+      status: 429,
+      headers: {
+        ...JSON_HEADERS,
+        "Retry-After": String(retryAfterSeconds),
+      },
+    },
+  );
+}
+
 export function jsonError(error: AppError | Error): Response {
   if (isAppError(error)) {
     return new Response(

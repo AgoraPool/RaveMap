@@ -6,6 +6,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "test": "node --test tests/*.test.ts",
+    "secrets:generate": "node scripts/generate-secrets.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },

@@ -6,6 +6,7 @@ import { getNostrEventRepository } from "../lib/server/nostr-repository";
 import Layout from "../layouts/Layout.astro";
 
 const repository = getNostrEventRepository();
+const cspNonce = Astro.locals.cspNonce;
 const now = Date.now();
 const events = (await repository.listPublishedEvents())
   .filter((event) => (event.endAt ?? event.startsAt).getTime() >= now)
@@ -98,7 +99,7 @@ const selectedOsmUrl = selected ? osmMarkerUrl(selected) : "";
   </main>
 </Layout>
 
-<script>
+<script nonce={cspNonce}>
   const mapFrame = document.getElementById("map-frame");
   const selectedTitle = document.getElementById("selected-title");
   const selectedOsm = document.getElementById("selected-osm");

@@ -2,6 +2,8 @@
 export const prerender = false;
 
 import Layout from "../layouts/Layout.astro";
+
+const cspNonce = Astro.locals.cspNonce;
 ---
 
 <Layout bodyClass="admin-body">
@@ -13,7 +15,7 @@ import Layout from "../layouts/Layout.astro";
         <p class="gate-copy">Nostr operace zůstanou skryté, dokud neověříš admin kód.</p>
 
         <form id="access-form" class="access-form">
-          <input id="adminSecret" name="adminSecret" type="password" minlength="24" placeholder="Admin kód" required />
+          <input id="adminSecret" name="adminSecret" type="password" minlength="24" placeholder="Admin kód" autocomplete="current-password" required />
           <button id="unlock-button" type="submit">Odemknout</button>
         </form>
 
@@ -27,7 +29,10 @@ import Layout from "../layouts/Layout.astro";
           <p class="kicker">Nostr kokpit</p>
           <h1>RaveMap Admin</h1>
         </div>
-        <p class="topbar-note">Podepsané publikování na relaye. Veřejné a kódem zamčené akce.</p>
+        <div class="topbar-actions">
+          <p class="topbar-note">Podepsané publikování na relaye. Veřejné a kódem zamčené akce.</p>
+          <button id="clear-admin-secret" type="button">Odhlásit</button>
+        </div>
       </header>
 
       <section class="status-grid">
@@ -182,7 +187,7 @@ import Layout from "../layouts/Layout.astro";
               <div class="field-row">
                 <label>
                   <span>Kód k odemknutí</span>
-                  <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" />
+                  <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" autocomplete="new-password" />
                 </label>
                 <label>
                   <span>Název tajné lokace</span>
@@ -230,6 +235,84 @@ import Layout from "../layouts/Layout.astro";
           </div>
           <p id="import-status" class="status-line neutral">Import vytváří veřejné koncepty.</p>
           <div id="import-preview" class="preview-list" hidden></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="kicker">Crew účty</p>
+              <h2>Profily a přiřazení</h2>
+            </div>
+            <button id="reload-crews" type="button">Obnovit</button>
+          </div>
+          <form id="crew-form" class="event-form">
+            <div class="field-row">
+              <label>
+                <span>Slug</span>
+                <input id="crewSlug" name="slug" type="text" minlength="3" maxlength="120" pattern="[a-z0-9-]+" required />
+              </label>
+              <label>
+                <span>Crew kód</span>
+                <input id="crewCode" name="crewCode" type="password" minlength="12" maxlength="160" autocomplete="new-password" />
+              </label>
+            </div>
+            <div class="code-tools">
+              <button id="generate-crew-code" type="button">Generovat kód</button>
+              <button id="copy-crew-code" type="button">Kopírovat kód</button>
+            </div>
+            <label>
+              <span>Název</span>
+              <input id="crewName" name="name" type="text" maxlength="80" />
+            </label>
+            <label>
+              <span>Popis</span>
+              <textarea id="crewSummary" name="summary" maxlength="1000"></textarea>
+            </label>
+            <div class="field-row">
+              <label>
+                <span>Avatar URL</span>
+                <input id="crewAvatarUrl" name="avatarUrl" type="url" />
+              </label>
+              <label>
+                <span>Banner URL</span>
+                <input id="crewBannerUrl" name="bannerUrl" type="url" />
+              </label>
+            </div>
+            <div class="field-row">
+              <label>
+                <span>SimpleX</span>
+                <input id="crewSimplexUrl" name="simplexUrl" type="text" />
+              </label>
+              <label>
+                <span>Lightning adresa</span>
+                <input id="crewLightningAddress" name="lightningAddress" type="text" placeholder="crew@domena.cz" />
+              </label>
+            </div>
+            <label>
+              <span>Web</span>
+              <input id="crewWebsiteUrl" name="websiteUrl" type="url" />
+            </label>
+            <div class="action-row">
+              <button id="save-crew" type="submit">Uložit crew</button>
+              <button id="rotate-crew-code" type="button">Rotovat kód</button>
+              <button id="archive-crew" type="button">Archivovat</button>
+            </div>
+          </form>
+          <form id="assign-crew-form" class="event-form">
+            <div class="field-row">
+              <label>
+                <span>Slug akce</span>
+                <input id="assignEventSlug" name="eventSlug" type="text" minlength="3" maxlength="120" pattern="[a-z0-9-]+" />
+              </label>
+              <label>
+                <span>Crew slug</span>
+                <input id="assignCrewSlug" name="crewSlug" type="text" minlength="3" maxlength="120" pattern="[a-z0-9-]+" />
+              </label>
+            </div>
+            <button id="assign-crew" type="submit">Přiřadit akci crew</button>
+          </form>
+          <p id="crew-status" class="status-line neutral">Crew správa připravena.</p>
+          <div id="crew-list" class="preview-list"></div>
         </section>
 
         <section class="panel">
@@ -294,10 +377,11 @@ import Layout from "../layouts/Layout.astro";
   </main>
 </Layout>
 
-<script>
+<script nonce={cspNonce}>
   const state = {
     authenticated: false,
     events: [],
+    crews: [],
     selectedSlugs: new Set(),
     filters: {
       query: "",
@@ -314,6 +398,7 @@ import Layout from "../layouts/Layout.astro";
   const accessGate = document.getElementById("access-gate");
   const adminSecretInput = document.getElementById("adminSecret");
   const unlockButton = document.getElementById("unlock-button");
+  const clearAdminSecretButton = document.getElementById("clear-admin-secret");
   const authStatus = document.getElementById("auth-status");
   const workspace = document.getElementById("workspace");
   const globalStatus = document.getElementById("global-status");
@@ -348,6 +433,15 @@ import Layout from "../layouts/Layout.astro";
   const importPreview = document.getElementById("import-preview");
   const reloadDiagnosticsButton = document.getElementById("reload-diagnostics");
   const diagnostics = document.getElementById("diagnostics");
+  const crewForm = document.getElementById("crew-form");
+  const assignCrewForm = document.getElementById("assign-crew-form");
+  const reloadCrewsButton = document.getElementById("reload-crews");
+  const rotateCrewCodeButton = document.getElementById("rotate-crew-code");
+  const archiveCrewButton = document.getElementById("archive-crew");
+  const generateCrewCodeButton = document.getElementById("generate-crew-code");
+  const copyCrewCodeButton = document.getElementById("copy-crew-code");
+  const crewStatus = document.getElementById("crew-status");
+  const crewList = document.getElementById("crew-list");
 
   function setStatus(target, message, tone = "neutral") {
     if (!(target instanceof HTMLElement)) return;
@@ -633,6 +727,124 @@ import Layout from "../layouts/Layout.astro";
     renderEvents();
   }
 
+  function renderCrews() {
+    if (!(crewList instanceof HTMLElement)) return;
+    if (state.crews.length === 0) {
+      crewList.innerHTML = `<p class="empty-state">Zatím žádné crew profily.</p>`;
+      return;
+    }
+
+    crewList.innerHTML = state.crews
+      .map(
+        (crew) => `
+          <article class="preview-item">
+            <strong>${escapeHtml(crew.name)} ${crew.archived ? "(archiv)" : ""}</strong>
+            <span>${escapeHtml(crew.slug)}</span>
+            <small>${escapeHtml(crew.lightningAddress || "bez lightning adresy")}</small>
+            <p>${escapeHtml(crew.summary)}</p>
+            <button type="button" data-crew-fill="${escapeHtml(crew.slug)}">Upravit</button>
+          </article>
+        `,
+      )
+      .join("");
+  }
+
+  async function loadCrews() {
+    const response = await fetch("/api/admin/crews", { headers: adminHeaders() });
+    const data = await parseResponse(response);
+    state.crews = Array.isArray(data.crews) ? data.crews : [];
+    renderCrews();
+  }
+
+  function crewPayload(action) {
+    if (!(crewForm instanceof HTMLFormElement)) throw new Error("Crew formulář není dostupný.");
+    const data = new FormData(crewForm);
+    return {
+      action,
+      slug: String(data.get("slug") || "").trim().toLowerCase(),
+      crewCode: String(data.get("crewCode") || "").trim() || undefined,
+      name: String(data.get("name") || "").trim() || undefined,
+      summary: String(data.get("summary") || "").trim() || undefined,
+      avatarUrl: String(data.get("avatarUrl") || "").trim() || undefined,
+      bannerUrl: String(data.get("bannerUrl") || "").trim() || undefined,
+      simplexUrl: String(data.get("simplexUrl") || "").trim() || undefined,
+      websiteUrl: String(data.get("websiteUrl") || "").trim() || undefined,
+      lightningAddress: String(data.get("lightningAddress") || "").trim() || undefined,
+    };
+  }
+
+  async function sendCrewAction(payload, successMessage) {
+    setStatus(crewStatus, "Ukládám crew změnu...", "warning");
+    const response = await fetch("/api/admin/crews", {
+      method: "POST",
+      headers: adminHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    await parseResponse(response);
+    setStatus(crewStatus, successMessage, "positive");
+    await Promise.all([loadCrews(), loadEvents()]);
+  }
+
+  function fillCrewForm(crew) {
+    if (!(crewForm instanceof HTMLFormElement)) return;
+    const fields = {
+      slug: crew.slug,
+      name: crew.name,
+      summary: crew.summary,
+      avatarUrl: crew.avatarUrl || "",
+      bannerUrl: crew.bannerUrl || "",
+      simplexUrl: crew.simplexUrl || "",
+      websiteUrl: crew.websiteUrl || "",
+      lightningAddress: crew.lightningAddress || "",
+      crewCode: "",
+    };
+    for (const [name, value] of Object.entries(fields)) {
+      const field = crewForm.elements.namedItem(name);
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.value = value;
+    }
+    const code = crewCodeInput();
+    if (code) code.type = "password";
+  }
+
+  function crewCodeInput() {
+    if (!(crewForm instanceof HTMLFormElement)) return null;
+    const field = crewForm.elements.namedItem("crewCode");
+    return field instanceof HTMLInputElement ? field : null;
+  }
+
+  function generateSafeCode() {
+    const bytes = new Uint8Array(24);
+    if (!window.crypto?.getRandomValues) {
+      throw new Error("Prohlížeč neumí bezpečné generování kódu.");
+    }
+
+    window.crypto.getRandomValues(bytes);
+    const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+    return window.btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  function setGeneratedCrewCode() {
+    const input = crewCodeInput();
+    if (!input) return;
+    input.value = generateSafeCode();
+    input.type = "text";
+    input.focus();
+    input.select();
+    setStatus(crewStatus, "Bezpečný crew kód je vygenerovaný. Zkopíruj ho před uložením nebo rotací.", "warning");
+  }
+
+  async function copyCrewCode() {
+    const input = crewCodeInput();
+    const value = input?.value.trim();
+    if (!value) {
+      setStatus(crewStatus, "Nejdřív vygeneruj nebo vyplň crew kód.", "warning");
+      return;
+    }
+
+    await navigator.clipboard.writeText(value);
+    setStatus(crewStatus, "Crew kód zkopírován.", "positive");
+  }
+
   async function loadDiagnostics() {
     if (!(diagnostics instanceof HTMLElement)) return;
     const response = await fetch("/api/admin/diagnostics", { headers: adminHeaders() });
@@ -657,7 +869,7 @@ import Layout from "../layouts/Layout.astro";
     setBusy(unlockButton, true);
     setStatus(authStatus, "Ověřuji kód...", "warning");
     try {
-      await loadEvents();
+      await Promise.all([loadEvents(), loadCrews()]);
       state.authenticated = true;
       if (accessGate instanceof HTMLElement) accessGate.hidden = true;
       if (workspace instanceof HTMLElement) workspace.hidden = false;
@@ -672,6 +884,15 @@ import Layout from "../layouts/Layout.astro";
     } finally {
       setBusy(unlockButton, false);
     }
+  }
+
+  function clearAdminSession() {
+    if (adminSecretInput instanceof HTMLInputElement) adminSecretInput.value = "";
+    state.authenticated = false;
+    if (workspace instanceof HTMLElement) workspace.hidden = true;
+    if (accessGate instanceof HTMLElement) accessGate.hidden = false;
+    if (authState instanceof HTMLElement) authState.textContent = "Zamčeno";
+    setStatus(authStatus, "Admin kód vymazán z této záložky.", "neutral");
   }
 
   async function saveEvent(event) {
@@ -898,6 +1119,87 @@ import Layout from "../layouts/Layout.astro";
     event.preventDefault();
     authenticate();
   });
+  clearAdminSecretButton?.addEventListener("click", clearAdminSession);
+  crewForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const payload = crewPayload("upsert");
+      const existing = state.crews.some((crew) => crew.slug === payload.slug);
+      if (!existing && !payload.crewCode) {
+        setGeneratedCrewCode();
+        return;
+      }
+
+      await sendCrewAction(payload, "Crew profil uložen.");
+    } catch (error) {
+      setStatus(crewStatus, error instanceof Error ? error.message : "Uložení crew selhalo.", "danger");
+    }
+  });
+  rotateCrewCodeButton?.addEventListener("click", async () => {
+    try {
+      if (!crewCodeInput()?.value.trim()) {
+        setGeneratedCrewCode();
+        return;
+      }
+      await sendCrewAction(crewPayload("rotate-code"), "Crew kód změněn.");
+    } catch (error) {
+      setStatus(crewStatus, error instanceof Error ? error.message : "Rotace kódu selhala.", "danger");
+    }
+  });
+  generateCrewCodeButton?.addEventListener("click", () => {
+    try {
+      setGeneratedCrewCode();
+    } catch (error) {
+      setStatus(crewStatus, error instanceof Error ? error.message : "Generování kódu selhalo.", "danger");
+    }
+  });
+  copyCrewCodeButton?.addEventListener("click", async () => {
+    try {
+      await copyCrewCode();
+    } catch (error) {
+      setStatus(crewStatus, error instanceof Error ? error.message : "Kopírování kódu selhalo.", "danger");
+    }
+  });
+  archiveCrewButton?.addEventListener("click", async () => {
+    const payload = crewPayload("archive");
+    if (!payload.slug || !window.confirm(`Archivovat crew ${payload.slug}?`)) return;
+    try {
+      await sendCrewAction(payload, "Crew archivována.");
+    } catch (error) {
+      setStatus(crewStatus, error instanceof Error ? error.message : "Archivace crew selhala.", "danger");
+    }
+  });
+  assignCrewForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!(assignCrewForm instanceof HTMLFormElement)) return;
+    const data = new FormData(assignCrewForm);
+    try {
+      await sendCrewAction(
+        {
+          action: "assign-event",
+          slug: String(data.get("crewSlug") || "").trim().toLowerCase(),
+          eventSlug: String(data.get("eventSlug") || "").trim().toLowerCase(),
+        },
+        "Akce přiřazena crew.",
+      );
+    } catch (error) {
+      setStatus(crewStatus, error instanceof Error ? error.message : "Přiřazení selhalo.", "danger");
+    }
+  });
+  reloadCrewsButton?.addEventListener("click", async () => {
+    try {
+      await loadCrews();
+    } catch (error) {
+      setStatus(crewStatus, error instanceof Error ? error.message : "Načtení crew selhalo.", "danger");
+    }
+  });
+  crewList?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const slug = target.dataset.crewFill;
+    const crew = slug ? state.crews.find((item) => item.slug === slug) : null;
+    if (crew) fillCrewForm(crew);
+  });
   eventForm?.addEventListener("submit", saveEvent);
   resetFormButton?.addEventListener("click", resetEditor);
   reloadEventsButton?.addEventListener("click", async () => {
@@ -1015,6 +1317,7 @@ import Layout from "../layouts/Layout.astro";
   }
 
   .admin-topbar,
+  .topbar-actions,
   .status-grid,
   .field-row,
   .action-row,
@@ -1041,6 +1344,12 @@ import Layout from "../layouts/Layout.astro";
     background: #fff6df;
     padding: 16px;
     box-shadow: 7px 7px 0 #000;
+  }
+
+  .topbar-actions {
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 
   h1,
@@ -1122,6 +1431,12 @@ import Layout from "../layouts/Layout.astro";
 
   .action-row .status-line {
     flex: 1 1 260px;
+  }
+
+  .code-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .status-grid {

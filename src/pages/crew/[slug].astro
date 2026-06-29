@@ -1,0 +1,250 @@
+---
+export const prerender = false;
+
+import Layout from "../../layouts/Layout.astro";
+import { getNostrEventRepository } from "../../lib/server/nostr-repository";
+
+const slug = Astro.params.slug?.trim().toLowerCase() ?? "";
+const repository = getNostrEventRepository();
+const cspNonce = Astro.locals.cspNonce;
+const crew = /^[a-z0-9-]{3,120}$/.test(slug) ? await repository.getCrewProfile(slug) : null;
+const events = crew ? (await repository.listPublishedEvents()).filter((event) => event.crewSlug === crew.slug) : [];
+const upcoming = events.filter((event) => event.startsAt.getTime() >= Date.now()).sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
+const past = events.filter((event) => event.startsAt.getTime() < Date.now()).sort((left, right) => right.startsAt.getTime() - left.startsAt.getTime());
+const promo = crew?.lightningAddress ? await repository.getPromoZapSummary("crew", crew.slug).catch(() => null) : null;
+
+if (!crew) {
+  Astro.response.status = 404;
+}
+
+const formatter = new Intl.DateTimeFormat("cs-CZ", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+---
+
+<Layout bodyClass="crew-body">
+  <main class="crew-shell">
+    <nav class="crew-nav">
+      <a href="/crew">Crew</a>
+      <a href="/akce">Akce</a>
+    </nav>
+    {
+      !crew ? (
+        <section class="crew-hero">
+          <h1>Crew nenalezena</h1>
+          <p>Tenhle crew profil neexistuje nebo je archivovaný.</p>
+        </section>
+      ) : (
+        <>
+          <section class="crew-hero">
+            {crew.bannerUrl ? <img class="crew-banner" src={crew.bannerUrl} alt="" loading="eager" decoding="async" referrerpolicy="no-referrer" /> : null}
+            <div class="crew-title-row">
+              {crew.avatarUrl ? <img class="crew-avatar" src={crew.avatarUrl} alt={crew.name} loading="eager" decoding="async" referrerpolicy="no-referrer" /> : null}
+              <div>
+                <p class="kicker">Crew</p>
+                <h1>{crew.name}</h1>
+              </div>
+            </div>
+            {crew.summary ? <p class="crew-summary">{crew.summary}</p> : null}
+            <div class="crew-actions">
+              {crew.websiteUrl ? <a href={crew.websiteUrl} target="_blank" rel="noreferrer">Web</a> : null}
+              {crew.simplexUrl ? <a href={crew.simplexUrl} target="_blank" rel="noreferrer">SimpleX</a> : null}
+              {crew.lightningAddress ? <button type="button" data-zap-button data-target-type="crew" data-slug={crew.slug}>Zap promo</button> : null}
+            </div>
+            {promo && promo.score > 0 ? <p class="promo-line">{promo.receipts} promo zapů za posledních 14 dní</p> : null}
+          </section>
+
+          <section class="event-section">
+            <h2>Další akce</h2>
+            <div class="event-list">
+              {
+                upcoming.length === 0 ? (
+                  <p class="empty-state">Tahle crew zatím nemá publikovanou další akci.</p>
+                ) : (
+                  upcoming.map((event) => (
+                    <a class="event-row" href={`/akce/${event.slug}`}>
+                      <strong>{event.title}</strong>
+                      <span>{formatter.format(event.startsAt)}</span>
+                      <small>{event.publicLocation}</small>
+                    </a>
+                  ))
+                )
+              }
+            </div>
+          </section>
+
+          {past.length > 0 ? (
+            <section class="event-section">
+              <h2>Historie</h2>
+              <div class="event-list compact">
+                {past.slice(0, 12).map((event) => (
+                  <a class="event-row" href={`/akce/${event.slug}`}>
+                    <strong>{event.title}</strong>
+                    <span>{formatter.format(event.startsAt)}</span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </>
+      )
+    }
+  </main>
+</Layout>
+
+<script nonce={cspNonce}>
+  async function requestPromoInvoice(button) {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const amount = Number(window.prompt("Kolik sats poslat na promo?", "210"));
+    if (!Number.isInteger(amount) || amount < 21) return;
+    button.disabled = true;
+    const original = button.textContent;
+    button.textContent = "Vytvářím fakturu";
+    try {
+      const response = await fetch("/api/zaps/promo-invoice", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          targetType: button.dataset.targetType,
+          slug: button.dataset.slug,
+          amountSats: amount,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok) throw new Error(payload.error?.message || "Faktura není dostupná");
+      await navigator.clipboard.writeText(payload.data.invoice);
+      button.textContent = "Faktura zkopírována";
+    } catch (error) {
+      button.textContent = error instanceof Error ? error.message : "Chyba";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = false;
+        button.textContent = original;
+      }, 2200);
+    }
+  }
+
+  for (const button of document.querySelectorAll("[data-zap-button]")) {
+    button.addEventListener("click", () => requestPromoInvoice(button));
+  }
+</script>
+
+<style>
+  .crew-shell {
+    min-height: 100svh;
+    padding: 24px;
+    color: #f4f0e8;
+    background: #101010;
+  }
+
+  .crew-nav,
+  .crew-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .crew-nav {
+    justify-content: flex-end;
+  }
+
+  .crew-nav a,
+  .crew-actions a,
+  .crew-actions button,
+  .event-row {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .crew-actions a,
+  .crew-actions button {
+    border: 1px solid rgba(244, 240, 232, 0.22);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 10px 14px;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .crew-hero,
+  .event-section {
+    max-width: 980px;
+    margin: 36px auto;
+  }
+
+  .crew-banner {
+    width: 100%;
+    max-height: 260px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 18px;
+  }
+
+  .crew-title-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .crew-avatar {
+    width: 88px;
+    height: 88px;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: #f0cf65;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(2.4rem, 8vw, 6rem);
+  }
+
+  h2 {
+    font-size: clamp(1.6rem, 4vw, 3rem);
+  }
+
+  .crew-summary {
+    max-width: 720px;
+    color: rgba(244, 240, 232, 0.78);
+    line-height: 1.55;
+  }
+
+  .promo-line,
+  .empty-state {
+    color: rgba(244, 240, 232, 0.68);
+  }
+
+  .event-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .event-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border: 1px solid rgba(244, 240, 232, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .event-row small,
+  .event-row span {
+    color: rgba(244, 240, 232, 0.68);
+  }
+
+  @media (max-width: 760px) {
+    .event-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

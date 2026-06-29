@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { requireAdmin } from "../../../lib/server/auth";
+import { requireAdminOrRateLimited } from "../../../lib/server/api-security";
 import { AppError } from "../../../lib/server/errors";
 import { jsonOk, withApiErrorHandling } from "../../../lib/server/http";
 import { getNostrEventRepository } from "../../../lib/server/nostr-repository";
@@ -28,7 +28,8 @@ async function createUniqueSlug(base: string): Promise<string> {
 
 export const GET: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
-    requireAdmin(request);
+    const limited = await requireAdminOrRateLimited(request);
+    if (limited) return limited;
 
     const events = await getNostrEventRepository().listAdminEvents();
     return jsonOk({ events });
@@ -36,7 +37,8 @@ export const GET: APIRoute = async ({ request }) =>
 
 export const POST: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
-    requireAdmin(request);
+    const limited = await requireAdminOrRateLimited(request);
+    if (limited) return limited;
 
     const input = await parseJsonBody(request, createEventSchema);
     const startsAt = new Date(input.startsAt);
@@ -102,7 +104,8 @@ export const POST: APIRoute = async ({ request }) =>
 
 export const PATCH: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
-    requireAdmin(request);
+    const limited = await requireAdminOrRateLimited(request);
+    if (limited) return limited;
 
     const input = await parseJsonBody(request, eventActionSchema);
     if (input.action !== "publish") {
@@ -122,7 +125,8 @@ export const PATCH: APIRoute = async ({ request }) =>
 
 export const DELETE: APIRoute = async ({ request }) =>
   withApiErrorHandling(async () => {
-    requireAdmin(request);
+    const limited = await requireAdminOrRateLimited(request);
+    if (limited) return limited;
 
     const input = await parseJsonBody(request, deleteEventSchema);
     const deleted = await getNostrEventRepository().deleteEvent(input.slug);

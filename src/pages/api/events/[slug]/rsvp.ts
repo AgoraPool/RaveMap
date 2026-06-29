@@ -52,12 +52,12 @@ export const GET: APIRoute = async ({ params }) =>
 export const POST: APIRoute = async ({ params, request }) =>
   withApiErrorHandling(async () => {
     const slug = readSlug(params.slug);
-    const input = await parseJsonBody(request, rsvpSchema);
     const rateState = await enforceCommentRateLimit(`rsvp:${slug}`, hashIpAddress(getClientIp(request)));
     if (rateState.blocked) {
       return rateLimitResponse(rateState.retryAfterSeconds);
     }
 
+    const input = await parseJsonBody(request, rsvpSchema);
     const repository = getNostrEventRepository();
     const result = input.signedEvent
       ? await repository.publishSignedRsvp(slug, input.signedEvent as NostrEvent)

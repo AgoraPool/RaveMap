@@ -8,7 +8,9 @@ const {
 } = Astro.props as { limit?: number; variant?: "full" | "preview" };
 const isPreview = variant === "preview";
 const repository = getNostrEventRepository();
+const cspNonce = Astro.locals.cspNonce;
 const list = await repository.listPublishedEvents(limit);
+const promoted = isPreview ? [] : await repository.listPromotedEvents(4).catch(() => []);
 const rsvpSummaries: Record<string, { accepted: number; tentative: number; signals?: number }> = isPreview
   ? {}
   : await repository.getRsvpSummariesForEvents(list).catch(() => ({}));
@@ -30,6 +32,18 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   </div>
   <h2 class="akce-title">AKCE</h2>
   <div class="akce-table">
+    {
+      promoted.length > 0 && (
+        <section class="promo-strip" aria-label="Podpořené komunitou">
+          <div>
+            <span>Podpořené komunitou</span>
+            <strong>{promoted[0].title}</strong>
+            <small>{promoted[0].crewName ? `crew ${promoted[0].crewName}` : `${Math.round(promoted[0].promo.totalMsats / 1000)} sats`}</small>
+          </div>
+          <a href={`/akce/${promoted[0].slug}`}>Otevřít</a>
+        </section>
+      )
+    }
     {list.length === 0 ? (
       <div class="empty-state">Žádné akce zatím nejsou publikované.</div>
     ) : (
@@ -100,6 +114,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
                   <span>{item.publicLocation}</span>
                   <div class="akce-location-actions">
                     <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
+                    {item.crewSlug && item.crewName && <a class="crew-link" href={`/crew/${item.crewSlug}`}>{item.crewName}</a>}
                     {
                       mapHref && (
                         <a class="osm-link" href={mapHref} target="_blank" rel="noreferrer">
@@ -119,7 +134,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   <img src="/bunkr.png" class="bunkr" alt="Dekorativní bunkr" />
 </section>
 
-<script>
+<script nonce={cspNonce}>
   const eventList = document.querySelector("[data-akce-list]");
   const sortButtons = [...document.querySelectorAll("[data-sort-key]")];
   const sortIndicators = [...document.querySelectorAll("[data-sort-indicator]")];
@@ -271,6 +286,29 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     overflow-x: clip;
     overscroll-behavior: contain;
     scrollbar-color: #000 #c00;
+  }
+
+  .promo-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(240, 207, 101, 0.35);
+    border-radius: 8px;
+    background: rgba(240, 207, 101, 0.08);
+  }
+
+  .promo-strip span,
+  .promo-strip small {
+    display: block;
+    color: rgba(244, 240, 232, 0.72);
+  }
+
+  .promo-strip a,
+  .crew-link {
+    color: #f0cf65;
   }
   .akce-sort-row,
   .akce-item {

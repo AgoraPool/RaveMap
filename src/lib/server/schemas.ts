@@ -69,6 +69,35 @@ const optionalTrimmedString = (max: number) =>
     z.string().max(max).optional(),
   );
 
+const lightningAddressSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const trimmed = value.trim().toLowerCase();
+    return trimmed.length === 0 ? undefined : trimmed;
+  },
+  z
+    .string()
+    .max(320)
+    .regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/, { message: "Použij lightning adresu ve tvaru jmeno@domena" })
+    .optional(),
+);
+
+const optionalSecretCodeSchema = (min: number, max: number, message: string) =>
+  z.preprocess(
+    (value) => {
+      if (typeof value !== "string") {
+        return value;
+      }
+
+      const trimmed = value.trim();
+      return trimmed.length === 0 ? undefined : trimmed;
+    },
+    z.string().min(min, { message }).max(max).optional(),
+  );
+
 const stringListSchema = z.preprocess(
   (value) => {
     if (!Array.isArray(value)) {
@@ -196,6 +225,46 @@ export const studioEventActionSchema = z
     action: z.enum(["publish", "archive"]),
   })
   .strict();
+
+export const crewAuthSchema = z
+  .object({
+    crewSlug: slugSchema,
+    crewCode: z.string().trim().min(12).max(160),
+  })
+  .strict();
+
+export const adminCrewSchema = z
+  .object({
+    action: z.enum(["upsert", "rotate-code", "archive", "assign-event"]),
+    slug: slugSchema,
+    name: optionalTrimmedString(80),
+    summary: optionalTrimmedString(1000),
+    avatarUrl: optionalHttpUrlSchema,
+    bannerUrl: optionalHttpUrlSchema,
+    simplexUrl: optionalSimplexUrlSchema,
+    websiteUrl: optionalHttpUrlSchema,
+    lightningAddress: lightningAddressSchema,
+    crewCode: optionalSecretCodeSchema(12, 160, "Crew kód musí mít alespoň 12 znaků"),
+    eventSlug: slugSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.action === "rotate-code" && !value.crewCode) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Crew kód je povinný",
+        path: ["crewCode"],
+      });
+    }
+
+    if (value.action === "assign-event" && !value.eventSlug) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Slug akce je povinný",
+        path: ["eventSlug"],
+      });
+    }
+  });
 
 const nostrTagSchema = z.array(z.string().max(2048)).min(1).max(8);
 const signedNostrEventSchema = z
@@ -351,9 +420,29 @@ export const studioEventSchema = z
     }
   });
 
+export const promoZapQuerySchema = z
+  .object({
+    targetType: z.enum(["event", "crew"]),
+    slug: slugSchema,
+  })
+  .strict();
+
+export const promoInvoiceSchema = z
+  .object({
+    targetType: z.enum(["event", "crew"]),
+    slug: slugSchema,
+    amountSats: z.number().int().min(21).max(1_000_000),
+    comment: optionalTrimmedString(120),
+  })
+  .strict();
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type DeleteEventInput = z.infer<typeof deleteEventSchema>;
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 export type PublicSubmitEventInput = z.infer<typeof publicSubmitEventSchema>;
 export type RsvpInput = z.infer<typeof rsvpSchema>;
 export type StudioEventInput = z.infer<typeof studioEventSchema>;
+export type CrewAuthInput = z.infer<typeof crewAuthSchema>;
+export type AdminCrewInput = z.infer<typeof adminCrewSchema>;
+export type PromoZapQueryInput = z.infer<typeof promoZapQuerySchema>;
+export type PromoInvoiceInput = z.infer<typeof promoInvoiceSchema>;

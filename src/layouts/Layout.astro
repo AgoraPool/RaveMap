@@ -2,6 +2,7 @@
 import "../styles/global.css";
 
 const { bodyClass = "" } = Astro.props;
+const cspNonce = Astro.locals.cspNonce;
 const showGridCanvas = !bodyClass.split(/\s+/).includes("admin-body");
 const htmlClass = bodyClass.split(/\s+/).includes("admin-body") ? "admin-html" : "";
 ---
@@ -55,7 +56,7 @@ const htmlClass = bodyClass.split(/\s+/).includes("admin-body") ? "admin-html" :
 
 {
 	showGridCanvas && (
-		<script>
+		<script nonce={cspNonce}>
 			const sections = [...document.querySelectorAll("body.home-body section")];
 			const mobileQuery = window.matchMedia("(max-width: 768px)");
 			const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
