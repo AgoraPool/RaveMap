@@ -80,6 +80,13 @@ export type PublicSubmitEventCommand = {
   genres?: string[];
   lineup?: string[];
   tags?: string[];
+  accessType?: EventAccessType;
+  unlockCode?: string;
+  secretInfo?: string;
+  secretLocationName?: string;
+  secretLatitude?: number;
+  secretLongitude?: number;
+  secretMapNote?: string;
   signedEvent?: NostrEvent;
 };
 

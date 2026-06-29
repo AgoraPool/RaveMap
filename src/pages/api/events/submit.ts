@@ -15,7 +15,7 @@ async function createUniquePublicSlug(title: string, startsAt: Date): Promise<st
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const candidate = attempt === 0 ? base : `${base}-${randomSlugSuffix(5)}`;
-    const exists = await repository.getPublishedEvent(candidate);
+    const exists = await repository.slugExists(candidate);
     if (!exists) {
       return candidate;
     }
@@ -72,6 +72,7 @@ export const POST: APIRoute = async ({ request }) =>
     }
 
     const repository = getNostrEventRepository();
+    const accessType = input.accessType ?? "public";
     if (input.signedEvent) {
       const result = await repository.publishSignedPublicSubmission({
         title: input.title,
@@ -86,13 +87,20 @@ export const POST: APIRoute = async ({ request }) =>
         genres: input.genres,
         lineup: input.lineup,
         tags: input.tags,
+        accessType,
+        unlockCode: input.unlockCode,
+        secretInfo: input.secretInfo,
+        secretLocationName: input.secretLocationName,
+        secretLatitude: input.secretLatitude,
+        secretLongitude: input.secretLongitude,
+        secretMapNote: input.secretMapNote,
         signedEvent: input.signedEvent as NostrEvent,
       });
       return jsonOk({ slug: result.slug, id: result.id }, 201);
     }
 
     const slug = await createUniquePublicSlug(input.title, startsAt);
-    const result = await repository.createPublicSubmission({
+    const command = {
       slug,
       title: input.title,
       summary: input.summary,
@@ -107,9 +115,16 @@ export const POST: APIRoute = async ({ request }) =>
       lineup: input.lineup,
       tags: input.tags,
       galleryImageUrls: [],
-      accessType: "public",
+      accessType,
       isPublished: true,
-    });
+      unlockCode: input.unlockCode,
+      secretInfo: input.secretInfo,
+      secretLocationName: input.secretLocationName,
+      secretLatitude: input.secretLatitude,
+      secretLongitude: input.secretLongitude,
+      secretMapNote: input.secretMapNote,
+    };
+    const result = accessType === "gated" ? await repository.createEvent(command) : await repository.createPublicSubmission(command);
 
     return jsonOk({ slug, id: result.id }, 201);
   });

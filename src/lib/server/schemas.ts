@@ -195,6 +195,13 @@ export const publicSubmitEventSchema = z
     genres: stringListSchema,
     lineup: stringListSchema,
     tags: stringListSchema,
+    accessType: z.enum(["public", "gated"]).optional(),
+    unlockCode: optionalTrimmedString(128),
+    secretInfo: optionalTrimmedString(4400),
+    secretLocationName: optionalTrimmedString(180),
+    secretLatitude: z.number().min(-90).max(90).optional(),
+    secretLongitude: z.number().min(-180).max(180).optional(),
+    secretMapNote: optionalTrimmedString(500),
     signedEvent: signedNostrEventSchema.optional(),
   })
   .strict()
@@ -204,6 +211,39 @@ export const publicSubmitEventSchema = z
         code: "custom",
         message: "Latitude and longitude must be provided together",
         path: ["publicLatitude"],
+      });
+    }
+
+    const accessType = value.accessType ?? "public";
+    if (accessType !== "gated") {
+      return;
+    }
+
+    const required: Array<keyof typeof value> = [
+      "unlockCode",
+      "secretInfo",
+      "secretLocationName",
+      "secretLatitude",
+      "secretLongitude",
+    ];
+
+    for (const field of required) {
+      const fieldValue = value[field];
+      const missing = typeof fieldValue === "string" ? fieldValue.trim().length === 0 : fieldValue === undefined;
+      if (missing) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Required for code-gated events",
+          path: [field],
+        });
+      }
+    }
+
+    if (value.unlockCode && value.unlockCode.length < 8) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Unlock code must be at least 8 characters",
+        path: ["unlockCode"],
       });
     }
   });

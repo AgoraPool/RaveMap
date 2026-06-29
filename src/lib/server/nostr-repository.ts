@@ -888,6 +888,7 @@ export class NostrEventRepository {
     const slug = tagValue(event, "d");
     const startsAt = parseDateFromSeconds(tagValue(event, "start"));
     const access = tagValue(event, "access");
+    const accessType = input.accessType ?? "public";
     const parsed = parsePublicEvent(event);
     if (
       event.kind !== PUBLIC_EVENT_KIND ||
@@ -895,7 +896,7 @@ export class NostrEventRepository {
       !slug ||
       !/^[a-z0-9-]{3,120}$/.test(slug) ||
       !startsAt ||
-      access !== "public" ||
+      access !== accessType ||
       tagValue(event, "client") !== "RaveMap" ||
       tagValue(event, "submission") !== "public" ||
       !tagValues(event, "t").includes("ravemap") ||
@@ -919,12 +920,66 @@ export class NostrEventRepository {
         expose: true,
       });
     }
+    if (!existing && (await this.slugExists(slug))) {
+      throw new AppError("This event URL is already taken", {
+        code: "SLUG_TAKEN",
+        status: 409,
+        expose: true,
+      });
+    }
+
+    const secretWrites =
+      accessType === "gated"
+        ? await (async () => {
+            const command: CreateEventCommand = {
+              slug,
+              title: input.title,
+              summary: input.summary,
+              publicLocation: input.publicLocation,
+              publicLatitude: input.publicLatitude,
+              publicLongitude: input.publicLongitude,
+              startsAt: input.startsAt,
+              endAt: input.endAt,
+              coverImageUrl: input.coverImageUrl,
+              externalUrl: input.externalUrl,
+              genres: input.genres,
+              lineup: input.lineup,
+              tags: input.tags,
+              galleryImageUrls: [],
+              accessType: "gated",
+              isPublished: true,
+              unlockCode: input.unlockCode,
+              secretInfo: input.secretInfo,
+              secretLocationName: input.secretLocationName,
+              secretLatitude: input.secretLatitude,
+              secretLongitude: input.secretLongitude,
+              secretMapNote: input.secretMapNote,
+            };
+            const codeHash = await hashUnlockCode(input.unlockCode ?? "");
+            const secret = secretFromCommand(command);
+            const secretEvent = await this.signer.sign({
+              kind: SECRET_EVENT_KIND,
+              created_at: nowSeconds(),
+              tags: [["d", slug]],
+              content: encryptSecretBundle(
+                {
+                  codeHash,
+                  secret,
+                },
+                {
+                  coordinate: nostrCoordinate(SECRET_EVENT_KIND, this.pubkey, slug),
+                },
+              ),
+            });
+            return this.publish(secretEvent);
+          })()
+        : [];
 
     const writes = await this.publish(event);
     return {
       id: event.id,
       slug,
-      writes,
+      writes: [...secretWrites, ...writes],
     };
   }
 
