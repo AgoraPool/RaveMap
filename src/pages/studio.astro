@@ -39,17 +39,6 @@ const cspNonce = Astro.locals.cspNonce;
       <p id="global-status" class="status-line neutral">Studio připraveno.</p>
 
       <section class="studio-grid">
-        <aside class="studio-inventory">
-          <div class="panel-head">
-            <div>
-              <p class="kicker">Tvoje studio</p>
-              <h2>Akce</h2>
-            </div>
-            <button id="reload-events" type="button">Obnovit</button>
-          </div>
-          <div id="studio-events" class="studio-events"></div>
-        </aside>
-
         <section class="studio-editor">
           <div class="wizard-steps" aria-label="Kroky editoru">
             <button type="button" data-step-button="0" data-active="true">1 Základ</button>
@@ -91,7 +80,7 @@ const cspNonce = Astro.locals.cspNonce;
                   <span>Začátek</span>
                   <input id="startsAt" name="startsAt" type="datetime-local" required />
                 </label>
-                <label>
+                <label class="optional-field">
                   <span>Konec</span>
                   <input id="endAt" name="endAt" type="datetime-local" />
                 </label>
@@ -103,11 +92,11 @@ const cspNonce = Astro.locals.cspNonce;
               </label>
 
               <div class="field-row">
-                <label>
+                <label class="optional-field">
                   <span>Veřejná šířka</span>
                   <input id="publicLatitude" name="publicLatitude" type="number" step="0.000001" min="-90" max="90" />
                 </label>
-                <label>
+                <label class="optional-field">
                   <span>Veřejná délka</span>
                   <input id="publicLongitude" name="publicLongitude" type="number" step="0.000001" min="-180" max="180" />
                 </label>
@@ -128,33 +117,33 @@ const cspNonce = Astro.locals.cspNonce;
               </label>
 
               <div class="field-row">
-                <label>
+                <label class="optional-field">
                   <span>Žánry</span>
                   <input id="genres" name="genres" type="text" placeholder="tekno, freetekno" />
                 </label>
-                <label>
+                <label class="optional-field">
                   <span>Lineup</span>
                   <input id="lineup" name="lineup" type="text" placeholder="crew, live, djs" />
                 </label>
               </div>
 
               <div class="field-row">
-                <label>
+                <label class="optional-field">
                   <span>URL plakátu</span>
                   <input id="coverImageUrl" name="coverImageUrl" type="url" inputmode="url" placeholder="https://..." />
                 </label>
-                <label>
+                <label class="optional-field">
                   <span>Externí odkaz</span>
                   <input id="externalUrl" name="externalUrl" type="url" inputmode="url" placeholder="https://..." />
                 </label>
               </div>
 
-              <label>
+              <label class="optional-field">
                 <span>SimpleX kontakt</span>
                 <input id="simplexUrl" name="simplexUrl" type="text" inputmode="url" placeholder="https://smp12.simplex.im/..." />
               </label>
 
-              <label>
+              <label class="optional-field">
                 <span>Tagy</span>
                 <input id="tags" name="tags" type="text" placeholder="festival, soundsystem, město" />
               </label>
@@ -194,7 +183,7 @@ const cspNonce = Astro.locals.cspNonce;
                   <span>Tajné info</span>
                   <textarea id="secretInfo" name="secretInfo" maxlength="4400"></textarea>
                 </label>
-                <label>
+                <label class="optional-field">
                   <span>Poznámka k mapě</span>
                   <textarea id="secretMapNote" name="secretMapNote" maxlength="500"></textarea>
                 </label>
@@ -221,6 +210,8 @@ const cspNonce = Astro.locals.cspNonce;
               </div>
             </section>
 
+            <aside id="publish-readiness" class="readiness-panel" aria-live="polite"></aside>
+
             <div class="wizard-actions">
               <button id="prev-step" type="button">Zpět</button>
               <button id="next-step" type="button">Další</button>
@@ -231,6 +222,17 @@ const cspNonce = Astro.locals.cspNonce;
             <p id="form-status" class="status-line neutral">Připraveno.</p>
           </form>
         </section>
+
+        <aside class="studio-inventory">
+          <div class="panel-head">
+            <div>
+              <p class="kicker">Tvoje studio</p>
+              <h2>Akce</h2>
+            </div>
+            <button id="reload-events" type="button">Obnovit</button>
+          </div>
+          <div id="studio-events" class="studio-events"></div>
+        </aside>
       </section>
     </section>
   </main>
@@ -242,6 +244,7 @@ const cspNonce = Astro.locals.cspNonce;
     secret: "",
     crew: null,
     events: [],
+    editingEvent: null,
     step: 0,
   };
 
@@ -264,6 +267,7 @@ const cspNonce = Astro.locals.cspNonce;
   const secretFields = document.getElementById("secret-fields");
   const publicPreview = document.getElementById("public-preview");
   const secretPreview = document.getElementById("secret-preview");
+  const readinessPanel = document.getElementById("publish-readiness");
   const prevStep = document.getElementById("prev-step");
   const nextStep = document.getElementById("next-step");
   const saveDraftButton = document.getElementById("save-draft");
@@ -284,6 +288,12 @@ const cspNonce = Astro.locals.cspNonce;
   function setStatus(target, message, tone = "neutral") {
     if (!(target instanceof HTMLElement)) return;
     target.textContent = message;
+    target.dataset.tone = tone;
+  }
+
+  function setStatusHtml(target, html, tone = "neutral") {
+    if (!(target instanceof HTMLElement)) return;
+    target.innerHTML = html;
     target.dataset.tone = tone;
   }
 
@@ -334,6 +344,98 @@ const cspNonce = Astro.locals.cspNonce;
     return data.get("accessType") === "gated" ? "gated" : "public";
   }
 
+  function formValue(name) {
+    if (!(form instanceof HTMLFormElement)) return "";
+    const data = new FormData(form);
+    return String(data.get(name) || "").trim();
+  }
+
+  function hasNumberValue(name) {
+    if (!(form instanceof HTMLFormElement)) return false;
+    const data = new FormData(form);
+    const raw = data.get(name);
+    return raw !== null && String(raw).trim().length > 0 && Number.isFinite(Number(raw));
+  }
+
+  function currentEditingEvent() {
+    if (!(form instanceof HTMLFormElement) || !state.editingEvent) return null;
+    const slugField = form.elements.namedItem("slug");
+    const slug = slugField instanceof HTMLInputElement ? slugField.value : "";
+    return state.editingEvent.slug === slug ? state.editingEvent : null;
+  }
+
+  function publishReadiness() {
+    const accessType = selectedAccessType();
+    const missing = [];
+    if (formValue("title").length < 3) missing.push("název");
+    if (!toIsoFromLocal(formValue("startsAt"))) missing.push("začátek");
+    if (formValue("publicLocation").length < 2) missing.push("veřejná lokalita");
+    if (formValue("summary").length < 10) missing.push("popis");
+
+    const editing = currentEditingEvent();
+    const gated = accessType === "gated";
+    const secretFieldsFilled = {
+      unlockCode: formValue("unlockCode").length >= 8,
+      secretLocationName: formValue("secretLocationName").length > 0,
+      secretLatitude: hasNumberValue("secretLatitude"),
+      secretLongitude: hasNumberValue("secretLongitude"),
+      secretInfo: formValue("secretInfo").length > 0,
+    };
+    const completeSecret = Object.values(secretFieldsFilled).every(Boolean);
+    const anySecret = Object.values(secretFieldsFilled).some(Boolean);
+    const preservingSecret = gated && !completeSecret && !anySecret && editing?.accessType === "gated";
+    const partialSecret = gated && !completeSecret && anySecret;
+    const missingSecret = Object.entries(secretFieldsFilled)
+      .filter(([, ok]) => !ok)
+      .map(([name]) => {
+        if (name === "unlockCode") return "kód";
+        if (name === "secretLocationName") return "tajná lokace";
+        if (name === "secretLatitude") return "tajná šířka";
+        if (name === "secretLongitude") return "tajná délka";
+        return "tajné info";
+      });
+
+    return {
+      accessType,
+      missing,
+      completeSecret,
+      preservingSecret,
+      partialSecret,
+      missingSecret,
+      ready: missing.length === 0 && (!gated || completeSecret || preservingSecret),
+    };
+  }
+
+  function renderReadiness() {
+    if (!(readinessPanel instanceof HTMLElement)) return;
+    const readiness = publishReadiness();
+    const accessLabel = readiness.accessType === "gated" ? "Publikace bude na kód" : "Publikace bude veřejná";
+    const items = [];
+    items.push(readiness.missing.length === 0 ? "Veřejná část je připravená." : `Chybí: ${readiness.missing.join(", ")}.`);
+    if (readiness.accessType === "gated") {
+      if (readiness.completeSecret) {
+        items.push("Tajná vrstva vytvoří nový kód a lokaci.");
+      } else if (readiness.preservingSecret) {
+        items.push("Tajná vrstva zachová už uložený kód a lokaci.");
+      } else if (readiness.partialSecret) {
+        items.push(`Tajná vrstva není kompletní. Doplň: ${readiness.missingSecret.join(", ")}.`);
+      } else {
+        items.push("Nová akce na kód potřebuje kód, tajné info, název lokace a obě souřadnice.");
+      }
+    } else {
+      items.push("Tajná vrstva je vypnutá.");
+    }
+
+    readinessPanel.dataset.ready = String(readiness.ready);
+    readinessPanel.innerHTML = `
+      <div>
+        <span>${readiness.ready ? "Připraveno" : "Ještě doplnit"}</span>
+        <strong>${escapeHtml(accessLabel)}</strong>
+      </div>
+      <ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+    `;
+  }
+
   function syncAccessMode() {
     const gated = selectedAccessType() === "gated";
     if (secretFields instanceof HTMLElement) secretFields.dataset.disabled = String(!gated);
@@ -342,6 +444,7 @@ const cspNonce = Astro.locals.cspNonce;
       if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.disabled = !gated;
     }
     renderPreview();
+    renderReadiness();
   }
 
   function payloadFromForm(isPublished) {
@@ -385,6 +488,7 @@ const cspNonce = Astro.locals.cspNonce;
     if (prevStep instanceof HTMLButtonElement) prevStep.disabled = state.step === 0;
     if (nextStep instanceof HTMLButtonElement) nextStep.hidden = state.step === 3;
     renderPreview();
+    renderReadiness();
   }
 
   function renderPreview() {
@@ -420,6 +524,7 @@ const cspNonce = Astro.locals.cspNonce;
     form.reset();
     const slug = form.elements.namedItem("slug");
     if (slug instanceof HTMLInputElement) slug.value = "";
+    state.editingEvent = null;
     if (editingState instanceof HTMLElement) editingState.textContent = "Nová akce";
     syncAccessMode();
     setStep(0);
@@ -429,6 +534,7 @@ const cspNonce = Astro.locals.cspNonce;
   function fillEditor(item) {
     resetEditor();
     if (!(form instanceof HTMLFormElement)) return;
+    state.editingEvent = item;
     const fields = {
       slug: item.slug,
       title: item.title,
@@ -464,7 +570,13 @@ const cspNonce = Astro.locals.cspNonce;
   function renderEvents() {
     if (!(eventsEl instanceof HTMLElement)) return;
     if (state.events.length === 0) {
-      eventsEl.innerHTML = `<p class="empty-state">Studio zatím nemá žádné akce.</p>`;
+      eventsEl.innerHTML = `
+        <div class="first-event-state">
+          <strong>Začni první akcí</strong>
+          <p>Vyplň editor vlevo, ulož koncept a potom ho publikuj. Veřejná akce potřebuje jen veřejnou část; akce na kód potřebuje i kompletní tajnou vrstvu.</p>
+          <button type="button" data-action="first-event">Vytvořit první akci</button>
+        </div>
+      `;
       return;
     }
 
@@ -542,9 +654,22 @@ const cspNonce = Astro.locals.cspNonce;
         body: JSON.stringify(payload),
       });
       const saved = await parseResponse(response);
-      setStatus(formStatus, isPublished ? `Publikováno ${saved.slug}.` : `Koncept uložen ${saved.slug}.`, "positive");
       resetEditor();
       await loadEvents();
+      if (isPublished) {
+        const crewHref = state.crew?.slug ? `/crew/${encodeURIComponent(state.crew.slug)}` : "/crew";
+        setStatusHtml(
+          formStatus,
+          `Publikováno ${escapeHtml(saved.slug)}. <a href="/akce/${escapeHtml(saved.slug)}" target="_blank" rel="noreferrer">Otevřít akci</a> <a href="${escapeHtml(crewHref)}" target="_blank" rel="noreferrer">Otevřít crew profil</a>`,
+          "positive",
+        );
+      } else {
+        setStatusHtml(
+          formStatus,
+          `Koncept uložen ${escapeHtml(saved.slug)}. Můžeš ho upravit v seznamu akcí nebo rovnou publikovat.`,
+          "positive",
+        );
+      }
     } catch (error) {
       setStatus(formStatus, error instanceof Error ? error.message : "Uložení selhalo.", "danger");
     } finally {
@@ -562,8 +687,17 @@ const cspNonce = Astro.locals.cspNonce;
       headers: headers(true),
       body: JSON.stringify({ slug, action }),
     });
-    await parseResponse(response);
-    setStatus(globalStatus, action === "archive" ? "Akce archivována." : "Koncept publikován.", "positive");
+    const result = await parseResponse(response);
+    if (action === "archive") {
+      setStatus(globalStatus, "Akce archivována.", "positive");
+    } else {
+      const crewHref = state.crew?.slug ? `/crew/${encodeURIComponent(state.crew.slug)}` : "/crew";
+      setStatusHtml(
+        globalStatus,
+        `Koncept publikován. <a href="/akce/${escapeHtml(result.slug || slug)}" target="_blank" rel="noreferrer">Otevřít akci</a> <a href="${escapeHtml(crewHref)}" target="_blank" rel="noreferrer">Otevřít crew profil</a>`,
+        "positive",
+      );
+    }
     await loadEvents();
   }
 
@@ -591,6 +725,7 @@ const cspNonce = Astro.locals.cspNonce;
   form?.addEventListener("input", () => {
     syncAccessMode();
     renderPreview();
+    renderReadiness();
   });
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -602,8 +737,16 @@ const cspNonce = Astro.locals.cspNonce;
     const actionTarget = target.closest("[data-action]");
     if (!(actionTarget instanceof HTMLElement)) return;
     const action = actionTarget.dataset.action;
+    if (!action) return;
+    if (action === "first-event") {
+      resetEditor();
+      const title = document.getElementById("title");
+      if (title instanceof HTMLInputElement) title.focus();
+      return;
+    }
+
     const slug = actionTarget.dataset.slug;
-    if (!action || !slug) return;
+    if (!slug) return;
     const item = state.events.find((candidate) => candidate.slug === slug);
     if (action === "edit" && item) {
       fillEditor(item);
@@ -727,9 +870,17 @@ const cspNonce = Astro.locals.cspNonce;
 
   .studio-grid {
     display: grid;
-    grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.38fr);
     gap: 18px;
     align-items: start;
+  }
+
+  .studio-editor {
+    grid-column: 1;
+  }
+
+  .studio-inventory {
+    grid-column: 2;
   }
 
   .studio-inventory,
@@ -750,6 +901,66 @@ const cspNonce = Astro.locals.cspNonce;
     border: 2px solid #000;
     background: rgba(255, 255, 255, 0.72);
     padding: 10px;
+  }
+
+  .first-event-state,
+  .readiness-panel {
+    display: grid;
+    gap: 10px;
+    border: 2px solid #000;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 12px;
+  }
+
+  .first-event-state strong,
+  .readiness-panel strong {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .first-event-state p {
+    margin: 0;
+    line-height: 1.45;
+    font-weight: 700;
+  }
+
+  .readiness-panel {
+    background: #fffef8;
+  }
+
+  .readiness-panel[data-ready="true"] {
+    border-color: #087c2f;
+  }
+
+  .readiness-panel[data-ready="false"] {
+    border-color: #9b0000;
+  }
+
+  .readiness-panel > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .readiness-panel span {
+    border: 2px solid #000;
+    background: #000;
+    color: #c00;
+    padding: 6px 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .readiness-panel ul {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 4px;
+    font-weight: 700;
   }
 
   .studio-event div:first-child {
@@ -830,6 +1041,15 @@ const cspNonce = Astro.locals.cspNonce;
   label {
     display: grid;
     gap: 7px;
+  }
+
+  .optional-field {
+    opacity: 0.76;
+  }
+
+  .optional-field span::after {
+    content: " / volitelné";
+    font-weight: 700;
   }
 
   .field-row {
@@ -944,6 +1164,13 @@ const cspNonce = Astro.locals.cspNonce;
     font-weight: 900;
   }
 
+  .status-line a {
+    display: inline-block;
+    margin-left: 8px;
+    color: inherit;
+    text-decoration: underline;
+  }
+
   .status-line[data-tone="positive"] {
     color: #087c2f;
   }
@@ -973,6 +1200,11 @@ const cspNonce = Astro.locals.cspNonce;
     .preview-grid,
     .wizard-steps {
       grid-template-columns: 1fr;
+    }
+
+    .studio-editor,
+    .studio-inventory {
+      grid-column: auto;
     }
 
     .wizard-steps button,

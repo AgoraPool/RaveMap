@@ -259,6 +259,11 @@ const cspNonce = Astro.locals.cspNonce;
             <div class="code-tools">
               <button id="generate-crew-code" type="button">Generovat kód</button>
               <button id="copy-crew-code" type="button">Kopírovat kód</button>
+              <button id="copy-crew-invite" type="button">Kopírovat pozvánku</button>
+            </div>
+            <div class="handoff-panel">
+              <strong>Handoff pro crew</strong>
+              <p>Po vygenerování kódu zkopíruj pozvánku. Obsahuje Studio URL, veřejný crew profil, slug a jednorázový crew kód.</p>
             </div>
             <label>
               <span>Název</span>
@@ -440,6 +445,7 @@ const cspNonce = Astro.locals.cspNonce;
   const archiveCrewButton = document.getElementById("archive-crew");
   const generateCrewCodeButton = document.getElementById("generate-crew-code");
   const copyCrewCodeButton = document.getElementById("copy-crew-code");
+  const copyCrewInviteButton = document.getElementById("copy-crew-invite");
   const crewStatus = document.getElementById("crew-status");
   const crewList = document.getElementById("crew-list");
 
@@ -845,6 +851,50 @@ const cspNonce = Astro.locals.cspNonce;
     setStatus(crewStatus, "Crew kód zkopírován.", "positive");
   }
 
+  function crewSlugValue() {
+    if (!(crewForm instanceof HTMLFormElement)) return "";
+    const field = crewForm.elements.namedItem("slug");
+    return field instanceof HTMLInputElement ? field.value.trim().toLowerCase() : "";
+  }
+
+  function crewNameValue() {
+    if (!(crewForm instanceof HTMLFormElement)) return "";
+    const field = crewForm.elements.namedItem("name");
+    return field instanceof HTMLInputElement ? field.value.trim() : "";
+  }
+
+  function crewInviteText(slug, code) {
+    const origin = window.location.origin;
+    const name = crewNameValue() || slug;
+    return [
+      `RaveMap Studio pozvánka pro ${name}`,
+      "",
+      `Studio: ${origin}/studio`,
+      `Crew profil: ${origin}/crew/${slug}`,
+      `Crew slug: ${slug}`,
+      `Crew kód: ${code}`,
+      "",
+      "Kód si uložte bezpečně. V této záložce se nepersistuje a admin ho může později rotovat.",
+    ].join("\n");
+  }
+
+  async function copyCrewInvite() {
+    const slug = crewSlugValue();
+    const code = crewCodeInput()?.value.trim() || "";
+    if (!slug) {
+      setStatus(crewStatus, "Nejdřív vyplň crew slug.", "warning");
+      return;
+    }
+    if (!code) {
+      setGeneratedCrewCode();
+      setStatus(crewStatus, "Vygeneroval jsem kód. Zkontroluj ho a zkopíruj pozvánku znovu.", "warning");
+      return;
+    }
+
+    await navigator.clipboard.writeText(crewInviteText(slug, code));
+    setStatus(crewStatus, "Crew pozvánka zkopírována. Pošli ji jen důvěryhodnému kontaktu.", "positive");
+  }
+
   async function loadDiagnostics() {
     if (!(diagnostics instanceof HTMLElement)) return;
     const response = await fetch("/api/admin/diagnostics", { headers: adminHeaders() });
@@ -1160,6 +1210,13 @@ const cspNonce = Astro.locals.cspNonce;
       setStatus(crewStatus, error instanceof Error ? error.message : "Kopírování kódu selhalo.", "danger");
     }
   });
+  copyCrewInviteButton?.addEventListener("click", async () => {
+    try {
+      await copyCrewInvite();
+    } catch (error) {
+      setStatus(crewStatus, error instanceof Error ? error.message : "Kopírování pozvánky selhalo.", "danger");
+    }
+  });
   archiveCrewButton?.addEventListener("click", async () => {
     const payload = crewPayload("archive");
     if (!payload.slug || !window.confirm(`Archivovat crew ${payload.slug}?`)) return;
@@ -1437,6 +1494,26 @@ const cspNonce = Astro.locals.cspNonce;
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .handoff-panel {
+    display: grid;
+    gap: 5px;
+    border: 2px solid #000;
+    background: rgba(255, 254, 248, 0.62);
+    padding: 10px;
+  }
+
+  .handoff-panel strong {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.78rem;
+  }
+
+  .handoff-panel p {
+    margin: 0;
+    line-height: 1.4;
+    font-weight: 700;
   }
 
   .status-grid {

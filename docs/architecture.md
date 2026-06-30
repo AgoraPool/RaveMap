@@ -36,10 +36,11 @@ Gated event secrets use `scrypt` for unlock-code hashing and `AES-256-GCM` for p
 
 ## Studio Flow
 
-1. `/studio` authenticates with `ORGANIZER_SECRET`.
-2. Studio lists only `origin=studio` events.
-3. Studio creates encrypted drafts or publishes live events using the same event model as admin.
-4. Studio archive writes the same app tombstone, but is limited to studio-created events.
+1. Admin creates an invite-only crew profile and crew code.
+2. `/studio` authenticates with `x-crew-slug` and `x-crew-secret`.
+3. Studio lists only `origin=studio` events owned by that crew.
+4. Studio creates encrypted drafts or publishes live events using the same event model as admin.
+5. Studio archive writes the same app tombstone, but is limited to that crew's studio-created events.
 
 ## Mirroring
 

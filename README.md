@@ -8,7 +8,7 @@ Kam Na Rave is a Nostr-backed event app for underground music events. It publish
 - Two event access modes: public-only and code-gated.
 - Optional encrypted secret payloads unlocked with attendee codes.
 - Nostr-backed admin cockpit for creating, editing, publishing, deleting, and diagnosing events.
-- Hidden organizer studio for crew-friendly draft, preview, publish, and archive workflows.
+- Invite-only crew studio for crew-friendly draft, preview, publish, and archive workflows.
 - Import workflow for mirroring public music events from `jiripetrak.cz` into reviewable drafts.
 
 ## Runtime Model
@@ -23,7 +23,7 @@ Kam Na Rave is a Nostr-backed event app for underground music events. It publish
 ## Required Environment
 
 - `ADMIN_SECRET`: shared admin secret.
-- `ORGANIZER_SECRET`: shared organizer studio secret.
+- `ORGANIZER_SECRET`: optional legacy shared organizer secret. Prefer invite-only crew accounts.
 - `ENCRYPTION_KEY`: base64 encoded 32-byte key for gated secret payload encryption.
 - `RATE_LIMIT_SECRET`: high-entropy HMAC key for unlock rate limit identity.
 - `NOSTR_RELAYS`: comma-separated `wss://` or `ws://` relay URLs.

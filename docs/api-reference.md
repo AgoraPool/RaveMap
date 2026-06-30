@@ -19,10 +19,10 @@ Admin endpoints require one of:
 - `x-admin-secret: <ADMIN_SECRET>`
 - `Authorization: Bearer <ADMIN_SECRET>`
 
-Studio endpoints require one of:
+Studio endpoints require:
 
-- `x-organizer-secret: <ORGANIZER_SECRET>`
-- `Authorization: Bearer <ORGANIZER_SECRET>`
+- `x-crew-slug: <crew-slug>`
+- `x-crew-secret: <crew-code>`
 
 ## `GET /api/admin/events`
 
@@ -111,9 +111,27 @@ Scheduler-facing sync endpoint. Requires:
 
 - `x-mirror-sync-secret: <MIRROR_SYNC_SECRET>`
 
+## `GET /api/admin/crews`
+
+Returns active and archived crew profiles. The response never includes crew code hashes or encrypted account bundles.
+
+## `POST /api/admin/crews`
+
+Creates or updates a crew profile, rotates a crew code, archives a crew, or assigns a Studio event to a crew. New crews require a one-time `crewCode`; existing profiles can be updated without resending the code.
+
+```json
+{
+  "action": "upsert",
+  "slug": "acid-crew",
+  "name": "Acid Crew",
+  "summary": "Underground parties and sound.",
+  "crewCode": "generated-safe-code"
+}
+```
+
 ## `GET /api/studio/events`
 
-Returns only events created by `/studio`, identified by the `origin=studio` Nostr marker.
+Returns only events created by `/studio` for the authenticated crew, identified by the `origin=studio` Nostr marker and crew ownership tag.
 
 ## `POST /api/studio/events`
 
@@ -135,7 +153,7 @@ Creates or replaces a studio event as a draft or live event. Studio payloads can
 }
 ```
 
-For existing gated studio events, secret fields may be omitted to preserve the already encrypted secret bundle.
+For a new gated Studio event, `unlockCode`, `secretInfo`, `secretLocationName`, `secretLatitude`, and `secretLongitude` are required. For existing gated Studio events, secret fields may be omitted to preserve the already encrypted secret bundle.
 
 ## `PATCH /api/studio/events`
 

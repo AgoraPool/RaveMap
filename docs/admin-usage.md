@@ -10,12 +10,30 @@
 
 Mirrored events are never published immediately. They enter admin as public-only drafts and can be reviewed, edited, published, or deleted.
 
-# Organizer Studio
+# Invite a Crew
+
+1. Open the crew panel in `/admin`.
+2. Enter a crew slug. Name, summary, avatar, banner, website, SimpleX, and Lightning are optional.
+3. Click `Generovat kód` for a safe one-time crew code.
+4. Save the crew profile.
+5. Click `Kopírovat pozvánku` and send it only to the trusted crew contact.
+6. Rotate the crew code from admin if the invite is exposed or the crew contact changes.
+
+# Crew Studio
 
 1. Open `/studio`.
-2. Enter `ORGANIZER_SECRET`.
-3. Create or edit only studio-created events.
-4. Use the guided steps to prepare public info, optional code-gated details, and preview the public/secret split.
-5. Save as draft, publish, or archive.
+2. Enter the crew slug and crew code from the invite.
+3. Use the guided first-publish editor to prepare public info.
+4. For a code-gated first event, fill the unlock code, secret info, secret location name, and both secret coordinates.
+5. Save as draft, publish, or archive only that crew's events.
+6. After publish, open the event detail and public crew page from the success links.
 
 Studio does not expose imports, relay diagnostics, bulk deletion, or non-studio events.
+
+## First Event Checklist
+
+- Public event: title, start time, public location, and public description.
+- Optional public context: end time, public coordinates, poster URL, external link, SimpleX, genres, lineup, and tags.
+- Code-gated event: unlock code, secret info, secret location name, secret latitude, and secret longitude.
+- Save a draft first if the crew wants to review wording before publishing.
+- Publish only when the readiness panel says the public part and gated layer are ready.
