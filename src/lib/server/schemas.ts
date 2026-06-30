@@ -303,6 +303,7 @@ export const publicSubmitEventSchema = z
     lineup: stringListSchema,
     tags: stringListSchema,
     accessType: z.enum(["public", "gated"]).optional(),
+    website: optionalTrimmedString(250),
     unlockCode: optionalTrimmedString(128),
     secretInfo: optionalTrimmedString(4400),
     secretLocationName: optionalTrimmedString(180),

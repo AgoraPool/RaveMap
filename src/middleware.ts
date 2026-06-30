@@ -1,5 +1,6 @@
 import { defineMiddleware } from "astro:middleware";
 import { randomBytes } from "node:crypto";
+import { cacheHeaderFor } from "./lib/server/cache-policy";
 
 function buildCsp(nonce: string): string {
   return [
@@ -25,18 +26,6 @@ const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
 };
-
-function cacheHeaderFor(pathname: string, method: string): string | null {
-  if (method !== "GET") {
-    return null;
-  }
-
-  if (pathname === "/akce" || pathname.startsWith("/akce/")) {
-    return "public, max-age=20, stale-while-revalidate=120";
-  }
-
-  return null;
-}
 
 export const onRequest = defineMiddleware(async ({ request, url, locals }, next) => {
   const nonce = randomBytes(16).toString("base64");

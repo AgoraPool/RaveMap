@@ -4,6 +4,7 @@ import { jsonOk, withApiErrorHandling } from "../../../lib/server/http";
 import { getNostrEventRepository } from "../../../lib/server/nostr-repository";
 import type { NostrEvent } from "../../../lib/server/nostr-types";
 import { enforceRequestRateLimit } from "../../../lib/server/api-security";
+import { assertPublicSubmitAllowed } from "../../../lib/server/public-submit";
 import { publicSubmitEventSchema } from "../../../lib/server/schemas";
 import { slugify, randomSlugSuffix } from "../../../lib/server/slug";
 import { parseJsonBody } from "../../../lib/server/validation";
@@ -34,6 +35,7 @@ export const POST: APIRoute = async ({ request }) =>
     if (limited) return limited;
 
     const input = await parseJsonBody(request, publicSubmitEventSchema);
+    assertPublicSubmitAllowed(input);
     const startsAt = new Date(input.startsAt);
     const endAt = input.endAt ? new Date(input.endAt) : undefined;
     if (Number.isNaN(startsAt.getTime()) || (endAt && Number.isNaN(endAt.getTime()))) {
@@ -53,7 +55,6 @@ export const POST: APIRoute = async ({ request }) =>
     }
 
     const repository = getNostrEventRepository();
-    const accessType = input.accessType ?? "public";
     if (input.signedEvent) {
       const result = await repository.publishSignedPublicSubmission({
         title: input.title,
@@ -69,13 +70,7 @@ export const POST: APIRoute = async ({ request }) =>
         genres: input.genres,
         lineup: input.lineup,
         tags: input.tags,
-        accessType,
-        unlockCode: input.unlockCode,
-        secretInfo: input.secretInfo,
-        secretLocationName: input.secretLocationName,
-        secretLatitude: input.secretLatitude,
-        secretLongitude: input.secretLongitude,
-        secretMapNote: input.secretMapNote,
+        accessType: "public",
         signedEvent: input.signedEvent as NostrEvent,
       });
       return jsonOk({ slug: result.slug, id: result.id }, 201);
@@ -98,16 +93,11 @@ export const POST: APIRoute = async ({ request }) =>
       lineup: input.lineup,
       tags: input.tags,
       galleryImageUrls: [],
-      accessType,
+      accessType: "public" as const,
       isPublished: true,
-      unlockCode: input.unlockCode,
-      secretInfo: input.secretInfo,
-      secretLocationName: input.secretLocationName,
-      secretLatitude: input.secretLatitude,
-      secretLongitude: input.secretLongitude,
-      secretMapNote: input.secretMapNote,
+      origin: "public" as const,
     };
-    const result = accessType === "gated" ? await repository.createEvent(command) : await repository.createPublicSubmission(command);
+    const result = await repository.createPublicSubmission(command);
 
     return jsonOk({ slug, id: result.id }, 201);
   });

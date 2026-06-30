@@ -56,6 +56,18 @@ const cspNonce = Astro.locals.cspNonce;
 
       <p id="global-status" class="status-line neutral">Pracovní plocha načtena.</p>
 
+      <section class="panel review-panel" aria-labelledby="review-title">
+        <div class="panel-head">
+          <div>
+            <p class="kicker">Review</p>
+            <h2 id="review-title">Co potřebuje pozornost</h2>
+          </div>
+          <button id="clear-review-filters" type="button">Vyčistit filtry</button>
+        </div>
+        <div id="review-summary" class="review-summary" aria-label="Souhrn inventáře"></div>
+        <div id="review-queues" class="review-queues" aria-label="Review fronty"></div>
+      </section>
+
       <div class="cockpit-grid">
         <div class="panel form-panel">
           <div class="panel-head">
@@ -216,6 +228,7 @@ const cspNonce = Astro.locals.cspNonce;
 
             <div class="action-row editor-actions">
               <button id="save-event" type="submit">Uložit koncept</button>
+              <p id="editor-readiness" class="status-line neutral">Editor čeká na akci.</p>
               <p id="form-status" class="status-line neutral">Připraveno.</p>
             </div>
           </form>
@@ -352,9 +365,12 @@ const cspNonce = Astro.locals.cspNonce;
               <option value="gated">Na kód</option>
             </select>
             <select id="source-filter" aria-label="Typ zdroje">
-              <option value="all">Všechny zdroje</option>
+              <option value="all">Všechny původy</option>
+              <option value="community">Komunitní</option>
+              <option value="crew">Crew</option>
               <option value="imported">Importované</option>
-              <option value="manual">Ručně</option>
+              <option value="admin">Admin</option>
+              <option value="manual">Ručně bez zdroje</option>
             </select>
             <select id="time-filter" aria-label="Čas akce">
               <option value="all">Všechna data</option>
@@ -365,6 +381,8 @@ const cspNonce = Astro.locals.cspNonce;
             <button id="reload-events" type="button">Obnovit</button>
           </div>
         </div>
+        <div id="quick-filters" class="quick-filters" aria-label="Rychlé filtry inventáře"></div>
+        <div id="active-filters" class="active-filters" aria-live="polite"></div>
         <div class="bulk-bar">
           <label class="select-filtered">
             <input id="select-filtered" type="checkbox" />
@@ -394,6 +412,7 @@ const cspNonce = Astro.locals.cspNonce;
       access: "all",
       source: "all",
       time: "all",
+      review: "all",
     },
   };
 
@@ -411,12 +430,16 @@ const cspNonce = Astro.locals.cspNonce;
   const eventCount = document.getElementById("event-count");
   const relayState = document.getElementById("relay-state");
   const importState = document.getElementById("import-state");
+  const reviewSummary = document.getElementById("review-summary");
+  const reviewQueues = document.getElementById("review-queues");
+  const clearReviewFiltersButton = document.getElementById("clear-review-filters");
 
   const eventForm = document.getElementById("event-form");
   const gatedFields = document.getElementById("gated-fields");
   const resetFormButton = document.getElementById("reset-form");
   const saveEventButton = document.getElementById("save-event");
   const publishInput = document.getElementById("isPublished");
+  const editorReadiness = document.getElementById("editor-readiness");
   const formStatus = document.getElementById("form-status");
   const eventsTable = document.getElementById("events-table");
   const reloadEventsButton = document.getElementById("reload-events");
@@ -431,6 +454,8 @@ const cspNonce = Astro.locals.cspNonce;
   const bulkPublishButton = document.getElementById("bulk-publish");
   const bulkDeleteButton = document.getElementById("bulk-delete");
   const clearSelectionButton = document.getElementById("clear-selection");
+  const quickFilters = document.getElementById("quick-filters");
+  const activeFilters = document.getElementById("active-filters");
 
   const previewImportButton = document.getElementById("preview-import");
   const syncImportButton = document.getElementById("sync-import");
@@ -538,6 +563,7 @@ const cspNonce = Astro.locals.cspNonce;
       }
     }
     syncSaveButtonLabel();
+    renderEditorReadiness();
   }
 
   function resetEditor() {
@@ -547,6 +573,7 @@ const cspNonce = Astro.locals.cspNonce;
     if (slug instanceof HTMLInputElement) slug.value = "";
     syncAccessMode();
     syncSaveButtonLabel();
+    renderEditorReadiness();
     setStatus(formStatus, "Připraveno.", "neutral");
   }
 
@@ -582,6 +609,7 @@ const cspNonce = Astro.locals.cspNonce;
     if (access instanceof HTMLInputElement) access.checked = true;
     syncAccessMode();
     syncSaveButtonLabel();
+    renderEditorReadiness();
     setStatus(formStatus, `Upravuješ ${item.slug}. Uložení nahradí nejnovější Nostr událost pro tento slug.`, "warning");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -596,6 +624,9 @@ const cspNonce = Astro.locals.cspNonce;
         item.publicLocation,
         item.source?.name,
         item.source?.url,
+        item.origin,
+        item.crewSlug,
+        item.crewName,
         item.externalUrl,
         ...(item.tags || []),
         ...(item.genres || []),
@@ -614,20 +645,233 @@ const cspNonce = Astro.locals.cspNonce;
       const matchesAccess = state.filters.access === "all" || item.accessType === state.filters.access;
       const matchesSource =
         state.filters.source === "all" ||
-        (state.filters.source === "imported" && item.source) ||
-        (state.filters.source === "manual" && !item.source);
+        (state.filters.source === "community" && provenanceFor(item).key === "community") ||
+        (state.filters.source === "crew" && provenanceFor(item).key === "crew") ||
+        (state.filters.source === "imported" && provenanceFor(item).key === "import") ||
+        (state.filters.source === "admin" && provenanceFor(item).key === "admin") ||
+        (state.filters.source === "manual" && provenanceFor(item).key === "admin" && !item.source);
       const matchesTime =
         state.filters.time === "all" ||
         (state.filters.time === "upcoming" && itemEnd >= now) ||
         (state.filters.time === "past" && itemEnd < now) ||
         (state.filters.time === "missing-image" && !item.coverImageUrl);
+      const matchesReview = matchesReviewFilter(item, state.filters.review);
 
-      return matchesQuery && matchesStatus && matchesAccess && matchesSource && matchesTime;
+      return matchesQuery && matchesStatus && matchesAccess && matchesSource && matchesTime && matchesReview;
     });
   }
 
   function badge(text, tone = "") {
     return `<span class="badge ${tone}">${text}</span>`;
+  }
+
+  function provenanceFor(item) {
+    if (item.crewSlug || item.origin === "studio") return { key: "crew", label: "Crew", tone: "crew" };
+    if (item.source || item.origin === "import") return { key: "import", label: "Import", tone: "import" };
+    if (item.origin === "public" || (item.tags || []).includes("ravemap")) {
+      return { key: "community", label: "Komunita", tone: "community" };
+    }
+    return { key: "admin", label: "Admin", tone: "admin" };
+  }
+
+  const REVIEW_FILTERS = [
+    {
+      key: "community",
+      label: "Komunitní",
+      description: "Veřejné příspěvky od lidí mimo crew/admin.",
+    },
+    {
+      key: "drafts",
+      label: "Koncepty",
+      description: "Akce připravené k kontrole před publikací.",
+    },
+    {
+      key: "missing-image",
+      label: "Bez plakátu",
+      description: "Publikace bez vizuálu nebo obrázku.",
+    },
+    {
+      key: "upcoming-soon",
+      label: "Brzy",
+      description: "Akce začínající během 14 dní.",
+    },
+    {
+      key: "past",
+      label: "Minulé",
+      description: "Akce po konci, vhodné ke kontrole nebo úklidu.",
+    },
+    {
+      key: "gated",
+      label: "Na kód",
+      description: "Akce se zamčenou tajnou vrstvou.",
+    },
+    {
+      key: "crew",
+      label: "Crew",
+      description: "Události napojené na crew profil.",
+    },
+  ];
+
+  function eventEndTime(item) {
+    return new Date(item.endAt || item.startsAt).getTime();
+  }
+
+  function isUpcomingSoon(item, now = Date.now()) {
+    const start = new Date(item.startsAt).getTime();
+    const horizon = now + 14 * 24 * 60 * 60 * 1000;
+    return Number.isFinite(start) && start >= now && start <= horizon;
+  }
+
+  function matchesReviewFilter(item, reviewKey) {
+    if (reviewKey === "all") return true;
+    if (reviewKey === "community") return provenanceFor(item).key === "community";
+    if (reviewKey === "drafts") return !item.isPublished;
+    if (reviewKey === "missing-image") return !item.coverImageUrl;
+    if (reviewKey === "upcoming-soon") return isUpcomingSoon(item);
+    if (reviewKey === "past") return eventEndTime(item) < Date.now();
+    if (reviewKey === "gated") return item.accessType === "gated";
+    if (reviewKey === "crew") return provenanceFor(item).key === "crew";
+    return true;
+  }
+
+  function reviewCount(key) {
+    return state.events.filter((item) => matchesReviewFilter(item, key)).length;
+  }
+
+  function inventorySummary() {
+    return {
+      total: state.events.length,
+      published: state.events.filter((item) => item.isPublished).length,
+      drafts: state.events.filter((item) => !item.isPublished).length,
+      community: state.events.filter((item) => provenanceFor(item).key === "community").length,
+      crew: state.events.filter((item) => provenanceFor(item).key === "crew").length,
+      imports: state.events.filter((item) => provenanceFor(item).key === "import").length,
+      missingImage: state.events.filter((item) => !item.coverImageUrl).length,
+    };
+  }
+
+  function resetFilterInputs() {
+    if (eventFilter instanceof HTMLInputElement) eventFilter.value = "";
+    if (statusFilter instanceof HTMLSelectElement) statusFilter.value = "all";
+    if (accessFilter instanceof HTMLSelectElement) accessFilter.value = "all";
+    if (sourceFilter instanceof HTMLSelectElement) sourceFilter.value = "all";
+    if (timeFilter instanceof HTMLSelectElement) timeFilter.value = "all";
+  }
+
+  function clearFilters() {
+    state.filters = {
+      query: "",
+      status: "all",
+      access: "all",
+      source: "all",
+      time: "all",
+      review: "all",
+    };
+    resetFilterInputs();
+    renderDashboard();
+    renderEvents();
+  }
+
+  function applyReviewFilter(key) {
+    state.filters = {
+      query: "",
+      status: "all",
+      access: "all",
+      source: "all",
+      time: "all",
+      review: key,
+    };
+    resetFilterInputs();
+
+    if (key === "community" && sourceFilter instanceof HTMLSelectElement) {
+      state.filters.source = "community";
+      sourceFilter.value = "community";
+    }
+    if (key === "crew" && sourceFilter instanceof HTMLSelectElement) {
+      state.filters.source = "crew";
+      sourceFilter.value = "crew";
+    }
+    if (key === "drafts" && statusFilter instanceof HTMLSelectElement) {
+      state.filters.status = "draft";
+      statusFilter.value = "draft";
+    }
+    if (key === "missing-image" && timeFilter instanceof HTMLSelectElement) {
+      state.filters.time = "missing-image";
+      timeFilter.value = "missing-image";
+    }
+    if (key === "past" && timeFilter instanceof HTMLSelectElement) {
+      state.filters.time = "past";
+      timeFilter.value = "past";
+    }
+    if (key === "gated" && accessFilter instanceof HTMLSelectElement) {
+      state.filters.access = "gated";
+      accessFilter.value = "gated";
+    }
+
+    renderDashboard();
+    renderEvents();
+    eventsTable?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderDashboard() {
+    const summary = inventorySummary();
+    if (reviewSummary instanceof HTMLElement) {
+      reviewSummary.innerHTML = [
+        ["Celkem", summary.total],
+        ["Publikováno", summary.published],
+        ["Koncepty", summary.drafts],
+        ["Komunita", summary.community],
+        ["Crew", summary.crew],
+        ["Import", summary.imports],
+        ["Bez plakátu", summary.missingImage],
+      ]
+        .map(([label, value]) => `<span><strong>${escapeHtml(value)}</strong>${escapeHtml(label)}</span>`)
+        .join("");
+    }
+
+    const queueMarkup = REVIEW_FILTERS.map((queue) => {
+      const count = reviewCount(queue.key);
+      return `
+        <button type="button" class="review-card ${state.filters.review === queue.key ? "active" : ""}" data-review-filter="${escapeHtml(queue.key)}">
+          <strong>${count}</strong>
+          <span>${escapeHtml(queue.label)}</span>
+          <small>${escapeHtml(queue.description)}</small>
+        </button>
+      `;
+    }).join("");
+
+    if (reviewQueues instanceof HTMLElement) reviewQueues.innerHTML = queueMarkup;
+    if (quickFilters instanceof HTMLElement) {
+      quickFilters.innerHTML =
+        `<button type="button" data-review-filter="all" class="${state.filters.review === "all" ? "active" : ""}">Vše</button>` +
+        REVIEW_FILTERS.map(
+          (queue) =>
+            `<button type="button" data-review-filter="${escapeHtml(queue.key)}" class="${state.filters.review === queue.key ? "active" : ""}">${escapeHtml(
+              queue.label,
+            )} <span>${reviewCount(queue.key)}</span></button>`,
+        ).join("");
+    }
+
+    renderActiveFilters();
+  }
+
+  function renderActiveFilters() {
+    if (!(activeFilters instanceof HTMLElement)) return;
+    const chips = [];
+    if (state.filters.review !== "all") {
+      const review = REVIEW_FILTERS.find((item) => item.key === state.filters.review);
+      chips.push(`Review: ${review?.label || state.filters.review}`);
+    }
+    if (state.filters.query) chips.push(`Hledání: ${state.filters.query}`);
+    if (state.filters.status !== "all") chips.push(`Stav: ${state.filters.status === "draft" ? "Koncepty" : "Publikované"}`);
+    if (state.filters.access !== "all") chips.push(`Přístup: ${state.filters.access === "gated" ? "Na kód" : "Veřejné"}`);
+    if (state.filters.source !== "all") chips.push(`Původ: ${sourceFilter instanceof HTMLSelectElement ? sourceFilter.selectedOptions[0]?.textContent || state.filters.source : state.filters.source}`);
+    if (state.filters.time !== "all") chips.push(`Čas: ${timeFilter instanceof HTMLSelectElement ? timeFilter.selectedOptions[0]?.textContent || state.filters.time : state.filters.time}`);
+
+    activeFilters.innerHTML =
+      chips.length === 0
+        ? `<span>Žádný filtr aktivní.</span>`
+        : chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join("") + `<button type="button" data-clear-filters>Vyčistit</button>`;
   }
 
   function eventDateRange(item) {
@@ -647,7 +891,10 @@ const cspNonce = Astro.locals.cspNonce;
     const allFilteredSelected = rows.length > 0 && rows.every((item) => state.selectedSlugs.has(item.slug));
 
     if (inventoryCount instanceof HTMLElement) inventoryCount.textContent = `${rows.length} zobrazeno / ${state.events.length} celkem`;
-    if (selectedCount instanceof HTMLElement) selectedCount.textContent = `${selectedRows.length} vybráno`;
+    if (selectedCount instanceof HTMLElement) {
+      const draftText = selectedDrafts.length > 0 ? ` / ${selectedDrafts.length} konceptů` : "";
+      selectedCount.textContent = `${selectedRows.length} vybráno${draftText}`;
+    }
     if (bulkPublishButton instanceof HTMLButtonElement) bulkPublishButton.disabled = selectedDrafts.length === 0;
     if (bulkDeleteButton instanceof HTMLButtonElement) bulkDeleteButton.disabled = selectedRows.length === 0;
     if (clearSelectionButton instanceof HTMLButtonElement) clearSelectionButton.disabled = selectedRows.length === 0;
@@ -662,6 +909,7 @@ const cspNonce = Astro.locals.cspNonce;
     const rows = filteredEvents();
     if (eventCount instanceof HTMLElement) eventCount.textContent = String(state.events.length);
     syncBulkControls(rows);
+    renderActiveFilters();
     if (rows.length === 0) {
       eventsTable.innerHTML = `<p class="empty-state">Nic neodpovídá filtru.</p>`;
       return;
@@ -674,7 +922,7 @@ const cspNonce = Astro.locals.cspNonce;
         <span>Ovládání</span>
         <span>Datum</span>
         <span>Lokalita</span>
-        <span>Zdroj</span>
+        <span>Původ</span>
         <span>Stav</span>
         <span>Akce</span>
       </div>
@@ -684,10 +932,19 @@ const cspNonce = Astro.locals.cspNonce;
       header +
       rows
         .map((item, index) => {
-        const sourceBadge = item.source ? badge("import", "soft") : "";
+        const provenance = provenanceFor(item);
+        const provenanceBadge = badge(provenance.label, provenance.tone);
         const liveBadge = item.isPublished ? badge("publikováno", "live") : badge("koncept", "draft");
         const accessBadge = item.accessType === "gated" ? badge("na kód", "danger") : badge("veřejná", "soft");
-        const sourceLine = item.source?.url ? `<a href="${escapeHtml(item.source.url)}" target="_blank" rel="noreferrer">zdroj</a>` : "ručně";
+        const timeBadge = eventEndTime(item) < Date.now() ? badge("minulá", "soft") : isUpcomingSoon(item) ? badge("brzy", "warning") : "";
+        const imageBadge = item.coverImageUrl ? "" : badge("bez plakátu", "warning");
+        const sourceLine = item.source?.url
+          ? `<a href="${escapeHtml(item.source.url)}" target="_blank" rel="noreferrer">zdroj</a>`
+          : provenance.key === "community"
+            ? "komunitní formulář"
+            : provenance.key === "crew"
+              ? escapeHtml(item.crewName || item.crewSlug || "crew")
+              : "admin";
         const thumb = item.coverImageUrl
           ? `<img class="event-thumb" src="${escapeHtml(item.coverImageUrl)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
           : `<span class="event-thumb-empty" aria-hidden="true"></span>`;
@@ -710,7 +967,7 @@ const cspNonce = Astro.locals.cspNonce;
               <span>${sourceLine}</span>
               ${tags ? `<small>${escapeHtml(tags)}</small>` : ""}
             </div>
-            <div class="badges">${liveBadge}${accessBadge}${sourceBadge}</div>
+            <div class="badges">${liveBadge}${accessBadge}${provenanceBadge}${timeBadge}${imageBadge}</div>
             <div class="row-actions">
               <button type="button" data-action="edit" data-slug="${escapeHtml(item.slug)}">Upravit</button>
               ${!item.isPublished ? `<button type="button" data-action="publish" data-slug="${escapeHtml(item.slug)}">Publikovat</button>` : `<a href="/akce/${escapeHtml(item.slug)}" target="_blank" rel="noreferrer">Otevřít</a>`}
@@ -730,7 +987,62 @@ const cspNonce = Astro.locals.cspNonce;
     for (const slug of [...state.selectedSlugs]) {
       if (!knownSlugs.has(slug)) state.selectedSlugs.delete(slug);
     }
+    renderDashboard();
     renderEvents();
+  }
+
+  function editorPayloadSnapshot() {
+    if (!(eventForm instanceof HTMLFormElement)) return null;
+    const data = new FormData(eventForm);
+    const accessType = selectedAccessType();
+    return {
+      title: String(data.get("title") || "").trim(),
+      startsAt: String(data.get("startsAt") || "").trim(),
+      publicLocation: String(data.get("publicLocation") || "").trim(),
+      summary: String(data.get("summary") || "").trim(),
+      coverImageUrl: String(data.get("coverImageUrl") || "").trim(),
+      accessType,
+      unlockCode: String(data.get("unlockCode") || "").trim(),
+      secretLocationName: String(data.get("secretLocationName") || "").trim(),
+      secretLatitude: String(data.get("secretLatitude") || "").trim(),
+      secretLongitude: String(data.get("secretLongitude") || "").trim(),
+      secretInfo: String(data.get("secretInfo") || "").trim(),
+      editing: isEditingEvent(),
+    };
+  }
+
+  function renderEditorReadiness() {
+    if (!(editorReadiness instanceof HTMLElement)) return;
+    const payload = editorPayloadSnapshot();
+    if (!payload) return;
+    const missing = [];
+    if (!payload.title) missing.push("název");
+    if (!payload.startsAt) missing.push("datum");
+    if (!payload.publicLocation) missing.push("lokalita");
+    if (payload.summary.length < 10) missing.push("popis");
+    const hints = [];
+    if (!payload.coverImageUrl) hints.push("bez plakátu");
+    if (payload.accessType === "gated") {
+      const secretComplete =
+        payload.unlockCode &&
+        payload.secretLocationName &&
+        payload.secretLatitude &&
+        payload.secretLongitude &&
+        payload.secretInfo;
+      hints.push(secretComplete || payload.editing ? "na kód" : "chybí tajná vrstva");
+    } else {
+      hints.push("veřejná");
+    }
+
+    if (missing.length > 0) {
+      setStatus(editorReadiness, `Chybí: ${missing.join(", ")}.`, "warning");
+      return;
+    }
+    if (hints.includes("chybí tajná vrstva")) {
+      setStatus(editorReadiness, "Gated akce potřebuje kód, tajnou lokaci, souřadnice a info.", "danger");
+      return;
+    }
+    setStatus(editorReadiness, `Připraveno: ${hints.join(" / ")}.`, hints.includes("bez plakátu") ? "warning" : "positive");
   }
 
   function renderCrews() {
@@ -1095,7 +1407,14 @@ const cspNonce = Astro.locals.cspNonce;
     const selectedRows = state.events.filter((item) => state.selectedSlugs.has(item.slug));
     if (selectedRows.length === 0) return;
 
-    const confirmation = window.prompt(`Napiš SMAZAT ${selectedRows.length} pro smazání ${selectedRows.length} vybraných akcí.`);
+    const sample = selectedRows
+      .slice(0, 5)
+      .map((item) => item.slug)
+      .join(", ");
+    const extra = selectedRows.length > 5 ? `, +${selectedRows.length - 5} dalších` : "";
+    const confirmation = window.prompt(
+      `Smazání vytvoří Nostr tombstone pro ${selectedRows.length} akcí: ${sample}${extra}.\nNapiš SMAZAT ${selectedRows.length} pro pokračování.`,
+    );
     if (confirmation !== `SMAZAT ${selectedRows.length}`) return;
 
     setStatus(globalStatus, `Mažu ${selectedRows.length} akcí...`, "warning");
@@ -1146,7 +1465,7 @@ const cspNonce = Astro.locals.cspNonce;
       }
 
       if (action === "delete") {
-        const confirmSlug = window.prompt(`Napiš slug pro smazání: ${slug}`);
+        const confirmSlug = window.prompt(`Smazání vytvoří Nostr tombstone a skryje akci z RaveMap.\nNapiš slug pro smazání: ${slug}`);
         if (confirmSlug !== slug) return;
         await deleteSlug(slug);
         state.selectedSlugs.delete(slug);
@@ -1191,6 +1510,8 @@ const cspNonce = Astro.locals.cspNonce;
         setGeneratedCrewCode();
         return;
       }
+      const slug = crewSlugValue();
+      if (!slug || !window.confirm(`Rotovat Studio kód pro crew ${slug}? Starý kód přestane fungovat po propsání na relaye.`)) return;
       await sendCrewAction(crewPayload("rotate-code"), "Crew kód změněn.");
     } catch (error) {
       setStatus(crewStatus, error instanceof Error ? error.message : "Rotace kódu selhala.", "danger");
@@ -1219,7 +1540,7 @@ const cspNonce = Astro.locals.cspNonce;
   });
   archiveCrewButton?.addEventListener("click", async () => {
     const payload = crewPayload("archive");
-    if (!payload.slug || !window.confirm(`Archivovat crew ${payload.slug}?`)) return;
+    if (!payload.slug || !window.confirm(`Archivovat crew ${payload.slug}? Profil zůstane v historii, ale crew nebude běžně aktivní pro handoff.`)) return;
     try {
       await sendCrewAction(payload, "Crew archivována.");
     } catch (error) {
@@ -1268,24 +1589,56 @@ const cspNonce = Astro.locals.cspNonce;
   previewImportButton?.addEventListener("click", previewImport);
   syncImportButton?.addEventListener("click", syncImport);
   eventsTable?.addEventListener("click", handleEventAction);
+  reviewQueues?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button = target.closest("[data-review-filter]");
+    if (!(button instanceof HTMLElement)) return;
+    applyReviewFilter(button.dataset.reviewFilter || "all");
+  });
+  quickFilters?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button = target.closest("[data-review-filter]");
+    if (!(button instanceof HTMLElement)) return;
+    applyReviewFilter(button.dataset.reviewFilter || "all");
+  });
+  activeFilters?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.dataset.clearFilters !== undefined) {
+      clearFilters();
+    }
+  });
+  clearReviewFiltersButton?.addEventListener("click", clearFilters);
+  eventForm?.addEventListener("input", renderEditorReadiness);
   eventFilter?.addEventListener("input", () => {
+    state.filters.review = "all";
     state.filters.query = eventFilter instanceof HTMLInputElement ? eventFilter.value : "";
+    renderDashboard();
     renderEvents();
   });
   statusFilter?.addEventListener("change", () => {
+    state.filters.review = "all";
     state.filters.status = statusFilter instanceof HTMLSelectElement ? statusFilter.value : "all";
+    renderDashboard();
     renderEvents();
   });
   accessFilter?.addEventListener("change", () => {
+    state.filters.review = "all";
     state.filters.access = accessFilter instanceof HTMLSelectElement ? accessFilter.value : "all";
+    renderDashboard();
     renderEvents();
   });
   sourceFilter?.addEventListener("change", () => {
+    state.filters.review = "all";
     state.filters.source = sourceFilter instanceof HTMLSelectElement ? sourceFilter.value : "all";
+    renderDashboard();
     renderEvents();
   });
   timeFilter?.addEventListener("change", () => {
+    state.filters.review = "all";
     state.filters.time = timeFilter instanceof HTMLSelectElement ? timeFilter.value : "all";
+    renderDashboard();
     renderEvents();
   });
   selectFiltered?.addEventListener("change", () => {
@@ -1594,6 +1947,74 @@ const cspNonce = Astro.locals.cspNonce;
     overflow: hidden;
   }
 
+  .review-panel {
+    grid-column: 1 / -1;
+  }
+
+  .review-summary {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .review-summary span {
+    display: grid;
+    gap: 3px;
+    border: 1px solid #000;
+    background: #fffef8;
+    padding: 8px;
+    font-size: 0.74rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .review-summary strong {
+    font-size: 1.35rem;
+    line-height: 1;
+  }
+
+  .review-queues {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .review-card {
+    display: grid;
+    gap: 5px;
+    text-align: left;
+    min-height: 116px;
+    border: 2px solid #000;
+    background: #fffef8;
+  }
+
+  .review-card strong {
+    font-size: 1.65rem;
+    line-height: 1;
+  }
+
+  .review-card span,
+  .quick-filters button,
+  .active-filters span,
+  .active-filters button {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .review-card small {
+    line-height: 1.25;
+    font-weight: 700;
+  }
+
+  .review-card.active,
+  .quick-filters button.active {
+    background: #000;
+    color: #ff1a1a;
+  }
+
   .table-tools {
     display: flex;
     flex-wrap: wrap;
@@ -1618,6 +2039,43 @@ const cspNonce = Astro.locals.cspNonce;
     border: 2px solid #000;
     background: #f2dfca;
     padding: 8px;
+  }
+
+  .quick-filters,
+  .active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    align-items: center;
+  }
+
+  .quick-filters {
+    border: 2px solid #000;
+    background: #f2dfca;
+    padding: 8px;
+  }
+
+  .quick-filters button {
+    padding: 7px 9px;
+  }
+
+  .quick-filters button span {
+    display: inline-block;
+    min-width: 1.6em;
+    margin-left: 5px;
+    border: 1px solid currentColor;
+    text-align: center;
+  }
+
+  .active-filters {
+    min-height: 34px;
+  }
+
+  .active-filters span,
+  .active-filters button {
+    border: 1px solid #000;
+    background: #fffef8;
+    padding: 6px 8px;
   }
 
   .bulk-bar strong {
@@ -1908,6 +2366,26 @@ const cspNonce = Astro.locals.cspNonce;
     background: #e5e7eb;
   }
 
+  .badge.warning {
+    background: #fde68a;
+  }
+
+  .badge.crew {
+    background: #bbf7d0;
+  }
+
+  .badge.community {
+    background: #dbeafe;
+  }
+
+  .badge.import {
+    background: #fde68a;
+  }
+
+  .badge.admin {
+    background: #e5e7eb;
+  }
+
   .row-actions button,
   .row-actions a {
     padding: 7px 8px;
@@ -1931,7 +2409,9 @@ const cspNonce = Astro.locals.cspNonce;
     }
 
     .status-grid,
-    .cockpit-grid {
+    .cockpit-grid,
+    .review-summary,
+    .review-queues {
       grid-template-columns: 1fr;
     }
 

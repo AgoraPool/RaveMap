@@ -8,23 +8,15 @@ const slug = Astro.params.slug?.trim().toLowerCase() ?? "";
 const repository = getNostrEventRepository();
 const cspNonce = Astro.locals.cspNonce;
 const crew = /^[a-z0-9-]{3,120}$/.test(slug) ? await repository.getCrewProfile(slug) : null;
-const events = crew ? (await repository.listPublishedEvents()).filter((event) => event.crewSlug === crew.slug) : [];
-const upcoming = events.filter((event) => event.startsAt.getTime() >= Date.now()).sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
-const past = events.filter((event) => event.startsAt.getTime() < Date.now()).sort((left, right) => right.startsAt.getTime() - left.startsAt.getTime());
 const promo = crew?.lightningAddress ? await repository.getPromoZapSummary("crew", crew.slug).catch(() => null) : null;
 
 if (!crew) {
   Astro.response.status = 404;
 }
-
-const formatter = new Intl.DateTimeFormat("cs-CZ", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 ---
 
 <Layout bodyClass="crew-body">
-  <main class="crew-shell">
+  <main class="crew-shell" data-crew-detail data-crew-slug={crew?.slug ?? ""}>
     <nav class="crew-nav">
       <a href="/crew">Crew</a>
       <a href="/akce">Akce</a>
@@ -63,36 +55,17 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 
           <section class="event-section">
             <h2>Další akce</h2>
-            <div class="event-list">
-              {
-                upcoming.length === 0 ? (
-                  <p class="empty-state">Tahle crew zatím nemá publikovanou další akci.</p>
-                ) : (
-                  upcoming.map((event) => (
-                    <a class="event-row" href={`/akce/${event.slug}`}>
-                      <strong>{event.title}</strong>
-                      <span>{formatter.format(event.startsAt)}</span>
-                      <small>{event.publicLocation}</small>
-                    </a>
-                  ))
-                )
-              }
-            </div>
+            <p class="empty-state" data-crew-loading>Načítám aktuální akce...</p>
+            <div class="event-list" data-crew-upcoming></div>
+            <p class="empty-state" data-crew-empty hidden>Tahle crew zatím nemá publikovanou další akci.</p>
+            <p class="empty-state" data-crew-error hidden>Akce crew se nepodařilo načíst.</p>
           </section>
 
-          {past.length > 0 ? (
-            <section class="event-section">
-              <h2>Historie</h2>
-              <div class="event-list compact">
-                {past.slice(0, 12).map((event) => (
-                  <a class="event-row" href={`/akce/${event.slug}`}>
-                    <strong>{event.title}</strong>
-                    <span>{formatter.format(event.startsAt)}</span>
-                  </a>
-                ))}
-              </div>
-            </section>
-          ) : null}
+          <section class="event-section" data-crew-past-section hidden>
+            <h2>Historie</h2>
+            <div class="event-list compact" data-crew-past>
+            </div>
+          </section>
         </>
       )
     }
@@ -100,6 +73,79 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
 </Layout>
 
 <script nonce={cspNonce}>
+{
+  const crewRoot = document.querySelector("[data-crew-detail]");
+  const crewSlug = crewRoot?.dataset.crewSlug || "";
+  const crewLoading = document.querySelector("[data-crew-loading]");
+  const crewUpcoming = document.querySelector("[data-crew-upcoming]");
+  const crewEmpty = document.querySelector("[data-crew-empty]");
+  const crewError = document.querySelector("[data-crew-error]");
+  const crewPastSection = document.querySelector("[data-crew-past-section]");
+  const crewPast = document.querySelector("[data-crew-past]");
+  const crewFormatter = new Intl.DateTimeFormat("cs-CZ", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => {
+      if (character === "&") return "&amp;";
+      if (character === "<") return "&lt;";
+      if (character === ">") return "&gt;";
+      if (character === '"') return "&quot;";
+      return "&#39;";
+    });
+  }
+
+  function eventRow(event, compact = false) {
+    return `
+      <a class="event-row" href="/akce/${encodeURIComponent(event.slug)}">
+        <strong>${escapeHtml(event.title)}</strong>
+        <span>${crewFormatter.format(new Date(event.startsAt))}</span>
+        ${compact ? "" : `<small>${escapeHtml(event.publicLocation)}</small>`}
+      </a>
+    `;
+  }
+
+  function setCrewEventState(state) {
+    if (crewLoading instanceof HTMLElement) crewLoading.hidden = state !== "loading";
+    if (crewEmpty instanceof HTMLElement) crewEmpty.hidden = state !== "empty";
+    if (crewError instanceof HTMLElement) crewError.hidden = state !== "error";
+  }
+
+  async function loadCrewEvents() {
+    if (!crewSlug || !(crewUpcoming instanceof HTMLElement)) return;
+    setCrewEventState("loading");
+    try {
+      const response = await fetch(`/api/crews/${encodeURIComponent(crewSlug)}`);
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || "Crew akce nejsou dostupné");
+      const now = Date.now();
+      const events = Array.isArray(payload.data?.events) ? payload.data.events : [];
+      const upcoming = events
+        .filter((event) => new Date(event.startsAt).getTime() >= now)
+        .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+      const past = events
+        .filter((event) => new Date(event.startsAt).getTime() < now)
+        .sort((left, right) => new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime());
+
+      crewUpcoming.innerHTML = upcoming.map((event) => eventRow(event)).join("");
+      if (crewPast instanceof HTMLElement) {
+        crewPast.innerHTML = past.slice(0, 12).map((event) => eventRow(event, true)).join("");
+      }
+      if (crewPastSection instanceof HTMLElement) {
+        crewPastSection.hidden = past.length === 0;
+      }
+      setCrewEventState(upcoming.length === 0 ? "empty" : "ready");
+    } catch {
+      if (crewUpcoming instanceof HTMLElement) crewUpcoming.innerHTML = "";
+      if (crewPastSection instanceof HTMLElement) crewPastSection.hidden = true;
+      setCrewEventState("error");
+    }
+  }
+
+  loadCrewEvents();
+
   async function requestPromoInvoice(button) {
     if (!(button instanceof HTMLButtonElement)) return;
     const amount = Number(window.prompt("Kolik sats poslat na promo?", "210"));
@@ -134,6 +180,7 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   for (const button of document.querySelectorAll("[data-zap-button]")) {
     button.addEventListener("click", () => requestPromoInvoice(button));
   }
+}
 </script>
 
 <style>
@@ -326,6 +373,11 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     border: 2px solid #000;
     background: #fffef8;
     padding: 14px;
+  }
+
+  .event-section[hidden],
+  .empty-state[hidden] {
+    display: none;
   }
 
   @media (max-width: 760px) {

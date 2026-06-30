@@ -1,28 +1,13 @@
 ---
-import { getNostrEventRepository } from "../lib/server/nostr-repository";
-import { hasPrecisePublicLocation, osmMarkerUrl } from "../lib/location";
-
 const {
   limit = 80,
   variant = "full",
 } = Astro.props as { limit?: number; variant?: "full" | "preview" };
 const isPreview = variant === "preview";
-const repository = getNostrEventRepository();
 const cspNonce = Astro.locals.cspNonce;
-const list = await repository.listPublishedEvents(limit);
-const promoted = isPreview ? [] : await repository.listPromotedEvents(4).catch(() => []);
-const rsvpSummaries: Record<string, { accepted: number; tentative: number; signals?: number }> = isPreview
-  ? {}
-  : await repository.getRsvpSummariesForEvents(list).catch(() => ({}));
-
-const formatter = new Intl.DateTimeFormat("cs-CZ", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
 ---
 
-<section class:list={["akce", isPreview && "akce-preview"]} id="akce">
+<section class:list={["akce", isPreview && "akce-preview"]} id="akce" data-akce-root data-limit={limit} data-variant={variant}>
   <div class="akce-bg"></div>
   <div class="akce-actions">
     {!isPreview && <a class="home-link" href="/">Domů</a>}
@@ -32,117 +17,179 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   </div>
   <h2 class="akce-title">AKCE</h2>
   <div class="akce-table">
-    {
-      promoted.length > 0 && (
-        <section class="promo-strip" aria-label="Podpořené komunitou">
-          <div>
-            <span>Podpořené komunitou</span>
-            <strong>{promoted[0].title}</strong>
-            <small>{promoted[0].crewName ? `crew ${promoted[0].crewName}` : `${Math.round(promoted[0].promo.totalMsats / 1000)} sats`}</small>
-          </div>
-          <a href={`/akce/${promoted[0].slug}`}>Otevřít</a>
-        </section>
-      )
-    }
-    {list.length === 0 ? (
-      <div class="empty-state">Žádné akce zatím nejsou publikované.</div>
-    ) : (
-      <>
-        {
-          !isPreview && (
-            <div class="akce-sort-row" aria-label="Řazení akcí">
-              <span class="akce-sort-spacer" aria-hidden="true"></span>
-              <button type="button" data-sort-key="name" aria-label="Seřadit podle názvu">
-                Název <span data-sort-indicator="name">-</span>
-              </button>
-              <button type="button" data-sort-key="date" aria-label="Seřadit podle data">
-                Datum <span data-sort-indicator="date">↑</span>
-              </button>
-              <button type="button" data-sort-key="rsvp" aria-label="Seřadit podle účasti">
-                Účast <span data-sort-indicator="rsvp">-</span>
-              </button>
-              <button type="button" data-sort-key="location" aria-label="Seřadit podle lokality">
-                Lokalita <span data-sort-indicator="location">-</span>
-              </button>
-            </div>
-          )
-        }
-        <div class="akce-list" data-akce-list>
-          {list.map((item) => {
-            const rsvp = rsvpSummaries[item.slug] ?? { accepted: 0, tentative: 0, signals: 0 };
-            const rsvpTotal = rsvp.accepted + rsvp.tentative;
-            const eventHref = `/akce/${item.slug}`;
-            const mapHref = hasPrecisePublicLocation(item) ? osmMarkerUrl(item) : "";
-            return (
-              <article
-                class:list={["akce-item", mapHref && "has-map"]}
-                data-name={item.title.toLocaleLowerCase("cs-CZ")}
-                data-date={item.startsAt.getTime()}
-                data-rsvp={rsvpTotal}
-                data-location={item.publicLocation.toLocaleLowerCase("cs-CZ")}
-              >
-                <a class="akce-poster-cell" href={eventHref} aria-label={`Otevřít akci ${item.title}`}>
-                  {
-                    item.coverImageUrl && (
-                      <img
-                        class="akce-img"
-                        src={item.coverImageUrl}
-                        alt={item.title}
-                        loading="lazy"
-                        decoding="async"
-                        referrerpolicy="no-referrer"
-                      />
-                    )
-                  }
-                </a>
-                <h3 class="akce-name">
-                  <a href={eventHref}>{item.title}</a>
-                </h3>
-                <div class="akce-date">{formatter.format(item.startsAt)}</div>
-                {
-                  !isPreview && (
-                    <div class="akce-rsvp" aria-label={`${rsvp.accepted} jde, ${rsvp.tentative} možná`}>
-                      <strong>{rsvpTotal}</strong>
-                      <small>
-                        {rsvp.accepted} jde / {rsvp.tentative} možná
-                      </small>
-                      {(rsvp.signals ?? 0) > 0 && <small class="akce-signal">{rsvp.signals} signálů</small>}
-                    </div>
-                  )
-                }
-                <div class="akce-location">
-                  <span>{item.publicLocation}</span>
-                  <div class="akce-location-actions">
-                    <small>{item.accessType === "gated" ? "na kód" : item.source ? "import" : "veřejná"}</small>
-                    {item.crewSlug && item.crewName && <a class="crew-link" href={`/crew/${item.crewSlug}`}>{item.crewName}</a>}
-                    {
-                      mapHref && (
-                        <a class="osm-link" href={mapHref} target="_blank" rel="noreferrer">
-                          OSM mapa
-                        </a>
-                      )
-                    }
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </>
+    <div class="loading-state" data-akce-loading>
+      <strong>Načítám aktuální akce...</strong>
+      <span>Čtu publikované RaveMap události z Nostr relayů.</span>
+    </div>
+    {!isPreview && (
+      <div class="akce-sort-row" aria-label="Řazení akcí" hidden>
+        <span class="akce-sort-spacer" aria-hidden="true"></span>
+        <button type="button" data-sort-key="name" aria-label="Seřadit podle názvu">
+          Název <span data-sort-indicator="name">-</span>
+        </button>
+        <button type="button" data-sort-key="date" aria-label="Seřadit podle data">
+          Datum <span data-sort-indicator="date">↑</span>
+        </button>
+        <button type="button" data-sort-key="rsvp" aria-label="Seřadit podle účasti">
+          Účast <span data-sort-indicator="rsvp">-</span>
+        </button>
+        <button type="button" data-sort-key="location" aria-label="Seřadit podle lokality">
+          Lokalita <span data-sort-indicator="location">-</span>
+        </button>
+      </div>
     )}
+    <div class="akce-list skeleton-list" data-akce-skeleton aria-hidden="true">
+      {Array.from({ length: isPreview ? 4 : 7 }).map(() => (
+        <article class="akce-item skeleton-row">
+          <span class="akce-poster-cell skeleton-block"></span>
+          <span class="skeleton-line wide"></span>
+          <span class="skeleton-line"></span>
+          {!isPreview && <span class="skeleton-line short"></span>}
+          <span class="skeleton-line medium"></span>
+        </article>
+      ))}
+    </div>
+    <div class="akce-list" data-akce-list></div>
+    <div class="empty-state" data-akce-empty hidden>Žádné akce zatím nejsou publikované.</div>
+    <div class="empty-state" data-akce-error hidden>Akce se nepodařilo načíst. Zkus to prosím znovu.</div>
   </div>
   <img src="/bunkr.png" class="bunkr" alt="Dekorativní bunkr" />
 </section>
 
 <script nonce={cspNonce}>
-  const eventList = document.querySelector("[data-akce-list]");
-  const sortButtons = [...document.querySelectorAll("[data-sort-key]")];
-  const sortIndicators = [...document.querySelectorAll("[data-sort-indicator]")];
+{
+  const root = document.querySelector("[data-akce-root]");
+  const eventList = root?.querySelector("[data-akce-list]");
+  const skeleton = root?.querySelector("[data-akce-skeleton]");
+  const loading = root?.querySelector("[data-akce-loading]");
+  const emptyState = root?.querySelector("[data-akce-empty]");
+  const errorState = root?.querySelector("[data-akce-error]");
+  const sortRow = root?.querySelector(".akce-sort-row");
+  const sortButtons = [...(root?.querySelectorAll("[data-sort-key]") ?? [])];
+  const sortIndicators = [...(root?.querySelectorAll("[data-sort-indicator]") ?? [])];
+  const isPreview = root?.dataset.variant === "preview";
+  const limit = Number(root?.dataset.limit || (isPreview ? 12 : 80));
   const collator = new Intl.Collator("cs-CZ", { sensitivity: "base", numeric: true });
+  const formatter = new Intl.DateTimeFormat("cs-CZ", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
   const sortState = {
     key: "date",
     direction: "asc",
   };
+  const cityOnlyLocations = new Set([
+    "brno",
+    "bratislava",
+    "czech republic",
+    "czechia",
+    "cesko",
+    "dresden",
+    "germany",
+    "ostrava",
+    "plzen",
+    "poland",
+    "polsko",
+    "praha",
+    "prague",
+    "rakousko",
+    "slovakia",
+    "slovensko",
+    "vienna",
+    "wien",
+  ]);
+
+  function normalizeLocation(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function hasPrecisePublicLocation(event) {
+    const hasCoordinates = Number.isFinite(event.publicLatitude) && Number.isFinite(event.publicLongitude);
+    const normalized = normalizeLocation(event.publicLocation);
+    return hasCoordinates && normalized && !cityOnlyLocations.has(normalized);
+  }
+
+  function osmMarkerUrl(event, zoom = 16) {
+    return `https://www.openstreetmap.org/?mlat=${event.publicLatitude}&mlon=${event.publicLongitude}#map=${zoom}/${event.publicLatitude}/${event.publicLongitude}`;
+  }
+
+  function provenance(event) {
+    if (event.crewSlug || event.origin === "studio") return "crew";
+    if (event.source || event.origin === "import") return "import";
+    if (event.origin === "public" || event.tags?.includes("ravemap")) return "community";
+    return "admin";
+  }
+
+  function provenanceLabel(value) {
+    if (value === "crew") return "Crew";
+    if (value === "community") return "Komunita";
+    if (value === "import") return "Import";
+    return "Admin";
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => {
+      if (character === "&") return "&amp;";
+      if (character === "<") return "&lt;";
+      if (character === ">") return "&gt;";
+      if (character === '"') return "&quot;";
+      return "&#39;";
+    });
+  }
+
+  function renderEvent(event) {
+    const startsAt = new Date(event.startsAt);
+    const eventHref = `/akce/${encodeURIComponent(event.slug)}`;
+    const mapHref = hasPrecisePublicLocation(event) ? osmMarkerUrl(event) : "";
+    const eventProvenance = provenance(event);
+    const poster = event.coverImageUrl
+      ? `<img class="akce-img" src="${escapeHtml(event.coverImageUrl)}" alt="${escapeHtml(event.title)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
+      : "";
+    const rsvpCell = isPreview
+      ? ""
+      : `<div class="akce-rsvp" aria-label="Účast je dostupná v detailu akce"><strong>-</strong><small>účast v detailu</small></div>`;
+    const crewLink = event.crewSlug && event.crewName ? `<a class="crew-link" href="/crew/${encodeURIComponent(event.crewSlug)}">${escapeHtml(event.crewName)}</a>` : "";
+    const mapLink = mapHref
+      ? `<a class="osm-link" href="${escapeHtml(mapHref)}" target="_blank" rel="noreferrer">OSM mapa</a>`
+      : "";
+
+    return `
+      <article
+        class="akce-item${mapHref ? " has-map" : ""}"
+        data-name="${escapeHtml(String(event.title || "").toLocaleLowerCase("cs-CZ"))}"
+        data-date="${startsAt.getTime()}"
+        data-rsvp="0"
+        data-location="${escapeHtml(String(event.publicLocation || "").toLocaleLowerCase("cs-CZ"))}"
+      >
+        <a class="akce-poster-cell" href="${eventHref}" aria-label="Otevřít akci ${escapeHtml(event.title)}">${poster}</a>
+        <h3 class="akce-name"><a href="${eventHref}">${escapeHtml(event.title)}</a></h3>
+        <div class="akce-date">${formatter.format(startsAt)}</div>
+        ${rsvpCell}
+        <div class="akce-location">
+          <span>${escapeHtml(event.publicLocation)}</span>
+          <div class="akce-location-actions">
+            <small>${event.accessType === "gated" ? "na kód" : "veřejná"}</small>
+            <small class="provenance-badge ${eventProvenance}">${provenanceLabel(eventProvenance)}</small>
+            ${crewLink}
+            ${mapLink}
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
+  function setLoadingState(state) {
+    if (loading instanceof HTMLElement) loading.hidden = state !== "loading";
+    if (skeleton instanceof HTMLElement) skeleton.hidden = state !== "loading";
+    if (emptyState instanceof HTMLElement) emptyState.hidden = state !== "empty";
+    if (errorState instanceof HTMLElement) errorState.hidden = state !== "error";
+    if (sortRow instanceof HTMLElement) sortRow.hidden = state !== "ready" || isPreview;
+  }
 
   function valueFor(row, key) {
     if (!(row instanceof HTMLElement)) return "";
@@ -197,7 +244,30 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     });
   }
 
+  async function loadEvents() {
+    if (!(eventList instanceof HTMLElement)) return;
+    setLoadingState("loading");
+    try {
+      const response = await fetch(`/api/events?limit=${encodeURIComponent(String(limit))}`);
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || "Akce nejsou dostupné");
+      const events = Array.isArray(payload.data?.events) ? payload.data.events : [];
+      eventList.innerHTML = events.map(renderEvent).join("");
+      if (events.length === 0) {
+        setLoadingState("empty");
+        return;
+      }
+      setLoadingState("ready");
+      renderSortState();
+    } catch {
+      eventList.innerHTML = "";
+      setLoadingState("error");
+    }
+  }
+
   renderSortState();
+  loadEvents();
+}
 </script>
 
 <style>
@@ -435,6 +505,19 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     font-weight: 700;
     line-height: 1.1;
   }
+  .akce-location-actions .provenance-badge {
+    background: #e5e7eb;
+    color: #000;
+  }
+  .akce-location-actions .provenance-badge.crew {
+    background: #bbf7d0;
+  }
+  .akce-location-actions .provenance-badge.community {
+    background: #dbeafe;
+  }
+  .akce-location-actions .provenance-badge.import {
+    background: #fde68a;
+  }
   .osm-link {
     background: #fff6df;
     color: #000;
@@ -476,6 +559,195 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
   .empty-state {
     padding: 24px;
     font-size: 1.4rem;
+  }
+  .loading-state {
+    display: grid;
+    gap: 4px;
+    padding: 18px;
+    border-bottom: 3px solid #000;
+    background: #000;
+    color: #fff6df;
+  }
+  .loading-state strong {
+    font-size: 1.1rem;
+    text-transform: uppercase;
+  }
+  .loading-state span {
+    color: rgba(255, 246, 223, 0.78);
+    font-size: 0.86rem;
+    font-weight: 700;
+  }
+  .loading-state[hidden],
+  .empty-state[hidden],
+  .akce-sort-row[hidden],
+  .skeleton-list[hidden] {
+    display: none;
+  }
+  .skeleton-row {
+    pointer-events: none;
+  }
+  .skeleton-block,
+  .skeleton-line {
+    display: block;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), rgba(255, 246, 223, 0.45), rgba(0, 0, 0, 0.3));
+    background-size: 220% 100%;
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+  .skeleton-line {
+    width: 72%;
+    height: 16px;
+  }
+  .skeleton-line.wide {
+    width: 92%;
+    height: 24px;
+  }
+  .skeleton-line.medium {
+    width: 58%;
+  }
+  .skeleton-line.short {
+    width: 36%;
+  }
+  @keyframes skeleton-pulse {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
+  :global(.akce [data-akce-list]) {
+    display: contents;
+  }
+  :global(.akce [data-akce-list] .akce-item) {
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 80px;
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1.45fr) minmax(130px, 0.9fr) minmax(92px, 0.55fr) minmax(140px, 0.9fr);
+    align-items: center;
+    gap: 16px;
+    padding: 8px 18px;
+    border-bottom: 1px solid black;
+    font-size: 1.1rem;
+    position: relative;
+    color: black;
+  }
+  :global(.akce [data-akce-list] .akce-item:hover) {
+    color: #c00;
+    background-color: #000;
+  }
+  :global(.akce [data-akce-list] .akce-poster-cell) {
+    width: 100px;
+    height: 64px;
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    background: rgba(0, 0, 0, 0.16);
+  }
+  :global(.akce [data-akce-list] .akce-img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  :global(.akce [data-akce-list] .akce-name) {
+    margin: 0;
+    font-size: 1.7rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    line-height: 0.95;
+  }
+  :global(.akce [data-akce-list] .akce-name a) {
+    color: inherit;
+    text-decoration: none;
+  }
+  :global(.akce [data-akce-list] .akce-name a:hover),
+  :global(.akce [data-akce-list] .akce-name a:focus-visible) {
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 4px;
+  }
+  :global(.akce [data-akce-list] .akce-date),
+  :global(.akce [data-akce-list] .akce-rsvp),
+  :global(.akce [data-akce-list] .akce-location) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  :global(.akce [data-akce-list] .akce-rsvp) {
+    display: grid;
+    gap: 3px;
+  }
+  :global(.akce [data-akce-list] .akce-rsvp strong) {
+    font-size: 1.45rem;
+    line-height: 1;
+  }
+  :global(.akce [data-akce-list] .akce-rsvp small) {
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
+  :global(.akce [data-akce-list] .akce-location) {
+    display: grid;
+    gap: 3px;
+  }
+  :global(.akce [data-akce-list] .akce-location-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+  }
+  :global(.akce [data-akce-list] .akce-location small),
+  :global(.akce [data-akce-list] .osm-link) {
+    width: fit-content;
+    border: 1px solid currentColor;
+    padding: 2px 5px;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  :global(.akce [data-akce-list] .provenance-badge) {
+    background: #e5e7eb;
+    color: #000;
+  }
+  :global(.akce [data-akce-list] .provenance-badge.crew) {
+    background: #bbf7d0;
+  }
+  :global(.akce [data-akce-list] .provenance-badge.community) {
+    background: #dbeafe;
+  }
+  :global(.akce [data-akce-list] .provenance-badge.import) {
+    background: #fde68a;
+  }
+  :global(.akce [data-akce-list] .osm-link) {
+    background: #fff6df;
+    color: #000;
+    text-decoration: none;
+  }
+  :global(.akce [data-akce-list] .osm-link:hover),
+  :global(.akce [data-akce-list] .osm-link:focus-visible) {
+    background: #000;
+    color: #c00;
+  }
+  :global(.akce-preview [data-akce-list]) {
+    display: block;
+  }
+  :global(.akce-preview [data-akce-list] .akce-item) {
+    grid-template-columns: 96px minmax(0, 1.5fr) minmax(150px, 0.7fr) minmax(150px, 0.8fr);
+    min-height: 88px;
+    border-bottom-width: 2px;
+  }
+  :global(.akce-preview [data-akce-list] .akce-item:last-child) {
+    border-bottom: 0;
+  }
+  :global(.akce-preview [data-akce-list] .akce-name) {
+    font-size: 1.95rem;
+    line-height: 0.95;
+  }
+  :global(.akce-preview [data-akce-list] .akce-date) {
+    font-weight: 700;
   }
   .bunkr {
     position: absolute;
@@ -552,6 +824,61 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       display: grid;
     }
     .akce-preview .akce-name {
+      font-size: 1.45rem;
+    }
+    :global(.akce [data-akce-list] .akce-item) {
+      grid-template-columns: 80px minmax(0, 1.2fr) minmax(110px, 0.9fr) minmax(72px, 0.5fr);
+      gap: 10px;
+    }
+    :global(.akce [data-akce-list] .akce-location) {
+      display: none;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map) {
+      grid-template-columns: 80px minmax(0, 1fr) minmax(110px, 0.8fr) minmax(72px, 0.5fr);
+      grid-template-areas:
+        "img name date rsvp"
+        "img location location location";
+      align-items: start;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map .akce-poster-cell) {
+      grid-area: img;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map .akce-name) {
+      grid-area: name;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map .akce-date) {
+      grid-area: date;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map .akce-rsvp) {
+      grid-area: rsvp;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map .akce-location) {
+      grid-area: location;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+    }
+    :global(.akce [data-akce-list] .akce-name) {
+      font-size: 1.4rem;
+    }
+    :global(.akce [data-akce-list] .akce-rsvp strong) {
+      font-size: 1.2rem;
+    }
+    :global(.akce [data-akce-list] .akce-rsvp small) {
+      font-size: 0.62rem;
+    }
+    :global(.akce [data-akce-list] .akce-poster-cell) {
+      width: 72px;
+      height: 52px;
+    }
+    :global(.akce-preview [data-akce-list] .akce-item) {
+      grid-template-columns: 72px minmax(0, 1fr) minmax(120px, 0.8fr) minmax(120px, 0.8fr);
+    }
+    :global(.akce-preview [data-akce-list] .akce-location) {
+      display: grid;
+    }
+    :global(.akce-preview [data-akce-list] .akce-name) {
       font-size: 1.45rem;
     }
   }
@@ -712,6 +1039,89 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       font-size: 0.82rem;
     }
     .akce-preview .akce-location small {
+      flex: 0 0 auto;
+      font-size: 0.58rem;
+    }
+    :global(.akce [data-akce-list]) {
+      display: block;
+    }
+    :global(.akce [data-akce-list] .akce-item) {
+      grid-template-columns: 56px 1fr;
+      grid-template-areas:
+        "img name"
+        "img date"
+        "img rsvp";
+      min-height: 74px;
+      padding: 10px 12px;
+      gap: 4px 10px;
+      font-size: 0.95rem;
+    }
+    :global(.akce [data-akce-list] .akce-poster-cell) {
+      grid-area: img;
+      width: 52px;
+      height: 44px;
+    }
+    :global(.akce [data-akce-list] .akce-name) {
+      grid-area: name;
+      font-size: 1.05rem;
+      line-height: 1.2;
+    }
+    :global(.akce [data-akce-list] .akce-date) {
+      grid-area: date;
+      font-size: 0.85rem;
+    }
+    :global(.akce [data-akce-list] .akce-rsvp) {
+      grid-area: rsvp;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    :global(.akce [data-akce-list] .akce-rsvp strong) {
+      font-size: 1rem;
+    }
+    :global(.akce [data-akce-list] .akce-rsvp small) {
+      font-size: 0.68rem;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map) {
+      grid-template-columns: 56px minmax(0, 1fr);
+      grid-template-areas:
+        "img name"
+        "img date"
+        "img rsvp"
+        "img location";
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map .akce-location) {
+      font-size: 0.78rem;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map .akce-location span) {
+      display: none;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map .akce-location-actions) {
+      gap: 6px;
+    }
+    :global(.akce [data-akce-list] .akce-item.has-map .osm-link),
+    :global(.akce [data-akce-list] .akce-item.has-map .akce-location small) {
+      font-size: 0.58rem;
+    }
+    :global(.akce-preview [data-akce-list] .akce-item) {
+      grid-template-columns: 56px minmax(0, 1fr);
+      grid-template-areas:
+        "img name"
+        "img date"
+        "img location";
+      min-height: 76px;
+    }
+    :global(.akce-preview [data-akce-list] .akce-name) {
+      font-size: 1.2rem;
+    }
+    :global(.akce-preview [data-akce-list] .akce-location) {
+      grid-area: location;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+    }
+    :global(.akce-preview [data-akce-list] .akce-location small) {
       flex: 0 0 auto;
       font-size: 0.58rem;
     }

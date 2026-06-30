@@ -93,7 +93,6 @@ type RelayDiagnostics = {
   };
 };
 
-const EVENT_READ_CACHE_TTL_MS = 45_000;
 const LIST_READ_CACHE_TTL_MS = 60_000;
 const INTERACTION_READ_CACHE_TTL_MS = 15_000;
 const MAX_READ_CACHE_ENTRIES = 600;
@@ -433,7 +432,11 @@ function parsePublicEvent(event: NostrEvent): PublicEventDto | null {
 }
 
 function isPublicSubmission(event: NostrEvent): boolean {
-  return tagValue(event, "client") === "RaveMap" && tagValue(event, "submission") === "public";
+  return (
+    tagValue(event, "client") === "RaveMap" &&
+    tagValue(event, "submission") === "public" &&
+    tagValues(event, "t").includes("ravemap")
+  );
 }
 
 function publicEventTemplate(input: CreateEventCommand): NostrUnsignedEvent {
@@ -895,11 +898,82 @@ export class NostrEventRepository {
     return bySlug;
   }
 
+  private publicEventFilters(limit: number, slug?: string): NostrFilter[] {
+    const slugFilter = slug ? { "#d": [slug] } : {};
+    return [
+      {
+        authors: [this.pubkey],
+        kinds: [PUBLIC_EVENT_KIND],
+        limit,
+        ...slugFilter,
+      },
+      {
+        kinds: [PUBLIC_EVENT_KIND],
+        "#t": ["ravemap"],
+        limit,
+        ...slugFilter,
+      },
+    ];
+  }
+
+  private async fetchOriginalAuthorDeletions(events: NostrEvent[]): Promise<NostrEvent[]> {
+    const targets = events
+      .filter((event) => event.pubkey !== this.pubkey)
+      .map((event) => {
+        const slug = tagValue(event, "d");
+        return slug ? { event, coordinate: nostrCoordinate(event.kind, event.pubkey, slug) } : null;
+      })
+      .filter((target): target is { event: NostrEvent; coordinate: string } => Boolean(target));
+    if (targets.length === 0) {
+      return [];
+    }
+
+    const authors = [...new Set(targets.map((target) => target.event.pubkey))];
+    const ids = [...new Set(targets.map((target) => target.event.id))];
+    const coordinates = [...new Set(targets.map((target) => target.coordinate))];
+    const limit = Math.max(100, targets.length * 4);
+
+    return this.fetchEvents([
+      {
+        authors,
+        kinds: [DELETE_EVENT_KIND],
+        "#e": ids,
+        limit,
+      },
+      {
+        authors,
+        kinds: [DELETE_EVENT_KIND],
+        "#a": coordinates,
+        limit,
+      },
+    ]);
+  }
+
+  private async visibleLatestPublishedEvents(events: NostrEvent[], tombstones: Set<string>): Promise<NostrEvent[]> {
+    const candidates = [...this.latestPublishedByD(events).values()].filter((event) => {
+      const slug = tagValue(event, "d");
+      return Boolean(slug && !tombstones.has(slug));
+    });
+    const deletions = await this.fetchOriginalAuthorDeletions(candidates);
+    return candidates.filter((event) => {
+      const slug = tagValue(event, "d");
+      if (!slug) return false;
+      const coordinate = nostrCoordinate(event.kind, event.pubkey, slug);
+      return !deletions.some(
+        (deletion) =>
+          deletion.kind === DELETE_EVENT_KIND &&
+          deletion.pubkey === event.pubkey &&
+          deletion.created_at >= event.created_at &&
+          (tagValues(deletion, "e").includes(event.id) || tagValues(deletion, "a").includes(coordinate)),
+      );
+    });
+  }
+
   async listTombstonedSlugs(slugs?: string[]): Promise<Set<string>> {
-    const cacheKey = `tombstones:${slugs ? [...slugs].sort().join(",") : "all"}`;
-    const cached = this.cacheGet<string[]>(cacheKey);
+    const cacheKey = slugs?.length ? `tombstones:${[...slugs].sort().join(",")}` : "tombstones:all";
+    const cached = this.cacheGet<Set<string>>(cacheKey);
     if (cached !== undefined) {
-      return new Set(cached);
+      return cached;
     }
 
     const filters: NostrFilter[] = [
@@ -913,7 +987,7 @@ export class NostrEventRepository {
 
     const events = await this.fetchEvents(filters);
     const tombstones = [...this.latestByD(events).keys()];
-    return new Set(this.cacheSet(cacheKey, tombstones, EVENT_READ_CACHE_TTL_MS));
+    return this.cacheSet(cacheKey, new Set(tombstones), LIST_READ_CACHE_TTL_MS);
   }
 
   async listCrewProfiles(options: { includeArchived?: boolean } = {}): Promise<CrewProfileDto[]> {
@@ -1080,39 +1154,30 @@ export class NostrEventRepository {
   }
 
   async listPublishedEvents(limit?: number): Promise<PublicEventDto[]> {
-    const cacheKey = `published:${limit ?? "all"}`;
+    const normalizedLimit = limit ?? 200;
+    const cacheKey = `published:${normalizedLimit}`;
     const cached = this.cacheGet<PublicEventDto[]>(cacheKey);
     if (cached !== undefined) {
       return cached;
     }
 
     const [events, tombstones] = await Promise.all([
-      this.fetchEvents([
-        {
-          authors: [this.pubkey],
-          kinds: [PUBLIC_EVENT_KIND],
-          limit: limit ?? 200,
-        },
-        {
-          kinds: [PUBLIC_EVENT_KIND],
-          "#t": ["ravemap"],
-          limit: limit ?? 200,
-        },
-      ]),
+      this.fetchEvents(this.publicEventFilters(normalizedLimit)),
       this.listTombstonedSlugs(),
     ]);
 
-    const published = [...this.latestPublishedByD(events).values()]
+    const published = (await this.visibleLatestPublishedEvents(events, tombstones))
       .map(parsePublicEvent)
       .filter((event): event is PublicEventDto => Boolean(event && !tombstones.has(event.slug)))
       .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime())
       .slice(0, limit);
 
-    return this.cacheSet(cacheKey, await this.enrichEventsWithCrews(published), LIST_READ_CACHE_TTL_MS);
+    const enriched = await this.enrichEventsWithCrews(published);
+    return this.cacheSet(cacheKey, enriched, LIST_READ_CACHE_TTL_MS);
   }
 
   async getPublishedEvent(slug: string): Promise<PublicEventDto | null> {
-    const cacheKey = `event:${slug}`;
+    const cacheKey = `published-detail:${slug}`;
     const cached = this.cacheGet<PublicEventDto | null>(cacheKey);
     if (cached !== undefined) {
       return cached;
@@ -1120,29 +1185,16 @@ export class NostrEventRepository {
 
     const [tombstones, events] = await Promise.all([
       this.listTombstonedSlugs([slug]),
-      this.fetchEvents([
-        {
-          authors: [this.pubkey],
-          kinds: [PUBLIC_EVENT_KIND],
-          "#d": [slug],
-          limit: 20,
-        },
-        {
-          kinds: [PUBLIC_EVENT_KIND],
-          "#d": [slug],
-          "#t": ["ravemap"],
-          limit: 20,
-        },
-      ]),
+      this.fetchEvents(this.publicEventFilters(20, slug)),
     ]);
     if (tombstones.has(slug)) {
-      return this.cacheSet(cacheKey, null, EVENT_READ_CACHE_TTL_MS);
+      return this.cacheSet(cacheKey, null, LIST_READ_CACHE_TTL_MS);
     }
 
-    const latest = this.latestPublishedByD(events).get(slug);
+    const latest = (await this.visibleLatestPublishedEvents(events, tombstones)).find((event) => tagValue(event, "d") === slug);
     const parsed = latest ? parsePublicEvent(latest) : null;
     const enriched = parsed ? (await this.enrichEventsWithCrews([parsed]))[0] : null;
-    return this.cacheSet(cacheKey, enriched, EVENT_READ_CACHE_TTL_MS);
+    return this.cacheSet(cacheKey, enriched ?? null, LIST_READ_CACHE_TTL_MS);
   }
 
   private async listCommentsForEvent(event: PublicEventDto): Promise<EventCommentDto[]> {
@@ -1507,8 +1559,8 @@ export class NostrEventRepository {
     };
   }
 
-  async listPromotedEvents(limit = 6): Promise<Array<PublicEventDto & { promo: PromoZapSummaryDto }>> {
-    const events = (await this.listPublishedEvents(120)).filter((event) => event.startsAt.getTime() >= Date.now() && event.crewSlug);
+  async listPromotedEvents(limit = 6, candidates?: PublicEventDto[]): Promise<Array<PublicEventDto & { promo: PromoZapSummaryDto }>> {
+    const events = (candidates ?? (await this.listPublishedEvents(120))).filter((event) => event.startsAt.getTime() >= Date.now() && event.crewSlug);
     const promoted = await Promise.all(
       events.map(async (event) => {
         const promo = await this.getPromoZapSummary("event", event.slug).catch(() => null);
@@ -1708,6 +1760,7 @@ export class NostrEventRepository {
     const accessType = input.accessType ?? "public";
     const parsed = parsePublicEvent(event);
     if (
+      accessType !== "public" ||
       event.kind !== PUBLIC_EVENT_KIND ||
       !parsed ||
       !slug ||
@@ -1804,41 +1857,42 @@ export class NostrEventRepository {
   async listAdminEvents(): Promise<AdminEventDto[]> {
     const tombstones = await this.listTombstonedSlugs();
     const events = await this.fetchEvents([
+      ...this.publicEventFilters(500),
       {
         authors: [this.pubkey],
-        kinds: [PUBLIC_EVENT_KIND, DRAFT_EVENT_KIND],
+        kinds: [DRAFT_EVENT_KIND],
         limit: 500,
       },
     ]);
 
     const publicEvents = await this.enrichEventsWithCrews(
-      [...this.latestByD(events.filter((event) => event.kind === PUBLIC_EVENT_KIND)).values()]
-      .map(parsePublicEvent)
-      .filter((event): event is PublicEventDto => Boolean(event && !tombstones.has(event.slug)))
-      .map((event) => ({
-        ...event,
-        isPublished: true,
-      })),
+      (await this.visibleLatestPublishedEvents(events.filter((event) => event.kind === PUBLIC_EVENT_KIND), tombstones))
+        .map(parsePublicEvent)
+        .filter((event): event is PublicEventDto => Boolean(event && !tombstones.has(event.slug)))
+        .map((event) => ({
+          ...event,
+          isPublished: true,
+        })),
     );
     const publishedSlugs = new Set(publicEvents.map((event) => event.slug));
 
     const drafts = await this.enrichEventsWithCrews(
       [...this.latestByD(events.filter((event) => event.kind === DRAFT_EVENT_KIND)).values()]
-      .map((event): AdminEventDto | null => {
-        const slug = tagValue(event, "d");
-        if (!slug || tombstones.has(slug) || publishedSlugs.has(slug)) {
-          return null;
-        }
+        .map((event): AdminEventDto | null => {
+          const slug = tagValue(event, "d");
+          if (!slug || tombstones.has(slug) || publishedSlugs.has(slug)) {
+            return null;
+          }
 
-        const draft = decryptDraftBundle(event.content, {
-          coordinate: nostrCoordinate(DRAFT_EVENT_KIND, this.pubkey, slug),
-        });
-        return {
-          ...publicDtoFromFields(draft.public, event.id, event.pubkey),
-          isPublished: false,
-        };
-      })
-      .filter((event): event is AdminEventDto => Boolean(event)),
+          const draft = decryptDraftBundle(event.content, {
+            coordinate: nostrCoordinate(DRAFT_EVENT_KIND, this.pubkey, slug),
+          });
+          return {
+            ...publicDtoFromFields(draft.public, event.id, event.pubkey),
+            isPublished: false,
+          };
+        })
+        .filter((event): event is AdminEventDto => Boolean(event)),
     );
 
     return [...publicEvents, ...drafts].sort((left, right) => {
@@ -2320,16 +2374,19 @@ export class NostrEventRepository {
   }
 
   async deleteEvent(slug: string): Promise<DeletedEventResult> {
-    const existing = await this.fetchEvents([
-      {
-        authors: [this.pubkey],
-        kinds: [PUBLIC_EVENT_KIND, SECRET_EVENT_KIND, DRAFT_EVENT_KIND],
-        "#d": [slug],
-        limit: 50,
-      },
+    const [existing, displayed] = await Promise.all([
+      this.fetchEvents([
+        {
+          authors: [this.pubkey],
+          kinds: [PUBLIC_EVENT_KIND, SECRET_EVENT_KIND, DRAFT_EVENT_KIND],
+          "#d": [slug],
+          limit: 50,
+        },
+      ]),
+      this.getPublishedEvent(slug),
     ]);
 
-    if (existing.length === 0) {
+    if (existing.length === 0 && !displayed) {
       throw new AppError("Akce nenalezena", {
         code: "EVENT_NOT_FOUND",
         status: 404,
@@ -2355,16 +2412,18 @@ export class NostrEventRepository {
         : [["e", event.id]];
     });
 
-    const deleteEvent = await this.signer.sign({
-      kind: DELETE_EVENT_KIND,
-      created_at: nowSeconds(),
-      tags: deleteTags,
-      content: "Deleted from RaveMap.",
-    });
-
-    const deletionWrites = await Promise.all(
-      this.relays.map((relay) => relayPublish(relay, deleteEvent, this.writeTimeoutMs)),
-    );
+    const deletionWrites =
+      deleteTags.length > 0
+        ? await (async () => {
+            const deleteEvent = await this.signer.sign({
+              kind: DELETE_EVENT_KIND,
+              created_at: nowSeconds(),
+              tags: deleteTags,
+              content: "Deleted from RaveMap.",
+            });
+            return Promise.all(this.relays.map((relay) => relayPublish(relay, deleteEvent, this.writeTimeoutMs)));
+          })()
+        : [];
 
     return {
       id: tombstone.id,

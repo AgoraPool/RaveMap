@@ -21,16 +21,14 @@ const cspNonce = Astro.locals.cspNonce;
       </div>
 
       <form id="submit-form" class="submit-form">
-        <div class="segmented" role="group" aria-label="Typ přístupu k akci">
-          <label>
-            <input type="radio" name="accessType" value="public" checked />
-            <span>Veřejná</span>
-          </label>
-          <label>
-            <input type="radio" name="accessType" value="gated" />
-            <span>Na kód</span>
-          </label>
-        </div>
+        <p class="public-only-note">
+          Veřejný formulář publikuje jen veřejné akce. Tajné lokace, kódy a invite-only detaily řeší pozvaná crew ve Studiu.
+        </p>
+
+        <label class="hp-field" aria-hidden="true">
+          <span>Web</span>
+          <input name="website" type="text" tabindex="-1" autocomplete="off" />
+        </label>
 
         <label class="title-field">
           <span>Název</span>
@@ -101,38 +99,6 @@ const cspNonce = Astro.locals.cspNonce;
           <input id="tags" name="tags" type="text" placeholder="festival, crew, místo" />
         </label>
 
-        <fieldset id="gated-fields" class="gated-fields" hidden>
-          <legend>Tajná vrstva</legend>
-          <div class="field-row">
-            <label>
-              <span>Kód k odemknutí</span>
-              <input id="unlockCode" name="unlockCode" type="password" minlength="8" maxlength="128" autocomplete="new-password" />
-            </label>
-            <label>
-              <span>Tajná lokace</span>
-              <input id="secretLocationName" name="secretLocationName" type="text" maxlength="180" />
-            </label>
-          </div>
-          <div class="field-row">
-            <label>
-              <span>Tajná šířka</span>
-              <input id="secretLatitude" name="secretLatitude" type="number" step="0.000001" min="-90" max="90" />
-            </label>
-            <label>
-              <span>Tajná délka</span>
-              <input id="secretLongitude" name="secretLongitude" type="number" step="0.000001" min="-180" max="180" />
-            </label>
-          </div>
-          <label>
-            <span>Tajné info</span>
-            <textarea id="secretInfo" name="secretInfo" maxlength="4400"></textarea>
-          </label>
-          <label>
-            <span>Poznámka k mapě</span>
-            <textarea id="secretMapNote" name="secretMapNote" maxlength="500"></textarea>
-          </label>
-        </fieldset>
-
         <div class="action-row">
           <button id="submit-event" type="submit">Publikovat akci</button>
           <button id="use-signer" type="button">Použít můj účet</button>
@@ -150,7 +116,6 @@ const cspNonce = Astro.locals.cspNonce;
   const modeEl = document.getElementById("submit-mode");
   const signerButton = document.getElementById("use-signer");
   const submitButton = document.getElementById("submit-event");
-  const gatedFields = document.getElementById("gated-fields");
   let signerMode = false;
 
   function setStatus(message, tone = "neutral") {
@@ -187,25 +152,6 @@ const cspNonce = Astro.locals.cspNonce;
     return `${slugify(payload.title) || "event"}-${date}`;
   }
 
-  function selectedAccessType() {
-    if (!(form instanceof HTMLFormElement)) return "public";
-    const data = new FormData(form);
-    return data.get("accessType") === "gated" ? "gated" : "public";
-  }
-
-  function syncAccessMode() {
-    const gated = selectedAccessType() === "gated";
-    if (gatedFields instanceof HTMLElement) gatedFields.hidden = !gated;
-    for (const input of document.querySelectorAll("#gated-fields input, #gated-fields textarea")) {
-      if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
-        input.required = gated && ["unlockCode", "secretLocationName", "secretLatitude", "secretLongitude", "secretInfo"].includes(input.name);
-      }
-    }
-    if (submitButton instanceof HTMLButtonElement) {
-      submitButton.textContent = gated ? "Publikovat akci na kód" : "Publikovat akci";
-    }
-  }
-
   async function parseResponse(response) {
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
@@ -217,7 +163,6 @@ const cspNonce = Astro.locals.cspNonce;
   function payloadFromForm() {
     if (!(form instanceof HTMLFormElement)) throw new Error("Formulář není dostupný.");
     const data = new FormData(form);
-    const accessType = selectedAccessType();
     return {
       title: String(data.get("title") || "").trim(),
       summary: String(data.get("summary") || "").trim(),
@@ -232,13 +177,8 @@ const cspNonce = Astro.locals.cspNonce;
       genres: listFromInput(data.get("genres")),
       lineup: listFromInput(data.get("lineup")),
       tags: listFromInput(data.get("tags")),
-      accessType,
-      unlockCode: accessType === "gated" ? String(data.get("unlockCode") || "") : undefined,
-      secretInfo: accessType === "gated" ? String(data.get("secretInfo") || "") : undefined,
-      secretLocationName: accessType === "gated" ? String(data.get("secretLocationName") || "") : undefined,
-      secretLatitude: accessType === "gated" && data.get("secretLatitude") ? Number(data.get("secretLatitude")) : undefined,
-      secretLongitude: accessType === "gated" && data.get("secretLongitude") ? Number(data.get("secretLongitude")) : undefined,
-      secretMapNote: accessType === "gated" ? String(data.get("secretMapNote") || "").trim() || undefined : undefined,
+      accessType: "public",
+      website: String(data.get("website") || "").trim() || undefined,
     };
   }
 
@@ -255,7 +195,7 @@ const cspNonce = Astro.locals.cspNonce;
       ["summary", payload.summary],
       ["location", payload.publicLocation],
       ["start", String(Math.floor(new Date(payload.startsAt).getTime() / 1000))],
-      ["access", payload.accessType],
+      ["access", "public"],
       ["client", "RaveMap"],
       ["submission", "public"],
       ["t", "ravemap"],
@@ -281,11 +221,6 @@ const cspNonce = Astro.locals.cspNonce;
       content: payload.summary,
     });
   }
-
-  for (const input of document.querySelectorAll('input[name="accessType"]')) {
-    input.addEventListener("change", syncAccessMode);
-  }
-  syncAccessMode();
 
   signerButton?.addEventListener("click", async () => {
     try {
@@ -422,37 +357,21 @@ const cspNonce = Astro.locals.cspNonce;
     gap: 12px;
   }
 
-  .segmented {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .public-only-note {
+    margin: 0;
     border: 2px solid #000;
-    background: #fffef8;
-  }
-
-  .segmented label {
-    display: block;
-    cursor: pointer;
-  }
-
-  .segmented label + label {
-    border-left: 2px solid #000;
-  }
-
-  .segmented input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .segmented span {
-    display: block;
+    background: #f2dfca;
     padding: 10px;
-    text-align: center;
+    line-height: 1.45;
+    font-weight: 800;
   }
 
-  .segmented input:checked + span {
-    background: #000;
-    color: #c00;
+  .hp-field {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
   }
 
   .field-row {
@@ -484,30 +403,6 @@ const cspNonce = Astro.locals.cspNonce;
   textarea {
     min-height: 140px;
     resize: vertical;
-  }
-
-  fieldset {
-    border: 2px solid #000;
-    margin: 0;
-    padding: 12px;
-  }
-
-  legend {
-    padding: 0 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 0.76rem;
-    font-weight: 900;
-  }
-
-  .gated-fields {
-    display: grid;
-    gap: 12px;
-    background: rgba(0, 0, 0, 0.04);
-  }
-
-  .gated-fields[hidden] {
-    display: none;
   }
 
   .action-row {
@@ -567,15 +462,6 @@ const cspNonce = Astro.locals.cspNonce;
     .field-row,
     .action-row {
       flex-direction: column;
-    }
-
-    .segmented {
-      grid-template-columns: 1fr;
-    }
-
-    .segmented label + label {
-      border-left: 0;
-      border-top: 2px solid #000;
     }
   }
 </style>

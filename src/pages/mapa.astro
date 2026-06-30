@@ -1,25 +1,9 @@
 ---
 export const prerender = false;
 
-import { hasPrecisePublicLocation, osmEmbedUrl, osmMarkerUrl } from "../lib/location";
-import { getNostrEventRepository } from "../lib/server/nostr-repository";
 import Layout from "../layouts/Layout.astro";
 
-const repository = getNostrEventRepository();
 const cspNonce = Astro.locals.cspNonce;
-const now = Date.now();
-const events = (await repository.listPublishedEvents())
-  .filter((event) => (event.endAt ?? event.startsAt).getTime() >= now)
-  .filter(hasPrecisePublicLocation);
-
-const formatter = new Intl.DateTimeFormat("cs-CZ", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
-const selected = events[0];
-const selectedMapUrl = selected ? osmEmbedUrl(selected) : "";
-const selectedOsmUrl = selected ? osmMarkerUrl(selected) : "";
 ---
 
 <Layout bodyClass="map-body">
@@ -37,101 +21,204 @@ const selectedOsmUrl = selected ? osmMarkerUrl(selected) : "";
         <p class="kicker">Přesné lokace</p>
         <h1 id="map-title">MAPA AKCÍ</h1>
       </div>
-      <p>{events.length} akcí má přesnou veřejnou lokaci.</p>
+      <p id="map-count">Načítám aktuální akce...</p>
     </section>
 
-    {
-      events.length === 0 ? (
-        <section class="empty-map">
-          <p>Žádná publikovaná akce zatím nemá přesnou veřejnou lokaci.</p>
-          <a href="/akce">Zpět na seznam</a>
-        </section>
-      ) : (
-        <section class="map-board" aria-label="Mapa přesných lokací">
-          <div class="map-list" aria-label="Akce na mapě">
-            {events.map((event, index) => {
-              const embedUrl = osmEmbedUrl(event);
-              const markerUrl = osmMarkerUrl(event);
-              return (
-                <article class:list={["map-event", index === 0 && "active"]} data-map-event>
-                  <button
-                    type="button"
-                    data-map-src={embedUrl}
-                    data-osm-url={markerUrl}
-                    data-title={event.title}
-                    aria-pressed={index === 0 ? "true" : "false"}
-                  >
-                    <span class="event-index">{String(index + 1).padStart(2, "0")}</span>
-                    <strong>{event.title}</strong>
-                    <span>{formatter.format(event.startsAt)}</span>
-                    <small>{event.publicLocation}</small>
-                  </button>
-                  <div class="event-actions">
-                    <span>{event.accessType === "gated" ? "na kód" : event.source ? "import" : "veřejná"}</span>
-                    <a href={`/akce/${event.slug}`}>Detail</a>
-                    <a href={markerUrl} target="_blank" rel="noreferrer">OSM</a>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+    <section id="map-loading" class="empty-map map-loading">
+      <p>Načítám aktuální akce z Nostr relayů.</p>
+      <div class="map-skeleton" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </section>
 
-          <div class="map-frame-panel">
-            <div class="map-frame-head">
-              <div>
-                <span>Vybraná akce</span>
-                <strong id="selected-title">{selected?.title}</strong>
-              </div>
-              <a id="selected-osm" href={selectedOsmUrl} target="_blank" rel="noreferrer">Otevřít v OSM</a>
-            </div>
-            <iframe
-              id="map-frame"
-              class="map-frame"
-              title="Mapa vybrané akce"
-              loading="lazy"
-              referrerpolicy="no-referrer"
-              src={selectedMapUrl}
-            ></iframe>
+    <section id="map-empty" class="empty-map" hidden>
+      <p>Žádná publikovaná akce zatím nemá přesnou veřejnou lokaci.</p>
+      <a href="/akce">Zpět na seznam</a>
+    </section>
+
+    <section id="map-error" class="empty-map" hidden>
+      <p>Mapu se nepodařilo načíst.</p>
+      <a href="/akce">Zpět na seznam</a>
+    </section>
+
+    <section id="map-board" class="map-board" aria-label="Mapa přesných lokací" hidden>
+      <div id="map-list" class="map-list" aria-label="Akce na mapě"></div>
+
+      <div class="map-frame-panel">
+        <div class="map-frame-head">
+          <div>
+            <span>Vybraná akce</span>
+            <strong id="selected-title"></strong>
           </div>
-        </section>
-      )
-    }
+          <a id="selected-osm" href="/akce" target="_blank" rel="noreferrer">Otevřít v OSM</a>
+        </div>
+        <iframe
+          id="map-frame"
+          class="map-frame"
+          title="Mapa vybrané akce"
+          loading="lazy"
+          referrerpolicy="no-referrer"
+        ></iframe>
+      </div>
+    </section>
   </main>
 </Layout>
 
 <script nonce={cspNonce}>
+{
+  const formatter = new Intl.DateTimeFormat("cs-CZ", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
   const mapFrame = document.getElementById("map-frame");
   const selectedTitle = document.getElementById("selected-title");
   const selectedOsm = document.getElementById("selected-osm");
-  const rows = [...document.querySelectorAll("[data-map-event]")];
+  const mapCount = document.getElementById("map-count");
+  const loading = document.getElementById("map-loading");
+  const empty = document.getElementById("map-empty");
+  const errorState = document.getElementById("map-error");
+  const board = document.getElementById("map-board");
+  const list = document.getElementById("map-list");
 
-  for (const row of rows) {
-    const button = row.querySelector("[data-map-src]");
-    button?.addEventListener("click", () => {
-      if (!(button instanceof HTMLButtonElement)) return;
-      const mapSrc = button.dataset.mapSrc || "";
-      const osmUrl = button.dataset.osmUrl || "";
-      const title = button.dataset.title || "";
-
-      if (mapFrame instanceof HTMLIFrameElement && mapSrc) {
-        mapFrame.src = mapSrc;
-      }
-      if (selectedTitle instanceof HTMLElement) {
-        selectedTitle.textContent = title;
-      }
-      if (selectedOsm instanceof HTMLAnchorElement && osmUrl) {
-        selectedOsm.href = osmUrl;
-      }
-
-      for (const candidate of rows) {
-        candidate.classList.toggle("active", candidate === row);
-        const candidateButton = candidate.querySelector("[data-map-src]");
-        if (candidateButton instanceof HTMLButtonElement) {
-          candidateButton.setAttribute("aria-pressed", String(candidate === row));
-        }
-      }
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => {
+      if (character === "&") return "&amp;";
+      if (character === "<") return "&lt;";
+      if (character === ">") return "&gt;";
+      if (character === '"') return "&quot;";
+      return "&#39;";
     });
   }
+
+  function osmMarkerUrl(event, zoom = 16) {
+    return `https://www.openstreetmap.org/?mlat=${event.publicLatitude}&mlon=${event.publicLongitude}#map=${zoom}/${event.publicLatitude}/${event.publicLongitude}`;
+  }
+
+  function osmEmbedUrl(event, pad = 0.01) {
+    const west = event.publicLongitude - pad;
+    const east = event.publicLongitude + pad;
+    const south = event.publicLatitude - pad;
+    const north = event.publicLatitude + pad;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${west}%2C${south}%2C${east}%2C${north}&layer=mapnik&marker=${event.publicLatitude}%2C${event.publicLongitude}`;
+  }
+
+  function provenance(event) {
+    if (event.crewSlug || event.origin === "studio") return "crew";
+    if (event.source || event.origin === "import") return "import";
+    if (event.origin === "public" || event.tags?.includes("ravemap")) return "community";
+    return "admin";
+  }
+
+  function provenanceLabel(value) {
+    if (value === "crew") return "Crew";
+    if (value === "community") return "Komunita";
+    if (value === "import") return "Import";
+    return "Admin";
+  }
+
+  function setState(state) {
+    if (loading instanceof HTMLElement) loading.hidden = state !== "loading";
+    if (empty instanceof HTMLElement) empty.hidden = state !== "empty";
+    if (errorState instanceof HTMLElement) errorState.hidden = state !== "error";
+    if (board instanceof HTMLElement) board.hidden = state !== "ready";
+  }
+
+  function bindRows() {
+    const rows = [...document.querySelectorAll("[data-map-event]")];
+    for (const row of rows) {
+      const button = row.querySelector("[data-map-src]");
+      button?.addEventListener("click", () => {
+        if (!(button instanceof HTMLButtonElement)) return;
+        const mapSrc = button.dataset.mapSrc || "";
+        const osmUrl = button.dataset.osmUrl || "";
+        const title = button.dataset.title || "";
+
+        if (mapFrame instanceof HTMLIFrameElement && mapSrc) {
+          mapFrame.src = mapSrc;
+        }
+        if (selectedTitle instanceof HTMLElement) {
+          selectedTitle.textContent = title;
+        }
+        if (selectedOsm instanceof HTMLAnchorElement && osmUrl) {
+          selectedOsm.href = osmUrl;
+        }
+
+        for (const candidate of rows) {
+          candidate.classList.toggle("active", candidate === row);
+          const candidateButton = candidate.querySelector("[data-map-src]");
+          if (candidateButton instanceof HTMLButtonElement) {
+            candidateButton.setAttribute("aria-pressed", String(candidate === row));
+          }
+        }
+      });
+    }
+  }
+
+  function renderEvents(events) {
+    if (!(list instanceof HTMLElement)) return;
+    list.innerHTML = events
+      .map((event, index) => {
+        const embedUrl = osmEmbedUrl(event);
+        const markerUrl = osmMarkerUrl(event);
+        const eventProvenance = provenance(event);
+        return `
+          <article class="map-event${index === 0 ? " active" : ""}" data-map-event>
+            <button
+              type="button"
+              data-map-src="${escapeHtml(embedUrl)}"
+              data-osm-url="${escapeHtml(markerUrl)}"
+              data-title="${escapeHtml(event.title)}"
+              aria-pressed="${index === 0 ? "true" : "false"}"
+            >
+              <span class="event-index">${String(index + 1).padStart(2, "0")}</span>
+              <strong>${escapeHtml(event.title)}</strong>
+              <span>${formatter.format(new Date(event.startsAt))}</span>
+              <small>${escapeHtml(event.publicLocation)}</small>
+            </button>
+            <div class="event-actions">
+              <span>${event.accessType === "gated" ? "na kód" : "veřejná"}</span>
+              <span class="provenance-badge ${eventProvenance}">${provenanceLabel(eventProvenance)}</span>
+              <a href="/akce/${encodeURIComponent(event.slug)}">Detail</a>
+              <a href="${escapeHtml(markerUrl)}" target="_blank" rel="noreferrer">OSM</a>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+
+    const selected = events[0];
+    if (selectedTitle instanceof HTMLElement) selectedTitle.textContent = selected?.title || "";
+    if (selectedOsm instanceof HTMLAnchorElement && selected) selectedOsm.href = osmMarkerUrl(selected);
+    if (mapFrame instanceof HTMLIFrameElement && selected) mapFrame.src = osmEmbedUrl(selected);
+    bindRows();
+  }
+
+  async function loadMapEvents() {
+    setState("loading");
+    try {
+      const response = await fetch("/api/events?view=map");
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || "Mapa není dostupná");
+      const events = Array.isArray(payload.data?.events) ? payload.data.events : [];
+      if (mapCount instanceof HTMLElement) {
+        mapCount.textContent = `${events.length} akcí má přesnou veřejnou lokaci.`;
+      }
+      if (events.length === 0) {
+        setState("empty");
+        return;
+      }
+      renderEvents(events);
+      setState("ready");
+    } catch {
+      if (mapCount instanceof HTMLElement) mapCount.textContent = "Mapa teď není dostupná.";
+      setState("error");
+    }
+  }
+
+  loadMapEvents();
+}
 </script>
 
 <style>
@@ -318,6 +405,22 @@ const selectedOsmUrl = selected ? osmMarkerUrl(selected) : "";
     font-weight: 900;
   }
 
+  .event-actions .provenance-badge {
+    background: #e5e7eb;
+  }
+
+  .event-actions .provenance-badge.crew {
+    background: #bbf7d0;
+  }
+
+  .event-actions .provenance-badge.community {
+    background: #dbeafe;
+  }
+
+  .event-actions .provenance-badge.import {
+    background: #fde68a;
+  }
+
   .event-actions a {
     padding: 4px 7px;
     font-size: 0.68rem;
@@ -373,9 +476,127 @@ const selectedOsmUrl = selected ? osmMarkerUrl(selected) : "";
     padding: 18px;
   }
 
+  .map-board[hidden],
+  .empty-map[hidden] {
+    display: none;
+  }
+
   .empty-map p {
     font-size: 1.35rem;
     font-weight: 900;
+  }
+
+  .map-skeleton {
+    display: grid;
+    gap: 8px;
+  }
+
+  .map-skeleton span {
+    display: block;
+    height: 18px;
+    max-width: 460px;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), rgba(255, 246, 223, 0.48), rgba(0, 0, 0, 0.35));
+    background-size: 220% 100%;
+    animation: map-skeleton-pulse 1.2s ease-in-out infinite;
+  }
+
+  .map-skeleton span:nth-child(2) {
+    width: 82%;
+  }
+
+  .map-skeleton span:nth-child(3) {
+    width: 54%;
+  }
+
+  @keyframes map-skeleton-pulse {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
+  :global(.map-shell #map-list .map-event) {
+    display: grid;
+    gap: 0;
+    border-bottom: 2px solid #000;
+  }
+  :global(.map-shell #map-list .map-event:last-child) {
+    border-bottom: 0;
+  }
+  :global(.map-shell #map-list .map-event button) {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 5px 12px;
+    border: 0;
+    background: transparent;
+    color: #000;
+    padding: 12px;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
+  :global(.map-shell #map-list .map-event.active button),
+  :global(.map-shell #map-list .map-event button:hover) {
+    background: #000;
+    color: #c00;
+  }
+  :global(.map-shell #map-list .event-index) {
+    grid-row: 1 / span 3;
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    line-height: 1;
+  }
+  :global(.map-shell #map-list .map-event strong) {
+    font-size: 1.18rem;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+  :global(.map-shell #map-list .map-event small),
+  :global(.map-shell #map-list .map-event button span:not(.event-index)) {
+    overflow-wrap: anywhere;
+  }
+  :global(.map-shell #map-list .event-actions) {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 12px 12px 72px;
+  }
+  :global(.map-shell #map-list .event-actions span) {
+    border: 1px solid #000;
+    padding: 3px 6px;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    font-weight: 900;
+  }
+  :global(.map-shell #map-list .event-actions .provenance-badge) {
+    background: #e5e7eb;
+  }
+  :global(.map-shell #map-list .event-actions .provenance-badge.crew) {
+    background: #bbf7d0;
+  }
+  :global(.map-shell #map-list .event-actions .provenance-badge.community) {
+    background: #dbeafe;
+  }
+  :global(.map-shell #map-list .event-actions .provenance-badge.import) {
+    background: #fde68a;
+  }
+  :global(.map-shell #map-list .event-actions a) {
+    border: 2px solid #000;
+    background: #fff6df;
+    color: #000;
+    padding: 4px 7px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.68rem;
+    font-weight: 900;
+  }
+  :global(.map-shell #map-list .event-actions a:hover) {
+    background: #000;
+    color: #c00;
   }
 
   @media (max-width: 900px) {
@@ -439,6 +660,16 @@ const selectedOsmUrl = selected ? osmMarkerUrl(selected) : "";
     }
 
     .event-actions {
+      padding: 0 10px 10px 64px;
+    }
+    :global(.map-shell #map-list .map-event button) {
+      grid-template-columns: 42px minmax(0, 1fr);
+      padding: 10px;
+    }
+    :global(.map-shell #map-list .event-index) {
+      font-size: 1.45rem;
+    }
+    :global(.map-shell #map-list .event-actions) {
       padding: 0 10px 10px 64px;
     }
 

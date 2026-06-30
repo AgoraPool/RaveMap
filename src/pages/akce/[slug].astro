@@ -3,6 +3,7 @@ export const prerender = false;
 
 import Layout from "../../layouts/Layout.astro";
 import { nip19 } from "nostr-tools";
+import { eventProvenance, eventProvenanceDescription, eventProvenanceLabel } from "../../lib/provenance";
 import { getNostrEventRepository } from "../../lib/server/nostr-repository";
 import { PUBLIC_EVENT_KIND } from "../../lib/server/nostr-types";
 
@@ -16,6 +17,7 @@ const pageData = slugValid
   : { event: null, comments: [], rsvp: { accepted: 0, tentative: 0, signals: 0 }, rsvpEntries: [] };
 const { event, comments, rsvp, rsvpEntries } = pageData;
 const eventPromo = event?.crewLightningAddress ? await repository.getPromoZapSummary("event", event.slug).catch(() => null) : null;
+const provenance = event ? eventProvenance(event) : null;
 if (!event) {
   Astro.response.status = 404;
 }
@@ -109,6 +111,7 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
               <p class="card-kicker">VEŘEJNÉ</p>
               <div class="meta-pills">
                 <span class="meta-pill">PUBLIKOVÁNO</span>
+                {provenance && <span class:list={["meta-pill", "provenance-pill", provenance]}>{eventProvenanceLabel(provenance)}</span>}
                 <span class="meta-pill meta-pill-soft">{event.publicLocation}</span>
               </div>
             </div>
@@ -140,6 +143,14 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
                     <span>Lokalita</span>
                     <strong>{event.publicLocation}</strong>
                   </div>
+                  {
+                    provenance && (
+                      <div>
+                        <span>Původ</span>
+                        <strong>{eventProvenanceDescription(provenance)}</strong>
+                      </div>
+                    )
+                  }
                   {
                     event.source && (
                       <div>
@@ -1619,6 +1630,26 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
   .meta-pill-soft {
     background: rgba(255, 255, 255, 0.72);
     color: #000;
+  }
+
+  .provenance-pill {
+    color: #000;
+  }
+
+  .provenance-pill.crew {
+    background: #bbf7d0;
+  }
+
+  .provenance-pill.community {
+    background: #dbeafe;
+  }
+
+  .provenance-pill.import {
+    background: #fde68a;
+  }
+
+  .provenance-pill.admin {
+    background: #e5e7eb;
   }
 
   .meta-pill-positive {
