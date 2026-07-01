@@ -9,7 +9,8 @@ export const CREW_ACCOUNT_KIND = 30431;
 export const DELETE_EVENT_KIND = 5;
 export const ZAP_REQUEST_KIND = 9734;
 export const ZAP_RECEIPT_KIND = 9735;
-export const RSVP_SIGNALS = ["hledám partu", "mám místo v autě", "jedu vlakem", "beru distro", "uvidíme se u stage"] as const;
+export const RSVP_SIGNALS = ["hledám partu", "mám místo v autě", "uvidíme se u stage"] as const;
+export const RSVP_CONTACT_SIGNALS = ["hledám partu", "mám místo v autě"] as const;
 
 export type NostrEvent = {
   id: string;
@@ -140,6 +141,7 @@ export type EventCommentDto = {
 
 export type RsvpStatus = "accepted" | "tentative";
 export type RsvpSignal = (typeof RSVP_SIGNALS)[number];
+export type RsvpContactSignal = (typeof RSVP_CONTACT_SIGNALS)[number];
 
 export type EventRsvpSummaryDto = {
   accepted: number;
@@ -152,6 +154,7 @@ export type EventRsvpEntryDto = {
   slug: string;
   status: RsvpStatus;
   signal?: RsvpSignal;
+  contact?: string;
   authorPubkey: string;
   authorName: string;
   isAnonymous: boolean;
@@ -163,6 +166,7 @@ export type CreateRsvpCommand = {
   status: RsvpStatus;
   nickname?: string;
   signal?: RsvpSignal;
+  contact?: string;
 };
 
 export type CreateCommentCommand = {

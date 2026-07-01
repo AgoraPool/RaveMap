@@ -3,6 +3,7 @@ export const prerender = false;
 
 import Layout from "../../layouts/Layout.astro";
 import { nip19 } from "nostr-tools";
+import { extractMediaSummaryParts } from "../../lib/media-samples";
 import { eventProvenance, eventProvenanceDescription, eventProvenanceLabel } from "../../lib/provenance";
 import { getNostrEventRepository } from "../../lib/server/nostr-repository";
 import { PUBLIC_EVENT_KIND } from "../../lib/server/nostr-types";
@@ -45,12 +46,13 @@ const formatEventDate = () => {
 
 const sourceSummaryFallback = event ? `${event.title}\n${event.publicLocation}\n${shortFormatter.format(event.startsAt)}` : "";
 const showSummary = Boolean(event?.summary && event.summary.trim() !== sourceSummaryFallback.trim() && event.summary.trim() !== event.title.trim());
+const summaryParts = showSummary && event ? extractMediaSummaryParts(event.summary) : [];
 const commentFormatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "medium",
   timeStyle: "short",
 });
 const rsvpStatusLabel = (status: string) => (status === "accepted" ? "jde" : "možná");
-const rsvpSignalOptions = ["hledám partu", "mám místo v autě", "jedu vlakem", "beru distro", "uvidíme se u stage"];
+const rsvpSignalOptions = ["hledám partu", "mám místo v autě", "uvidíme se u stage"];
 const publicMapUrl =
   event?.publicLatitude !== undefined && event.publicLongitude !== undefined
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${event.publicLongitude - 0.01}%2C${event.publicLatitude - 0.01}%2C${
@@ -161,7 +163,30 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
                   }
                 </div>
 
-                {showSummary && <p class="card-copy">{event.summary}</p>}
+                {
+                  showSummary && (
+                    <p class="card-copy">{summaryParts.map((part) => (
+                        part.type === "text" ? (
+                          part.text
+                        ) : part.sample.embedUrl ? (
+                          <button
+                            type="button"
+                            class:list={["media-inline-link", part.sample.provider]}
+                            data-media-sample
+                            data-media-embed={part.sample.embedUrl}
+                            data-media-source={part.sample.sourceUrl}
+                            data-media-title={part.sample.label}
+                          >
+                            {part.text}
+                          </button>
+                        ) : (
+                          <a class:list={["media-inline-link", part.sample.provider]} href={part.sample.sourceUrl} target="_blank" rel="noreferrer">
+                            {part.text}
+                          </a>
+                        )
+                      ))}</p>
+                  )
+                }
 
                 {
                   event.tags.length > 0 && (
@@ -347,6 +372,10 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
                 </label>
               ))}
             </div>
+            <label class="rsvp-contact" id="rsvp-contact-wrap" hidden>
+              <span>Kontakt pro domluvu</span>
+              <input id="rsvp-contact" name="contact" type="text" maxlength="120" placeholder="Telegram, Signal, e-mail..." />
+            </label>
             <div class="rsvp-actions">
               <button type="button" data-rsvp-status="accepted">Jdu</button>
               <button type="button" data-rsvp-status="tentative">Možná</button>
@@ -363,6 +392,7 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
                         <span>{rsvpStatusLabel(entry.status)}</span>
                       </div>
                       {entry.signal && <p>{entry.signal}</p>}
+                      {entry.contact && <p class="rsvp-contact-line">Kontakt: {entry.contact}</p>}
                       <time datetime={entry.createdAt.toISOString()}>{commentFormatter.format(entry.createdAt)}</time>
                     </article>
                   ))
@@ -435,6 +465,27 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
         </div>
       )
     }
+    <div id="media-modal" class="media-modal" hidden>
+      <button class="media-modal-backdrop" type="button" data-media-close aria-label="Zavřít přehrávač"></button>
+      <section class="media-modal-panel" role="dialog" aria-modal="true" aria-labelledby="media-modal-title">
+        <div class="media-modal-head">
+          <div>
+            <p class="card-kicker">UKÁZKA</p>
+            <h2 id="media-modal-title">Přehrávač</h2>
+          </div>
+          <button type="button" data-media-close>Zavřít</button>
+        </div>
+        <iframe
+          id="media-modal-frame"
+          title="Přehrávač hudební ukázky"
+          loading="lazy"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin"
+        ></iframe>
+        <a id="media-modal-source" class="media-modal-source" href="/" target="_blank" rel="noreferrer">Otevřít zdroj</a>
+      </section>
+    </div>
   </div>
 </Layout>
 
@@ -581,10 +632,18 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
   const rsvpMaybe = document.getElementById("rsvp-maybe");
   const rsvpSignals = document.getElementById("rsvp-signals");
   const rsvpNickname = document.getElementById("rsvp-nickname");
+  const rsvpContactWrap = document.getElementById("rsvp-contact-wrap");
+  const rsvpContact = document.getElementById("rsvp-contact");
   const rsvpEntryList = document.getElementById("rsvp-entry-list");
   const rsvpSigner = document.getElementById("rsvp-signer");
   const nostrCopyButtons = document.querySelectorAll("[data-copy-nostr]");
-  const allowedRsvpSignals = new Set(["hledám partu", "mám místo v autě", "jedu vlakem", "beru distro", "uvidíme se u stage"]);
+  const mediaModal = document.getElementById("media-modal");
+  const mediaModalTitle = document.getElementById("media-modal-title");
+  const mediaModalFrame = document.getElementById("media-modal-frame");
+  const mediaModalSource = document.getElementById("media-modal-source");
+  const mediaSampleButtons = document.querySelectorAll("[data-media-sample]");
+  const allowedRsvpSignals = new Set(["hledám partu", "mám místo v autě", "uvidíme se u stage"]);
+  const contactRsvpSignals = new Set(["hledám partu", "mám místo v autě"]);
   let signedCommentMode = false;
   let signedRsvpMode = false;
   let signedPubkey = "";
@@ -596,6 +655,27 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function openMediaModal(button) {
+    if (!(mediaModal instanceof HTMLElement) || !(button instanceof HTMLElement)) return;
+    const embedUrl = button.dataset.mediaEmbed || "";
+    const sourceUrl = button.dataset.mediaSource || "";
+    const title = button.dataset.mediaTitle || "Hudební ukázka";
+    if (!embedUrl) return;
+
+    if (mediaModalTitle instanceof HTMLElement) mediaModalTitle.textContent = title;
+    if (mediaModalFrame instanceof HTMLIFrameElement) mediaModalFrame.src = embedUrl;
+    if (mediaModalSource instanceof HTMLAnchorElement) mediaModalSource.href = sourceUrl || embedUrl;
+    mediaModal.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeMediaModal() {
+    if (!(mediaModal instanceof HTMLElement)) return;
+    mediaModal.hidden = true;
+    if (mediaModalFrame instanceof HTMLIFrameElement) mediaModalFrame.src = "";
+    document.body.style.overflow = "";
   }
 
   function setCommentStatus(message, tone = "neutral") {
@@ -684,6 +764,23 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     return allowedRsvpSignals.has(selected.value) ? selected.value : "";
   }
 
+  function syncRsvpContactField() {
+    const signal = selectedRsvpSignal();
+    const acceptsContact = contactRsvpSignals.has(signal);
+    if (rsvpContactWrap instanceof HTMLElement) {
+      rsvpContactWrap.hidden = !acceptsContact;
+    }
+    if (rsvpContact instanceof HTMLInputElement) {
+      rsvpContact.disabled = !acceptsContact;
+      if (!acceptsContact) rsvpContact.value = "";
+    }
+  }
+
+  function selectedRsvpContact(signal) {
+    if (!contactRsvpSignals.has(signal) || !(rsvpContact instanceof HTMLInputElement)) return "";
+    return rsvpContact.value.trim();
+  }
+
   function rsvpStatusLabel(status) {
     return status === "accepted" ? "jde" : "možná";
   }
@@ -698,6 +795,7 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     rsvpEntryList.innerHTML = entries
       .map((entry) => {
         const signal = entry.signal ? `<p>${escapeHtml(entry.signal)}</p>` : "";
+        const contact = entry.contact ? `<p class="rsvp-contact-line">Kontakt: ${escapeHtml(entry.contact)}</p>` : "";
         return `
           <article class="rsvp-entry">
             <div>
@@ -705,6 +803,7 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
               <span>${escapeHtml(rsvpStatusLabel(entry.status))}</span>
             </div>
             ${signal}
+            ${contact}
             <time datetime="${escapeHtml(entry.createdAt)}">${escapeHtml(formatCommentDate(entry.createdAt))}</time>
           </article>
         `;
@@ -712,7 +811,7 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
       .join("");
   }
 
-  async function buildSignedRsvp(slug, coordinate, status, nickname, signal) {
+  async function buildSignedRsvp(slug, coordinate, status, nickname, signal, contact) {
     const nostr = /** @type {any} */ (window).nostr;
     if (!nostr?.signEvent) {
       throw new Error("V prohlížeči není Nostr rozšíření. Anonymní odpověď pořád funguje.");
@@ -733,6 +832,7 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
         ["client", "RaveMap"],
         ...(nickname ? [["name", nickname]] : []),
         ...(signal ? [["signal", signal]] : []),
+        ...(contact ? [["contact", contact]] : []),
       ],
       content: "",
     });
@@ -792,6 +892,20 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     });
   }
 
+  for (const button of mediaSampleButtons) {
+    button.addEventListener("click", () => openMediaModal(button));
+  }
+
+  for (const button of document.querySelectorAll("[data-media-close]")) {
+    button.addEventListener("click", closeMediaModal);
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && mediaModal instanceof HTMLElement && !mediaModal.hidden) {
+      closeMediaModal();
+    }
+  });
+
   for (const button of document.querySelectorAll("[data-rsvp-status]")) {
     button.addEventListener("click", async () => {
       if (!(button instanceof HTMLButtonElement) || !(rsvpCard instanceof HTMLElement)) return;
@@ -801,15 +915,16 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
       if (!slug || !coordinate || (status !== "accepted" && status !== "tentative")) return;
       const nickname = rsvpNickname instanceof HTMLInputElement ? rsvpNickname.value.trim() : "";
       const signal = selectedRsvpSignal();
+      const contact = selectedRsvpContact(signal);
 
       button.disabled = true;
       setRsvpStatus("Ukládám odpověď...", "warning");
       try {
-        const signedEvent = signedRsvpMode ? await buildSignedRsvp(slug, coordinate, status, nickname, signal) : undefined;
+        const signedEvent = signedRsvpMode ? await buildSignedRsvp(slug, coordinate, status, nickname, signal, contact) : undefined;
         const response = await fetch(`/api/events/${slug}/rsvp`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status, nickname: nickname || undefined, signal: signal || undefined, signedEvent }),
+          body: JSON.stringify({ status, nickname: nickname || undefined, signal: signal || undefined, contact: contact || undefined, signedEvent }),
         });
         const result = await parseCommentResponse(response);
         renderRsvp(result.rsvp);
@@ -822,6 +937,11 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
       }
     });
   }
+
+  for (const input of document.querySelectorAll('input[name="rsvpSignal"]')) {
+    input.addEventListener("change", syncRsvpContactField);
+  }
+  syncRsvpContactField();
 
   commentForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1124,6 +1244,115 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     min-width: 0;
   }
 
+  .media-inline-link {
+    appearance: none;
+    display: inline;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    padding: 0 2px;
+    background: rgba(142, 241, 176, 0.72);
+    color: #000;
+    font: inherit;
+    line-height: inherit;
+    text-align: inherit;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 2px;
+    white-space: inherit;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    cursor: pointer;
+  }
+
+  .media-inline-link.soundcloud {
+    background: rgba(255, 214, 118, 0.76);
+  }
+
+  .media-inline-link:hover,
+  .media-inline-link:focus-visible {
+    background: #000;
+    color: #c00;
+    outline: 2px solid #000;
+  }
+
+  .media-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+  }
+
+  .media-modal[hidden] {
+    display: none;
+  }
+
+  .media-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.72);
+    cursor: pointer;
+  }
+
+  .media-modal-panel {
+    position: relative;
+    z-index: 1;
+    width: min(860px, 100%);
+    max-height: calc(100svh - 36px);
+    border: 3px solid #000;
+    background: #fff4dd;
+    box-shadow: 12px 12px 0 #000;
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  .media-modal-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .media-modal-head h2 {
+    overflow-wrap: anywhere;
+  }
+
+  .media-modal-head button,
+  .media-modal-source {
+    border: 2px solid #000;
+    background: #fffef8;
+    color: #000;
+    padding: 8px 10px;
+    font: inherit;
+    font-weight: 900;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .media-modal-head button:hover,
+  .media-modal-source:hover {
+    background: #000;
+    color: #c00;
+  }
+
+  .media-modal iframe {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    min-height: 220px;
+    border: 3px solid #000;
+    background: #000;
+  }
+
+  .media-modal-source {
+    width: fit-content;
+  }
+
   .event-meta-line {
     line-height: 1.45;
     font-weight: 700;
@@ -1290,11 +1519,6 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     border-radius: 0;
   }
 
-  .rsvp-actions button:first-child {
-    background: #000;
-    color: #c00;
-  }
-
   .rsvp-actions button:hover {
     background: #c00;
     color: #000;
@@ -1305,19 +1529,26 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     cursor: not-allowed;
   }
 
-  .rsvp-nickname {
+  .rsvp-nickname,
+  .rsvp-contact {
     display: grid;
     gap: 7px;
   }
 
-  .rsvp-nickname span {
+  .rsvp-contact[hidden] {
+    display: none;
+  }
+
+  .rsvp-nickname span,
+  .rsvp-contact span {
     font-size: 0.76rem;
     font-weight: 900;
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
 
-  .rsvp-nickname input {
+  .rsvp-nickname input,
+  .rsvp-contact input {
     width: 100%;
     border: 2px solid #000;
     background: #fffef8;
@@ -1817,6 +2048,24 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
     .secret-button {
       width: 100%;
       min-width: 0;
+    }
+
+    .media-modal {
+      padding: 10px;
+    }
+
+    .media-modal-panel {
+      max-height: calc(100svh - 20px);
+      padding: 10px;
+      box-shadow: 4px 4px 0 #000;
+    }
+
+    .media-modal-head {
+      display: grid;
+    }
+
+    .media-modal iframe {
+      min-height: 180px;
     }
 
     .comment-actions button,

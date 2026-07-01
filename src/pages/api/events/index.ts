@@ -3,7 +3,7 @@ import { hasPrecisePublicLocation } from "../../../lib/location";
 import { AppError } from "../../../lib/server/errors";
 import { jsonOk, withApiErrorHandling } from "../../../lib/server/http";
 import { getNostrEventRepository } from "../../../lib/server/nostr-repository";
-import type { PublicEventDto } from "../../../lib/server/nostr-types";
+import type { EventRsvpSummaryDto, PublicEventDto } from "../../../lib/server/nostr-types";
 
 type PublicEventsApiView = "all" | "upcoming" | "map";
 
@@ -47,7 +47,14 @@ export const GET: APIRoute = async ({ url }) =>
   withApiErrorHandling(async () => {
     const limit = parsePublicEventsApiLimit(url.searchParams.get("limit"));
     const view = parsePublicEventsApiView(url.searchParams.get("view"));
-    const events = selectPublicEventsForApi(await getNostrEventRepository().listPublishedEvents(limit), view);
+    const repository = getNostrEventRepository();
+    const events = selectPublicEventsForApi(await repository.listPublishedEvents(limit), view);
+    const rsvpBySlug: Record<string, EventRsvpSummaryDto> = await repository.getRsvpSummariesForEvents(events).catch(() => ({}));
 
-    return jsonOk({ events });
+    return jsonOk({
+      events: events.map((event) => ({
+        ...event,
+        rsvp: rsvpBySlug[event.slug] ?? { accepted: 0, tentative: 0, signals: 0 },
+      })),
+    });
   });

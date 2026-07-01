@@ -147,15 +147,22 @@ const cspNonce = Astro.locals.cspNonce;
     const eventHref = `/akce/${encodeURIComponent(event.slug)}`;
     const mapHref = hasPrecisePublicLocation(event) ? osmMarkerUrl(event) : "";
     const eventProvenance = provenance(event);
+    const rsvpAccepted = Number(event.rsvp?.accepted ?? 0);
+    const rsvpTentative = Number(event.rsvp?.tentative ?? 0);
+    const rsvpSignals = Number(event.rsvp?.signals ?? 0);
+    const rsvpTotal = rsvpAccepted + rsvpTentative;
     const poster = event.coverImageUrl
       ? `<img class="akce-img" src="${escapeHtml(event.coverImageUrl)}" alt="${escapeHtml(event.title)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
-      : "";
+      : `<span class="akce-poster-placeholder">bez plakátu</span>`;
     const rsvpCell = isPreview
       ? ""
-      : `<div class="akce-rsvp" aria-label="Účast je dostupná v detailu akce"><strong>-</strong><small>účast v detailu</small></div>`;
-    const crewLink = event.crewSlug && event.crewName ? `<a class="crew-link" href="/crew/${encodeURIComponent(event.crewSlug)}">${escapeHtml(event.crewName)}</a>` : "";
+      : `<div class="akce-rsvp" aria-label="${rsvpAccepted} jde, ${rsvpTentative} možná, ${rsvpSignals} signálů"><strong>${rsvpAccepted}</strong><small>jde / ${rsvpTentative} možná</small>${rsvpSignals > 0 ? `<small class="akce-signal">${rsvpSignals} signálů</small>` : ""}</div>`;
+    const crewLink =
+      event.crewSlug && event.crewName
+        ? `<a class="crew-link" href="/crew/${encodeURIComponent(event.crewSlug)}" title="Crew: ${escapeHtml(event.crewName)}">${escapeHtml(event.crewName)}</a>`
+        : "";
     const mapLink = mapHref
-      ? `<a class="osm-link" href="${escapeHtml(mapHref)}" target="_blank" rel="noreferrer">OSM mapa</a>`
+      ? `<a class="osm-link" href="${escapeHtml(mapHref)}" target="_blank" rel="noreferrer" aria-label="Otevřít lokaci v OSM">OSM</a>`
       : "";
 
     return `
@@ -163,11 +170,11 @@ const cspNonce = Astro.locals.cspNonce;
         class="akce-item${mapHref ? " has-map" : ""}"
         data-name="${escapeHtml(String(event.title || "").toLocaleLowerCase("cs-CZ"))}"
         data-date="${startsAt.getTime()}"
-        data-rsvp="0"
+        data-rsvp="${rsvpTotal}"
         data-location="${escapeHtml(String(event.publicLocation || "").toLocaleLowerCase("cs-CZ"))}"
       >
         <a class="akce-poster-cell" href="${eventHref}" aria-label="Otevřít akci ${escapeHtml(event.title)}">${poster}</a>
-        <h3 class="akce-name"><a href="${eventHref}">${escapeHtml(event.title)}</a></h3>
+        <h3 class="akce-name"><a href="${eventHref}" title="${escapeHtml(event.title)}">${escapeHtml(event.title)}</a></h3>
         <div class="akce-date">${formatter.format(startsAt)}</div>
         ${rsvpCell}
         <div class="akce-location">
@@ -379,8 +386,7 @@ const cspNonce = Astro.locals.cspNonce;
     color: rgba(244, 240, 232, 0.72);
   }
 
-  .promo-strip a,
-  .crew-link {
+  .promo-strip a {
     color: #f0cf65;
   }
   .akce-sort-row,
@@ -389,9 +395,9 @@ const cspNonce = Astro.locals.cspNonce;
     box-sizing: border-box;
     min-width: 0;
     display: grid;
-    grid-template-columns: 110px minmax(0, 1.45fr) minmax(130px, 0.9fr) minmax(92px, 0.55fr) minmax(140px, 0.9fr);
+    grid-template-columns: 112px minmax(0, 1.35fr) minmax(150px, 0.72fr) minmax(110px, 0.45fr) minmax(190px, 0.82fr);
     align-items: center;
-    gap: 16px;
+    gap: 14px;
   }
   .akce-sort-row {
     position: sticky;
@@ -425,12 +431,13 @@ const cspNonce = Astro.locals.cspNonce;
     display: contents;
   }
   .akce-item {
-    min-height: 80px;
+    min-height: 82px;
     padding: 8px 18px;
     border-bottom: 1px solid black;
     font-size: 1.1rem;
     position: relative;
     color: black;
+    align-items: start;
   }
   .akce-item:hover {
     color: #c00;
@@ -439,21 +446,54 @@ const cspNonce = Astro.locals.cspNonce;
   .akce-poster-cell {
     width: 100px;
     height: 64px;
-    display: block;
+    display: grid;
+    place-items: center;
     color: inherit;
     text-decoration: none;
+    background: rgba(0, 0, 0, 0.16);
+    overflow: hidden;
+    align-self: center;
   }
   .akce-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
+  }
+  .akce-poster-placeholder {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    border: 1px dashed rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.72);
+    font-size: 0.62rem;
+    font-weight: 900;
+    line-height: 1.05;
+    text-align: center;
+    text-transform: uppercase;
   }
   .akce-name {
-    font-size: 1.7rem;
+    margin: 0;
+    font-size: clamp(1.25rem, 2vw, 1.65rem);
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+    line-height: 1.06;
   }
   .akce-name a {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    text-overflow: ellipsis;
     color: inherit;
     text-decoration: none;
   }
@@ -468,6 +508,7 @@ const cspNonce = Astro.locals.cspNonce;
   .akce-location {
     min-width: 0;
     overflow-wrap: anywhere;
+    align-self: center;
   }
   .akce-rsvp {
     display: grid;
@@ -490,23 +531,25 @@ const cspNonce = Astro.locals.cspNonce;
   }
   .akce-location {
     display: grid;
-    gap: 3px;
+    gap: 5px;
   }
   .akce-location-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 4px;
     align-items: center;
   }
   .akce-location small,
-  .osm-link {
+  .osm-link,
+  .crew-link {
     width: fit-content;
     border: 1px solid currentColor;
-    padding: 2px 5px;
+    padding: 2px 4px;
     text-transform: uppercase;
-    font-size: 0.7rem;
-    font-weight: 700;
+    font-size: 0.62rem;
+    font-weight: 900;
     line-height: 1.1;
+    white-space: nowrap;
   }
   .akce-location-actions .provenance-badge {
     background: #e5e7eb;
@@ -521,11 +564,22 @@ const cspNonce = Astro.locals.cspNonce;
   .akce-location-actions .provenance-badge.import {
     background: #fde68a;
   }
+  .crew-link {
+    background: #bbf7d0;
+    color: #000;
+    text-decoration: none;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .osm-link {
     background: #fff6df;
     color: #000;
     text-decoration: none;
   }
+  .crew-link:hover,
+  .crew-link:focus-visible,
   .osm-link:hover,
   .osm-link:focus-visible {
     background: #000;
@@ -625,16 +679,16 @@ const cspNonce = Astro.locals.cspNonce;
     width: 100%;
     box-sizing: border-box;
     min-width: 0;
-    min-height: 80px;
+    min-height: 82px;
     display: grid;
-    grid-template-columns: 110px minmax(0, 1.45fr) minmax(130px, 0.9fr) minmax(92px, 0.55fr) minmax(140px, 0.9fr);
-    align-items: center;
-    gap: 16px;
+    grid-template-columns: 112px minmax(0, 1.35fr) minmax(150px, 0.72fr) minmax(110px, 0.45fr) minmax(190px, 0.82fr);
+    gap: 14px;
     padding: 8px 18px;
     border-bottom: 1px solid black;
     font-size: 1.1rem;
     position: relative;
     color: black;
+    align-items: start;
   }
   :global(.akce [data-akce-list] .akce-item:hover) {
     color: #c00;
@@ -643,10 +697,13 @@ const cspNonce = Astro.locals.cspNonce;
   :global(.akce [data-akce-list] .akce-poster-cell) {
     width: 100px;
     height: 64px;
-    display: block;
+    display: grid;
+    place-items: center;
     color: inherit;
     text-decoration: none;
     background: rgba(0, 0, 0, 0.16);
+    overflow: hidden;
+    align-self: center;
   }
   :global(.akce [data-akce-list] .akce-img) {
     width: 100%;
@@ -654,14 +711,40 @@ const cspNonce = Astro.locals.cspNonce;
     object-fit: cover;
     display: block;
   }
+  :global(.akce [data-akce-list] .akce-poster-placeholder) {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    border: 1px dashed rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.72);
+    font-size: 0.62rem;
+    font-weight: 900;
+    line-height: 1.05;
+    text-align: center;
+    text-transform: uppercase;
+  }
   :global(.akce [data-akce-list] .akce-name) {
     margin: 0;
-    font-size: 1.7rem;
+    font-size: clamp(1.25rem, 2vw, 1.65rem);
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     overflow-wrap: anywhere;
-    line-height: 0.95;
+    word-break: break-word;
+    hyphens: auto;
+    line-height: 1.06;
   }
   :global(.akce [data-akce-list] .akce-name a) {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    text-overflow: ellipsis;
     color: inherit;
     text-decoration: none;
   }
@@ -676,6 +759,7 @@ const cspNonce = Astro.locals.cspNonce;
   :global(.akce [data-akce-list] .akce-location) {
     min-width: 0;
     overflow-wrap: anywhere;
+    align-self: center;
   }
   :global(.akce [data-akce-list] .akce-rsvp) {
     display: grid;
@@ -693,23 +777,25 @@ const cspNonce = Astro.locals.cspNonce;
   }
   :global(.akce [data-akce-list] .akce-location) {
     display: grid;
-    gap: 3px;
+    gap: 5px;
   }
   :global(.akce [data-akce-list] .akce-location-actions) {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 4px;
     align-items: center;
   }
   :global(.akce [data-akce-list] .akce-location small),
-  :global(.akce [data-akce-list] .osm-link) {
+  :global(.akce [data-akce-list] .osm-link),
+  :global(.akce [data-akce-list] .crew-link) {
     width: fit-content;
     border: 1px solid currentColor;
-    padding: 2px 5px;
+    padding: 2px 4px;
     text-transform: uppercase;
-    font-size: 0.7rem;
-    font-weight: 700;
+    font-size: 0.62rem;
+    font-weight: 900;
     line-height: 1.1;
+    white-space: nowrap;
   }
   :global(.akce [data-akce-list] .provenance-badge) {
     background: #e5e7eb;
@@ -724,11 +810,22 @@ const cspNonce = Astro.locals.cspNonce;
   :global(.akce [data-akce-list] .provenance-badge.import) {
     background: #fde68a;
   }
+  :global(.akce [data-akce-list] .crew-link) {
+    background: #bbf7d0;
+    color: #000;
+    text-decoration: none;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   :global(.akce [data-akce-list] .osm-link) {
     background: #fff6df;
     color: #000;
     text-decoration: none;
   }
+  :global(.akce [data-akce-list] .crew-link:hover),
+  :global(.akce [data-akce-list] .crew-link:focus-visible),
   :global(.akce [data-akce-list] .osm-link:hover),
   :global(.akce [data-akce-list] .osm-link:focus-visible) {
     background: #000;
@@ -1012,6 +1109,7 @@ const cspNonce = Astro.locals.cspNonce;
       gap: 6px;
     }
     .akce-item.has-map .osm-link,
+    .akce-item.has-map .crew-link,
     .akce-item.has-map .akce-location small {
       font-size: 0.58rem;
     }
@@ -1103,6 +1201,7 @@ const cspNonce = Astro.locals.cspNonce;
       gap: 6px;
     }
     :global(.akce [data-akce-list] .akce-item.has-map .osm-link),
+    :global(.akce [data-akce-list] .akce-item.has-map .crew-link),
     :global(.akce [data-akce-list] .akce-item.has-map .akce-location small) {
       font-size: 0.58rem;
     }

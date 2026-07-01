@@ -14,7 +14,7 @@ function buildCsp(nonce: string): string {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     `script-src 'self' 'nonce-${nonce}'`,
     "connect-src 'self'",
-    "frame-src https://www.openstreetmap.org",
+    "frame-src https://www.openstreetmap.org https://www.youtube-nocookie.com https://w.soundcloud.com",
     "upgrade-insecure-requests",
   ].join("; ");
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { RSVP_SIGNALS } from "./nostr-types";
+import { RSVP_CONTACT_SIGNALS, RSVP_SIGNALS } from "./nostr-types";
 
 const slugSchema = z.string().trim().min(3).max(120).regex(/^[a-z0-9-]+$/);
 
@@ -361,9 +361,19 @@ export const rsvpSchema = z
     status: z.enum(["accepted", "tentative"]),
     nickname: optionalTrimmedString(40),
     signal: z.enum(RSVP_SIGNALS).optional(),
+    contact: optionalTrimmedString(120),
     signedEvent: signedNostrEventSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.contact && (!value.signal || !RSVP_CONTACT_SIGNALS.includes(value.signal as (typeof RSVP_CONTACT_SIGNALS)[number]))) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Kontakt lze přidat jen ke signálu hledám partu nebo mám místo v autě",
+        path: ["contact"],
+      });
+    }
+  });
 
 export const studioEventSchema = z
   .object({

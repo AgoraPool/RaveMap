@@ -42,6 +42,7 @@ import {
   type PublicSubmitEventCommand,
   type PromoZapSummaryDto,
   type PromoZapTargetType,
+  RSVP_CONTACT_SIGNALS,
   RSVP_EVENT_KIND,
   RSVP_SIGNALS,
   type RelayReadResult,
@@ -194,6 +195,18 @@ function rsvpSignalFromTag(value: string | undefined): RsvpSignal | undefined {
   return RSVP_SIGNALS.find((signal) => signal === value);
 }
 
+function rsvpContactAllowed(signal: RsvpSignal | undefined): boolean {
+  return Boolean(signal && RSVP_CONTACT_SIGNALS.includes(signal as (typeof RSVP_CONTACT_SIGNALS)[number]));
+}
+
+function rsvpContactFromTag(event: NostrEvent, signal: RsvpSignal | undefined): string | undefined {
+  const contact = tagValue(event, "contact")?.trim();
+  if (!contact || contact.length > 120 || !rsvpContactAllowed(signal)) {
+    return undefined;
+  }
+  return contact;
+}
+
 function rsvpAuthorName(event: NostrEvent): string {
   const nickname = tagValue(event, "nickname") || tagValue(event, "name");
   if (nickname) {
@@ -210,11 +223,13 @@ function parseRsvpEntry(event: NostrEvent): EventRsvpEntryDto | null {
     return null;
   }
 
+  const signal = rsvpSignalFromTag(tagValue(event, "signal"));
   return {
     id: event.id,
     slug,
     status,
-    signal: rsvpSignalFromTag(tagValue(event, "signal")),
+    signal,
+    contact: rsvpContactFromTag(event, signal),
     authorPubkey: event.pubkey,
     authorName: rsvpAuthorName(event),
     isAnonymous: tagValue(event, "anonymous") === "true",
@@ -1677,6 +1692,7 @@ export class NostrEventRepository {
     }
 
     const nickname = input.nickname?.trim();
+    const contact = input.contact?.trim();
     const coordinate = eventCoordinate(event.authorPubkey, input.slug);
     const rsvp = await this.signer.sign({
       kind: RSVP_EVENT_KIND,
@@ -1690,6 +1706,7 @@ export class NostrEventRepository {
         ["client", "RaveMap"],
         ...(nickname ? [["nickname", nickname]] : []),
         ...(input.signal ? [["signal", input.signal]] : []),
+        ...(contact && rsvpContactAllowed(input.signal) ? [["contact", contact]] : []),
       ],
       content: "",
     });
@@ -1711,12 +1728,15 @@ export class NostrEventRepository {
     }
 
     const coordinate = eventCoordinate(target.authorPubkey, slug);
+    const signal = rsvpSignalFromTag(tagValue(event, "signal"));
+    const contact = tagValue(event, "contact")?.trim();
     if (
       event.kind !== RSVP_EVENT_KIND ||
       !tagValues(event, "a").includes(coordinate) ||
       tagValue(event, "ravemap-event") !== slug ||
       !rsvpStatusFromTag(tagValue(event, "status")) ||
-      (tagValue(event, "signal") !== undefined && !rsvpSignalFromTag(tagValue(event, "signal"))) ||
+      (tagValue(event, "signal") !== undefined && !signal) ||
+      (contact !== undefined && (!contact || contact.length > 120 || !rsvpContactAllowed(signal))) ||
       event.created_at > nowSeconds() + 10 * 60 ||
       !verifyEvent(event)
     ) {

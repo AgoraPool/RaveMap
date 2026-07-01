@@ -66,6 +66,7 @@ export const POST: APIRoute = async ({ params, request }) =>
           status: input.status,
           nickname: input.nickname,
           signal: input.signal,
+          contact: input.contact,
         });
     const [rsvp, entries] = await Promise.all([repository.getRsvpSummary(slug), repository.listRsvpEntries(slug)]);
 
