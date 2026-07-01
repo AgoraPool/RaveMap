@@ -46,21 +46,25 @@ const cspNonce = Astro.locals.cspNonce;
     <section id="map-board" class="map-board" aria-label="Mapa přesných lokací" hidden>
       <div id="map-list" class="map-list" aria-label="Akce na mapě"></div>
 
-      <div class="map-frame-panel">
-        <div class="map-frame-head">
+      <div class="map-panel">
+        <div class="map-panel-head">
           <div>
             <span>Vybraná akce</span>
             <strong id="selected-title"></strong>
           </div>
           <a id="selected-osm" href="/akce" target="_blank" rel="noreferrer">Otevřít v OSM</a>
         </div>
-        <iframe
-          id="map-frame"
-          class="map-frame"
-          title="Mapa vybrané akce"
-          loading="lazy"
-          referrerpolicy="no-referrer"
-        ></iframe>
+        <div id="event-map" class="event-map" role="region" aria-label="Mapa všech akcí" tabindex="0">
+          <div id="map-tiles" class="map-tiles" aria-hidden="true"></div>
+          <div id="map-markers" class="map-markers" aria-label="Akce na mapě"></div>
+          <div class="map-controls" aria-label="Ovládání mapy">
+            <button id="map-zoom-in" type="button" aria-label="Přiblížit mapu">+</button>
+            <button id="map-zoom-out" type="button" aria-label="Oddálit mapu">-</button>
+          </div>
+          <div class="map-attribution">
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -72,7 +76,11 @@ const cspNonce = Astro.locals.cspNonce;
     dateStyle: "medium",
     timeStyle: "short",
   });
-  const mapFrame = document.getElementById("map-frame");
+  const eventMap = document.getElementById("event-map");
+  const mapTiles = document.getElementById("map-tiles");
+  const mapMarkers = document.getElementById("map-markers");
+  const zoomInButton = document.getElementById("map-zoom-in");
+  const zoomOutButton = document.getElementById("map-zoom-out");
   const selectedTitle = document.getElementById("selected-title");
   const selectedOsm = document.getElementById("selected-osm");
   const mapCount = document.getElementById("map-count");
@@ -81,6 +89,18 @@ const cspNonce = Astro.locals.cspNonce;
   const errorState = document.getElementById("map-error");
   const board = document.getElementById("map-board");
   const list = document.getElementById("map-list");
+  const tileSize = 256;
+  const minZoom = 4;
+  const maxZoom = 15;
+  const focusZoom = 15;
+  const markerOverlapRadius = 20;
+  const state = {
+    events: [],
+    selectedSlug: "",
+    mapMode: "overview",
+    currentView: null,
+    drag: null,
+  };
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (character) => {
@@ -96,12 +116,42 @@ const cspNonce = Astro.locals.cspNonce;
     return `https://www.openstreetmap.org/?mlat=${event.publicLatitude}&mlon=${event.publicLongitude}#map=${zoom}/${event.publicLatitude}/${event.publicLongitude}`;
   }
 
-  function osmEmbedUrl(event, pad = 0.01) {
-    const west = event.publicLongitude - pad;
-    const east = event.publicLongitude + pad;
-    const south = event.publicLatitude - pad;
-    const north = event.publicLatitude + pad;
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${west}%2C${south}%2C${east}%2C${north}&layer=mapnik&marker=${event.publicLatitude}%2C${event.publicLongitude}`;
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function projectCoordinate(latitude, longitude, zoom) {
+    const sinLatitude = Math.sin((clamp(latitude, -85.05112878, 85.05112878) * Math.PI) / 180);
+    const scale = tileSize * 2 ** zoom;
+    return {
+      x: ((longitude + 180) / 360) * scale,
+      y: (0.5 - Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI)) * scale,
+    };
+  }
+
+  function tileUrl(x, y, zoom) {
+    return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+  }
+
+  function normalizeMapView(view) {
+    const zoom = clamp(Math.round(view.zoom), minZoom, maxZoom);
+    const worldSize = tileSize * 2 ** zoom;
+    return {
+      center: {
+        x: ((view.center.x % worldSize) + worldSize) % worldSize,
+        y: clamp(view.center.y, 0, worldSize),
+      },
+      zoom,
+    };
+  }
+
+  function mapSize() {
+    if (!(eventMap instanceof HTMLElement)) return { width: 320, height: 320 };
+    const rect = eventMap.getBoundingClientRect();
+    return {
+      width: Math.max(rect.width, 320),
+      height: Math.max(rect.height, 320),
+    };
   }
 
   function provenance(event) {
@@ -125,51 +175,361 @@ const cspNonce = Astro.locals.cspNonce;
     if (board instanceof HTMLElement) board.hidden = state !== "ready";
   }
 
+  function markerOffset(event, coordinateCounts) {
+    const key = `${event.publicLatitude.toFixed(5)},${event.publicLongitude.toFixed(5)}`;
+    const group = coordinateCounts.get(key) || [];
+    if (group.length <= 1) return { x: 0, y: 0 };
+    const index = group.indexOf(event.slug);
+    const angle = (index / group.length) * Math.PI * 2 - Math.PI / 2;
+    return {
+      x: Math.cos(angle) * markerOverlapRadius,
+      y: Math.sin(angle) * markerOverlapRadius,
+    };
+  }
+
+  function coordinateGroups(events) {
+    const groups = new Map();
+    for (const event of events) {
+      const key = `${event.publicLatitude.toFixed(5)},${event.publicLongitude.toFixed(5)}`;
+      groups.set(key, [...(groups.get(key) || []), event.slug]);
+    }
+    return groups;
+  }
+
+  function overviewMapView(events, width, height) {
+    const projectedAtZero = events.map((event) => projectCoordinate(event.publicLatitude, event.publicLongitude, 0));
+    const minX = Math.min(...projectedAtZero.map((point) => point.x));
+    const maxX = Math.max(...projectedAtZero.map((point) => point.x));
+    const minY = Math.min(...projectedAtZero.map((point) => point.y));
+    const maxY = Math.max(...projectedAtZero.map((point) => point.y));
+    const spanX = Math.max(maxX - minX, 0.0001);
+    const spanY = Math.max(maxY - minY, 0.0001);
+    const fitZoom = Math.floor(Math.log2(Math.min((width * 0.78) / spanX, (height * 0.78) / spanY)));
+    const zoom = events.length === 1 ? 13 : clamp(fitZoom, minZoom, maxZoom);
+    return {
+      center: {
+        x: ((minX + maxX) / 2) * 2 ** zoom,
+        y: ((minY + maxY) / 2) * 2 ** zoom,
+      },
+      zoom,
+    };
+  }
+
+  function focusedMapView(event) {
+    return {
+      center: projectCoordinate(event.publicLatitude, event.publicLongitude, focusZoom),
+      zoom: focusZoom,
+    };
+  }
+
+  function selectedEvent() {
+    return state.events.find((event) => event.slug === state.selectedSlug) || state.events[0];
+  }
+
+  function currentMapView(width, height) {
+    const selected = selectedEvent();
+    if (state.mapMode === "manual" && state.currentView) {
+      return state.currentView;
+    }
+    if (state.mapMode === "focused" && selected) {
+      return focusedMapView(selected);
+    }
+    return overviewMapView(state.events, width, height);
+  }
+
+  function renderTiles(view, width, height) {
+    if (!(mapTiles instanceof HTMLElement)) return;
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    const startTileX = Math.floor((view.center.x - halfWidth) / tileSize);
+    const endTileX = Math.floor((view.center.x + halfWidth) / tileSize);
+    const startTileY = Math.floor((view.center.y - halfHeight) / tileSize);
+    const endTileY = Math.floor((view.center.y + halfHeight) / tileSize);
+    const maxTile = 2 ** view.zoom;
+    let html = "";
+
+    for (let tileY = startTileY; tileY <= endTileY; tileY += 1) {
+      if (tileY < 0 || tileY >= maxTile) continue;
+      for (let tileX = startTileX; tileX <= endTileX; tileX += 1) {
+        const wrappedTileX = ((tileX % maxTile) + maxTile) % maxTile;
+        const left = tileX * tileSize - view.center.x + halfWidth;
+        const top = tileY * tileSize - view.center.y + halfHeight;
+        html += `<img src="${tileUrl(wrappedTileX, tileY, view.zoom)}" alt="" loading="lazy" draggable="false" style="left:${left}px;top:${top}px;">`;
+      }
+    }
+
+    mapTiles.innerHTML = html;
+  }
+
+  function renderMarkers(events, view, width, height) {
+    if (!(mapMarkers instanceof HTMLElement)) return;
+    const coordinateCounts = coordinateGroups(events);
+    mapMarkers.innerHTML = events
+      .map((event, index) => {
+        const point = projectCoordinate(event.publicLatitude, event.publicLongitude, view.zoom);
+        const offset = markerOffset(event, coordinateCounts);
+        const left = point.x - view.center.x + width / 2 + offset.x;
+        const top = point.y - view.center.y + height / 2 + offset.y;
+        const selected = event.slug === state.selectedSlug;
+        return `
+          <button
+            type="button"
+            class="map-marker${selected ? " active" : ""}"
+            data-map-marker="${escapeHtml(event.slug)}"
+            aria-pressed="${selected ? "true" : "false"}"
+            aria-label="${escapeHtml(event.title)}"
+            title="${escapeHtml(event.title)}"
+            style="left:${left}px;top:${top}px;"
+          ><span>${String(index + 1).padStart(2, "0")}</span></button>
+        `;
+      })
+      .join("");
+  }
+
+  function animateMapTransition(previousView, nextView, width, height) {
+    if (!previousView || !mapTiles || !mapMarkers) return;
+    if (!("animate" in mapTiles) || !("animate" in mapMarkers)) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const scale = 2 ** (previousView.zoom - nextView.zoom);
+    const initialTranslateX = scale * nextView.center.x - previousView.center.x + (width / 2) * (1 - scale);
+    const initialTranslateY = scale * nextView.center.y - previousView.center.y + (height / 2) * (1 - scale);
+    const from = `translate(${initialTranslateX}px, ${initialTranslateY}px) scale(${scale})`;
+    const timing = {
+      duration: 360,
+      easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+    };
+
+    for (const layer of [mapTiles, mapMarkers]) {
+      layer.animate([{ transform: from }, { transform: "translate(0, 0) scale(1)" }], timing);
+    }
+  }
+
+  function renderMap(options = {}) {
+    if (!(eventMap instanceof HTMLElement) || state.events.length === 0) return;
+    const { width, height } = mapSize();
+    const previousView = state.currentView;
+    const view = normalizeMapView(options.view || currentMapView(width, height));
+    renderTiles(view, width, height);
+    renderMarkers(state.events, view, width, height);
+    if (options.animate) animateMapTransition(previousView, view, width, height);
+    state.currentView = view;
+  }
+
+  function interactionView() {
+    const { width, height } = mapSize();
+    return normalizeMapView(state.currentView || currentMapView(width, height));
+  }
+
+  function setManualMapView(view, options = {}) {
+    state.mapMode = "manual";
+    renderMap({ view, animate: options.animate });
+  }
+
+  function zoomMap(delta, origin) {
+    if (state.events.length === 0) return;
+    const { width, height } = mapSize();
+    const current = interactionView();
+    const nextZoom = clamp(current.zoom + delta, minZoom, maxZoom);
+    if (nextZoom === current.zoom) return;
+
+    const originX = origin?.x ?? width / 2;
+    const originY = origin?.y ?? height / 2;
+    const scale = 2 ** (nextZoom - current.zoom);
+    const worldX = current.center.x + originX - width / 2;
+    const worldY = current.center.y + originY - height / 2;
+
+    setManualMapView(
+      {
+        center: {
+          x: worldX * scale - originX + width / 2,
+          y: worldY * scale - originY + height / 2,
+        },
+        zoom: nextZoom,
+      },
+      { animate: true },
+    );
+  }
+
+  function panMap(deltaX, deltaY) {
+    if (state.events.length === 0) return;
+    const current = interactionView();
+    setManualMapView({
+      center: {
+        x: current.center.x - deltaX,
+        y: current.center.y - deltaY,
+      },
+      zoom: current.zoom,
+    });
+  }
+
+  function mapPoint(event) {
+    if (!(eventMap instanceof HTMLElement)) return { x: 0, y: 0 };
+    const rect = eventMap.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+  }
+
+  function selectEvent(slug, options = {}) {
+    const selected = state.events.find((event) => event.slug === slug) || state.events[0];
+    if (!selected) return;
+    state.selectedSlug = selected.slug;
+    if (options.focusMap) {
+      state.mapMode = "focused";
+    }
+
+    if (selectedTitle instanceof HTMLElement) {
+      selectedTitle.textContent = selected.title;
+    }
+    if (selectedOsm instanceof HTMLAnchorElement) {
+      selectedOsm.href = osmMarkerUrl(selected);
+    }
+
+    const rows = [...document.querySelectorAll("[data-map-event]")];
+    for (const row of rows) {
+      const isActive = row.getAttribute("data-map-event") === selected.slug;
+      row.classList.toggle("active", isActive);
+      const candidateButton = row.querySelector("[data-map-slug]");
+      if (candidateButton instanceof HTMLButtonElement) {
+        candidateButton.setAttribute("aria-pressed", String(isActive));
+      }
+      if (isActive && options.scrollList && row instanceof HTMLElement) {
+        row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
+
+    const markers = [...document.querySelectorAll("[data-map-marker]")];
+    for (const marker of markers) {
+      const isActive = marker.getAttribute("data-map-marker") === selected.slug;
+      marker.classList.toggle("active", isActive);
+      marker.setAttribute("aria-pressed", String(isActive));
+    }
+
+    if (options.focusMap) {
+      renderMap({ animate: true });
+    }
+  }
+
   function bindRows() {
     const rows = [...document.querySelectorAll("[data-map-event]")];
     for (const row of rows) {
-      const button = row.querySelector("[data-map-src]");
+      const button = row.querySelector("[data-map-slug]");
       button?.addEventListener("click", () => {
         if (!(button instanceof HTMLButtonElement)) return;
-        const mapSrc = button.dataset.mapSrc || "";
-        const osmUrl = button.dataset.osmUrl || "";
-        const title = button.dataset.title || "";
-
-        if (mapFrame instanceof HTMLIFrameElement && mapSrc) {
-          mapFrame.src = mapSrc;
-        }
-        if (selectedTitle instanceof HTMLElement) {
-          selectedTitle.textContent = title;
-        }
-        if (selectedOsm instanceof HTMLAnchorElement && osmUrl) {
-          selectedOsm.href = osmUrl;
-        }
-
-        for (const candidate of rows) {
-          candidate.classList.toggle("active", candidate === row);
-          const candidateButton = candidate.querySelector("[data-map-src]");
-          if (candidateButton instanceof HTMLButtonElement) {
-            candidateButton.setAttribute("aria-pressed", String(candidate === row));
-          }
-        }
+        selectEvent(button.dataset.slug || "", { focusMap: true });
       });
     }
   }
 
+  mapMarkers?.addEventListener("click", (event) => {
+    const marker = event.target instanceof Element ? event.target.closest("[data-map-marker]") : null;
+    if (!(marker instanceof HTMLButtonElement)) return;
+    selectEvent(marker.dataset.mapMarker || "", { focusMap: true, scrollList: true });
+  });
+
+  eventMap?.addEventListener("pointerdown", (event) => {
+    if (!(eventMap instanceof HTMLElement)) return;
+    if (event.target instanceof Element && event.target.closest("button, a")) return;
+    event.preventDefault();
+    state.drag = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    eventMap.classList.add("dragging");
+    eventMap.setPointerCapture(event.pointerId);
+  });
+
+  eventMap?.addEventListener("pointermove", (event) => {
+    if (!state.drag || state.drag.id !== event.pointerId) return;
+    event.preventDefault();
+    const deltaX = event.clientX - state.drag.x;
+    const deltaY = event.clientY - state.drag.y;
+    state.drag.x = event.clientX;
+    state.drag.y = event.clientY;
+    panMap(deltaX, deltaY);
+  });
+
+  eventMap?.addEventListener("pointerup", (event) => {
+    if (!state.drag || state.drag.id !== event.pointerId) return;
+    state.drag = null;
+    eventMap.classList.remove("dragging");
+    if (eventMap instanceof HTMLElement && eventMap.hasPointerCapture(event.pointerId)) {
+      eventMap.releasePointerCapture(event.pointerId);
+    }
+  });
+
+  eventMap?.addEventListener("pointercancel", (event) => {
+    state.drag = null;
+    eventMap?.classList.remove("dragging");
+    if (eventMap instanceof HTMLElement && eventMap.hasPointerCapture(event.pointerId)) {
+      eventMap.releasePointerCapture(event.pointerId);
+    }
+  });
+
+  eventMap?.addEventListener(
+    "wheel",
+    (event) => {
+      event.preventDefault();
+      zoomMap(event.deltaY < 0 ? 1 : -1, mapPoint(event));
+    },
+    { passive: false },
+  );
+
+  eventMap?.addEventListener("dblclick", (event) => {
+    event.preventDefault();
+    zoomMap(1, mapPoint(event));
+  });
+
+  eventMap?.addEventListener("keydown", (event) => {
+    const panStep = event.shiftKey ? 120 : 60;
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      zoomMap(1);
+    } else if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      zoomMap(-1);
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      panMap(panStep, 0);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      panMap(-panStep, 0);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      panMap(0, panStep);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      panMap(0, -panStep);
+    }
+  });
+
+  zoomInButton?.addEventListener("click", () => zoomMap(1));
+  zoomOutButton?.addEventListener("click", () => zoomMap(-1));
+
+  window.addEventListener("resize", () => {
+    renderMap();
+    selectEvent(state.selectedSlug);
+  });
+
   function renderEvents(events) {
     if (!(list instanceof HTMLElement)) return;
+    state.events = events;
+    state.selectedSlug = events[0]?.slug || "";
+    state.mapMode = "overview";
+    state.currentView = null;
     list.innerHTML = events
       .map((event, index) => {
-        const embedUrl = osmEmbedUrl(event);
         const markerUrl = osmMarkerUrl(event);
         const eventProvenance = provenance(event);
         return `
-          <article class="map-event${index === 0 ? " active" : ""}" data-map-event>
+          <article class="map-event${index === 0 ? " active" : ""}" data-map-event="${escapeHtml(event.slug)}">
             <button
               type="button"
-              data-map-src="${escapeHtml(embedUrl)}"
-              data-osm-url="${escapeHtml(markerUrl)}"
-              data-title="${escapeHtml(event.title)}"
+              data-map-slug="${escapeHtml(event.slug)}"
+              data-slug="${escapeHtml(event.slug)}"
               aria-pressed="${index === 0 ? "true" : "false"}"
             >
               <span class="event-index">${String(index + 1).padStart(2, "0")}</span>
@@ -191,8 +551,11 @@ const cspNonce = Astro.locals.cspNonce;
     const selected = events[0];
     if (selectedTitle instanceof HTMLElement) selectedTitle.textContent = selected?.title || "";
     if (selectedOsm instanceof HTMLAnchorElement && selected) selectedOsm.href = osmMarkerUrl(selected);
-    if (mapFrame instanceof HTMLIFrameElement && selected) mapFrame.src = osmEmbedUrl(selected);
     bindRows();
+    window.requestAnimationFrame(() => {
+      renderMap();
+      selectEvent(state.selectedSlug);
+    });
   }
 
   async function loadMapEvents() {
@@ -261,7 +624,7 @@ const cspNonce = Astro.locals.cspNonce;
   .nav-link,
   .empty-map a,
   .event-actions a,
-  .map-frame-head a {
+  .map-panel-head a {
     border: 2px solid #000;
     background: #fff6df;
     color: #000;
@@ -274,7 +637,7 @@ const cspNonce = Astro.locals.cspNonce;
   }
 
   .nav-link:first-child,
-  .map-frame-head a {
+  .map-panel-head a {
     background: #000;
     color: #c00;
   }
@@ -282,12 +645,12 @@ const cspNonce = Astro.locals.cspNonce;
   .nav-link:hover,
   .empty-map a:hover,
   .event-actions a:hover,
-  .map-frame-head a:hover {
+  .map-panel-head a:hover {
     background: #000;
     color: #c00;
   }
 
-  .map-frame-head a:hover {
+  .map-panel-head a:hover {
     background: #fff6df;
     color: #000;
   }
@@ -329,7 +692,7 @@ const cspNonce = Astro.locals.cspNonce;
   }
 
   .map-list,
-  .map-frame-panel,
+  .map-panel,
   .empty-map {
     border: 3px solid #000;
     background: #c00;
@@ -426,14 +789,14 @@ const cspNonce = Astro.locals.cspNonce;
     font-size: 0.68rem;
   }
 
-  .map-frame-panel {
+  .map-panel {
     min-width: 0;
     display: grid;
     grid-template-rows: auto 1fr;
     overflow: hidden;
   }
 
-  .map-frame-head {
+  .map-panel-head {
     display: flex;
     justify-content: space-between;
     gap: 12px;
@@ -444,29 +807,166 @@ const cspNonce = Astro.locals.cspNonce;
     min-width: 0;
   }
 
-  .map-frame-head div {
+  .map-panel-head div {
     display: grid;
     gap: 4px;
     min-width: 0;
   }
 
-  .map-frame-head span {
+  .map-panel-head span {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
     font-weight: 900;
   }
 
-  .map-frame-head strong {
+  .map-panel-head strong {
     overflow-wrap: anywhere;
   }
 
-  .map-frame {
+  .event-map {
+    position: relative;
     width: 100%;
     min-height: 540px;
     height: 100%;
+    overflow: hidden;
     border: 0;
+    background: #e5dcc6;
+    isolation: isolate;
+    touch-action: none;
+    cursor: grab;
+  }
+
+  .event-map:focus-visible {
+    outline: 4px solid #000;
+    outline-offset: -4px;
+  }
+
+  .event-map.dragging {
+    cursor: grabbing;
+  }
+
+  .map-tiles,
+  .map-markers {
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+
+  .map-tiles {
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  :global(.map-shell .map-tiles img) {
+    position: absolute;
+    width: 256px;
+    height: 256px;
+    max-width: none;
+    user-select: none;
+  }
+
+  .map-markers {
+    z-index: 1;
+  }
+
+  :global(.map-shell .map-marker) {
+    position: absolute;
+    width: 38px;
+    height: 38px;
+    transform: translate(-50%, -50%);
+    border: 3px solid #000;
+    border-radius: 999px;
     background: #fff6df;
+    color: #000;
+    font: 900 0.72rem/1 var(--font-body);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  :global(.map-shell .map-marker span) {
+    position: relative;
+    z-index: 1;
+  }
+
+  :global(.map-shell .map-marker:hover),
+  :global(.map-shell .map-marker.active) {
+    background: #000;
+    color: #c00;
+    z-index: 2;
+  }
+
+  :global(.map-shell .map-marker.active) {
+    width: 48px;
+    height: 48px;
+    box-shadow: 6px 6px 0 #c00;
+  }
+
+  :global(.map-shell .map-marker::after) {
+    content: attr(aria-label);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 10px);
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: min(240px, 52vw);
+    border: 2px solid #000;
+    background: #fff6df;
+    color: #000;
+    padding: 5px 7px;
+    font: 900 0.72rem/1.1 var(--font-body);
+    text-transform: uppercase;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  :global(.map-shell .map-marker:hover::after),
+  :global(.map-shell .map-marker.active::after) {
+    opacity: 1;
+  }
+
+  .map-attribution {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 2;
+    border: 1px solid #000;
+    background: rgba(255, 246, 223, 0.9);
+    padding: 3px 5px;
+    font-size: 0.68rem;
+    font-weight: 700;
+  }
+
+  .map-attribution a {
+    color: #000;
+  }
+
+  .map-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 3;
+    display: grid;
+    gap: 6px;
+  }
+
+  .map-controls button {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #000;
+    background: #fff6df;
+    color: #000;
+    font: 900 1.35rem/1 var(--font-body);
+    cursor: pointer;
+    box-shadow: 4px 4px 0 #000;
+  }
+
+  .map-controls button:hover {
+    background: #000;
+    color: #c00;
   }
 
   .empty-map {
@@ -639,7 +1139,7 @@ const cspNonce = Astro.locals.cspNonce;
     }
 
     .map-list,
-    .map-frame-panel,
+    .map-panel,
     .empty-map {
       border-width: 2px;
       box-shadow: 4px 4px 0 #000;
@@ -673,17 +1173,17 @@ const cspNonce = Astro.locals.cspNonce;
       padding: 0 10px 10px 64px;
     }
 
-    .map-frame-head {
+    .map-panel-head {
       align-items: stretch;
       display: grid;
       border-bottom-width: 2px;
     }
 
-    .map-frame-head a {
+    .map-panel-head a {
       text-align: center;
     }
 
-    .map-frame {
+    .event-map {
       min-height: 320px;
     }
   }
