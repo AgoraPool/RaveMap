@@ -185,7 +185,10 @@ const cspNonce = Astro.locals.cspNonce;
 
   function setLoadingState(state) {
     if (loading instanceof HTMLElement) loading.hidden = state !== "loading";
-    if (skeleton instanceof HTMLElement) skeleton.hidden = state !== "loading";
+    if (skeleton instanceof HTMLElement) {
+      skeleton.hidden = state !== "loading";
+      skeleton.style.display = state === "loading" ? "" : "none";
+    }
     if (emptyState instanceof HTMLElement) emptyState.hidden = state !== "empty";
     if (errorState instanceof HTMLElement) errorState.hidden = state !== "error";
     if (sortRow instanceof HTMLElement) sortRow.hidden = state !== "ready" || isPreview;
