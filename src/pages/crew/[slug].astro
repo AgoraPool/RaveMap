@@ -100,9 +100,9 @@ if (!crew) {
   function eventRow(event, compact = false) {
     return `
       <a class="event-row" href="/akce/${encodeURIComponent(event.slug)}">
-        <strong>${escapeHtml(event.title)}</strong>
-        <span>${crewFormatter.format(new Date(event.startsAt))}</span>
-        ${compact ? "" : `<small>${escapeHtml(event.publicLocation)}</small>`}
+        <strong class="event-row-title">${escapeHtml(event.title)}</strong>
+        <span class="event-row-date">${crewFormatter.format(new Date(event.startsAt))}</span>
+        ${compact ? `<small class="event-row-action">Detail</small>` : `<small class="event-row-location">${escapeHtml(event.publicLocation)}</small>`}
       </a>
     `;
   }
@@ -247,7 +247,7 @@ if (!crew) {
   .crew-nav a:hover,
   .crew-actions a:hover,
   .crew-actions button:hover,
-  .event-row:hover {
+  .crew-shell :global(.event-row:hover) {
     background: #000;
     color: #c00;
   }
@@ -342,7 +342,7 @@ if (!crew) {
     gap: 8px;
   }
 
-  .event-row {
+  .crew-shell :global(.event-row) {
     display: grid;
     grid-template-columns: 1fr auto auto;
     gap: 12px;
@@ -354,19 +354,27 @@ if (!crew) {
     text-decoration: none;
   }
 
-  .event-row strong {
+  .crew-shell :global(.event-row-title) {
     overflow-wrap: anywhere;
+    min-width: 0;
   }
 
-  .event-row span,
-  .event-row small {
+  .crew-shell :global(.event-row-date),
+  .crew-shell :global(.event-row-location),
+  .crew-shell :global(.event-row-action) {
     font-weight: 800;
   }
 
-  .event-row small {
+  .crew-shell :global(.event-row-location),
+  .crew-shell :global(.event-row-action) {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-size: 0.74rem;
+  }
+
+  .crew-shell :global(.event-row-action) {
+    border: 1px solid currentColor;
+    padding: 3px 6px;
   }
 
   .empty-state {
@@ -397,7 +405,7 @@ if (!crew) {
       aspect-ratio: 4 / 3;
     }
 
-    .event-row {
+    .crew-shell :global(.event-row) {
       grid-template-columns: 1fr;
     }
   }
