@@ -361,10 +361,6 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
               <input id="rsvp-nickname" name="nickname" type="text" maxlength="40" placeholder="Anonym" />
             </label>
             <div class="rsvp-signal-group" role="group" aria-label="Signál k účasti">
-              <label>
-                <input type="radio" name="rsvpSignal" value="" checked />
-                <span>bez signálu</span>
-              </label>
               {rsvpSignalOptions.map((signal) => (
                 <label>
                   <input type="radio" name="rsvpSignal" value={signal} />
