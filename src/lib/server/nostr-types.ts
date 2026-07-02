@@ -1,6 +1,7 @@
 export const PUBLIC_EVENT_KIND = 31923;
 export const RSVP_EVENT_KIND = 31925;
 export const COMMENT_EVENT_KIND = 1111;
+export const BLOG_EVENT_KIND = 30023;
 export const SECRET_EVENT_KIND = 30420;
 export const DRAFT_EVENT_KIND = 30421;
 export const TOMBSTONE_EVENT_KIND = 30422;
@@ -173,6 +174,17 @@ export type CreateCommentCommand = {
   slug: string;
   content: string;
   nickname?: string;
+};
+
+export type BlogPostNip23Command = {
+  slug: string;
+  title: string;
+  summary: string;
+  content: string;
+  publishedAt: Date;
+  updatedAt?: Date;
+  tags: string[];
+  url?: string;
 };
 
 export type RelayWriteResult = {

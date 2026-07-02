@@ -274,8 +274,15 @@ const signedNostrEventSchema = z
     created_at: z.number().int().positive(),
     kind: z.number().int(),
     tags: z.array(nostrTagSchema).max(100),
-    content: z.string().max(4400),
+    content: z.string().max(65_000),
     sig: z.string().regex(/^[0-9a-f]{128}$/),
+  })
+  .strict();
+
+export const blogNostrPublishSchema = z
+  .object({
+    mode: z.enum(["app"]).optional(),
+    signedEvent: signedNostrEventSchema.optional(),
   })
   .strict();
 
@@ -457,3 +464,4 @@ export type CrewAuthInput = z.infer<typeof crewAuthSchema>;
 export type AdminCrewInput = z.infer<typeof adminCrewSchema>;
 export type PromoZapQueryInput = z.infer<typeof promoZapQuerySchema>;
 export type PromoInvoiceInput = z.infer<typeof promoInvoiceSchema>;
+export type BlogNostrPublishInput = z.infer<typeof blogNostrPublishSchema>;

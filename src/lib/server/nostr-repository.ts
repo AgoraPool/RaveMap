@@ -18,6 +18,7 @@ import { getAppManagedSigner, type NostrSigner } from "./nostr-signer";
 import { safeFetchJson, validateSafeUrl } from "./safe-fetch";
 import {
   COMMENT_EVENT_KIND,
+  BLOG_EVENT_KIND,
   CREW_ACCOUNT_KIND,
   CREW_PROFILE_KIND,
   DELETE_EVENT_KIND,
@@ -26,6 +27,7 @@ import {
   SECRET_EVENT_KIND,
   TOMBSTONE_EVENT_KIND,
   type AdminEventDto,
+  type BlogPostNip23Command,
   type CreateCommentCommand,
   type CreateEventCommand,
   type CreateRsvpCommand,
@@ -235,6 +237,53 @@ function parseRsvpEntry(event: NostrEvent): EventRsvpEntryDto | null {
     isAnonymous: tagValue(event, "anonymous") === "true",
     createdAt: new Date(event.created_at * 1000),
   };
+}
+
+function blogPostTemplate(input: BlogPostNip23Command): NostrUnsignedEvent {
+  const publishedAt = Math.floor(input.publishedAt.getTime() / 1000);
+  const tags = [
+    ["d", input.slug],
+    ["title", input.title],
+    ["summary", input.summary],
+    ["published_at", String(publishedAt)],
+    ["client", "RaveMap"],
+    ["t", "ravemap"],
+    ...input.tags.map((tag) => ["t", tag]),
+    ...(input.updatedAt ? [["updated_at", String(Math.floor(input.updatedAt.getTime() / 1000))]] : []),
+    ...(input.url ? [["r", input.url]] : []),
+  ];
+
+  return {
+    kind: BLOG_EVENT_KIND,
+    created_at: nowSeconds(),
+    tags,
+    content: input.content,
+  };
+}
+
+function signedBlogPostMatches(event: NostrEvent, expected: BlogPostNip23Command): boolean {
+  const expectedPublishedAt = String(Math.floor(expected.publishedAt.getTime() / 1000));
+  const expectedUpdatedAt = expected.updatedAt ? String(Math.floor(expected.updatedAt.getTime() / 1000)) : undefined;
+  const expectedTags = new Set(["ravemap", ...expected.tags]);
+  const actualTags = new Set(tagValues(event, "t"));
+
+  for (const tag of expectedTags) {
+    if (!actualTags.has(tag)) {
+      return false;
+    }
+  }
+
+  return (
+    event.kind === BLOG_EVENT_KIND &&
+    event.content === expected.content &&
+    tagValue(event, "d") === expected.slug &&
+    tagValue(event, "title") === expected.title &&
+    tagValue(event, "summary") === expected.summary &&
+    tagValue(event, "published_at") === expectedPublishedAt &&
+    (!expectedUpdatedAt || tagValue(event, "updated_at") === expectedUpdatedAt) &&
+    (!expected.url || tagValues(event, "r").includes(expected.url)) &&
+    tagValue(event, "client") === "RaveMap"
+  );
 }
 
 function rsvpIdentity(event: NostrEvent, appPubkey: string): string {
@@ -1651,6 +1700,40 @@ export class NostrEventRepository {
 
     return {
       id: event.id,
+      writes: await this.publish(event),
+    };
+  }
+
+  blogPostUnsignedEvent(input: BlogPostNip23Command): NostrUnsignedEvent {
+    return blogPostTemplate(input);
+  }
+
+  async publishBlogPost(input: BlogPostNip23Command): Promise<CreatedEventResult> {
+    const event = await this.signer.sign(blogPostTemplate(input));
+    return {
+      id: event.id,
+      slug: input.slug,
+      writes: await this.publish(event),
+    };
+  }
+
+  async publishSignedBlogPost(input: BlogPostNip23Command, event: NostrEvent): Promise<CreatedEventResult> {
+    if (
+      event.created_at > nowSeconds() + 10 * 60 ||
+      event.content.length > 65_000 ||
+      !signedBlogPostMatches(event, input) ||
+      !verifyEvent(event)
+    ) {
+      throw new AppError("Podepsaný blogový text není platný", {
+        code: "INVALID_SIGNED_BLOG_POST",
+        status: 400,
+        expose: true,
+      });
+    }
+
+    return {
+      id: event.id,
+      slug: input.slug,
       writes: await this.publish(event),
     };
   }

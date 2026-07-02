@@ -14,6 +14,7 @@ export async function getStaticPaths() {
 
 const { post } = Astro.props;
 const { Content } = await render(post);
+const cspNonce = Astro.locals.cspNonce;
 
 const formatter = new Intl.DateTimeFormat("cs-CZ", {
   dateStyle: "long",
@@ -53,9 +54,113 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
       <div class="article-body">
         <Content />
       </div>
+
+      <section class="nostr-panel" data-blog-nostr data-blog-slug={post.id}>
+        <div>
+          <p class="kicker">Nostr</p>
+          <strong>NIP-23</strong>
+        </div>
+        <div class="nostr-actions">
+          <button type="button" data-user-nostr-publish>Podepsat mým účtem</button>
+          <button type="button" data-app-nostr-publish>Publikovat app key</button>
+        </div>
+        <p class="nostr-status" data-nostr-status role="status" aria-live="polite"></p>
+      </section>
     </article>
   </main>
 </Layout>
+
+<script nonce={cspNonce}>
+  {
+    const panel = document.querySelector("[data-blog-nostr]");
+    const status = document.querySelector("[data-nostr-status]");
+    const userButton = document.querySelector("[data-user-nostr-publish]");
+    const appButton = document.querySelector("[data-app-nostr-publish]");
+
+    function setStatus(message, tone = "neutral") {
+      if (!(status instanceof HTMLElement)) return;
+      status.textContent = message;
+      status.dataset.tone = tone;
+    }
+
+    function setBusy(button, busy) {
+      if (button instanceof HTMLButtonElement) button.disabled = busy;
+    }
+
+    async function parseResponse(response) {
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || `Požadavek selhal se stavem ${response.status}`);
+      }
+      return payload.data;
+    }
+
+    function endpoint() {
+      const slug = panel instanceof HTMLElement ? panel.dataset.blogSlug : "";
+      if (!slug) throw new Error("Chybí slug textu.");
+      return `/api/blog/${encodeURIComponent(slug)}/nostr`;
+    }
+
+    async function publishWithUserSigner() {
+      const nostr = /** @type {any} */ (window).nostr;
+      if (!nostr?.signEvent) {
+        throw new Error("V prohlížeči není Nostr signer.");
+      }
+
+      const template = await parseResponse(await fetch(endpoint()));
+      const signedEvent = await nostr.signEvent(template.event);
+      return parseResponse(
+        await fetch(endpoint(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signedEvent }),
+        }),
+      );
+    }
+
+    async function publishWithAppKey() {
+      const secret = window.prompt("Admin kód");
+      if (!secret) return null;
+      return parseResponse(
+        await fetch(endpoint(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${secret}`,
+          },
+          body: JSON.stringify({ mode: "app" }),
+        }),
+      );
+    }
+
+    userButton?.addEventListener("click", async () => {
+      setBusy(userButton, true);
+      setStatus("Podepisuji...", "warning");
+      try {
+        const result = await publishWithUserSigner();
+        setStatus(`Publikováno: ${result.id}`, "positive");
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Publikování selhalo.", "danger");
+      } finally {
+        setBusy(userButton, false);
+      }
+    });
+
+    appButton?.addEventListener("click", async () => {
+      setBusy(appButton, true);
+      setStatus("Publikuji app key...", "warning");
+      try {
+        const result = await publishWithAppKey();
+        if (result) setStatus(`Publikováno: ${result.id}`, "positive");
+        else setStatus("", "neutral");
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Publikování selhalo.", "danger");
+      } finally {
+        setBusy(appButton, false);
+      }
+    });
+  }
+</script>
 
 <style>
   :global(body.blog-body) {
@@ -231,6 +336,75 @@ const formatter = new Intl.DateTimeFormat("cs-CZ", {
     background: transparent;
     color: inherit;
     padding: 0;
+  }
+
+  .nostr-panel {
+    display: grid;
+    gap: 12px;
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 3px solid #000;
+  }
+
+  .nostr-panel > div:first-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+  }
+
+  .nostr-panel strong {
+    font-size: 1.2rem;
+  }
+
+  .nostr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .nostr-actions button {
+    border: 2px solid #000;
+    background: #fffef8;
+    color: #000;
+    padding: 9px 11px;
+    font: inherit;
+    font-weight: 900;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .nostr-actions button:last-child {
+    background: #000;
+    color: #c00;
+  }
+
+  .nostr-actions button:hover {
+    background: #c00;
+    color: #000;
+  }
+
+  .nostr-actions button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .nostr-status {
+    min-height: 1.4em;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+
+  .nostr-status[data-tone="positive"] {
+    color: #006b2f;
+  }
+
+  .nostr-status[data-tone="warning"] {
+    color: #7a4b00;
+  }
+
+  .nostr-status[data-tone="danger"] {
+    color: #8b0000;
   }
 
   @media (max-width: 760px) {
