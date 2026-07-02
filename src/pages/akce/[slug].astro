@@ -146,18 +146,11 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
                     <strong>{event.publicLocation}</strong>
                   </div>
                   {
-                    provenance && (
+                    (provenance || event.source) && (
                       <div>
                         <span>Původ</span>
-                        <strong>{eventProvenanceDescription(provenance)}</strong>
-                      </div>
-                    )
-                  }
-                  {
-                    event.source && (
-                      <div>
-                        <span>Zdroj</span>
-                        <strong>{event.source.name}</strong>
+                        <strong>{provenance ? eventProvenanceDescription(provenance) : event.source?.name}</strong>
+                        {provenance && event.source && <small>Zdroj: {event.source.name}</small>}
                       </div>
                     )
                   }
@@ -1225,6 +1218,14 @@ const nostrWebUrl = nostrAddress ? `https://njump.me/${nostrAddress}` : "";
 
   .event-facts strong {
     line-height: 1.35;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
+  }
+
+  .event-facts small {
+    line-height: 1.3;
+    font-weight: 800;
     overflow-wrap: anywhere;
     word-break: break-word;
     min-width: 0;
