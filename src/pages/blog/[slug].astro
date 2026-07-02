@@ -1,0 +1,249 @@
+---
+import { getCollection, render } from "astro:content";
+import Layout from "../../layouts/Layout.astro";
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const posts = await getCollection("blog", ({ data }) => !data.draft);
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+
+const formatter = new Intl.DateTimeFormat("cs-CZ", {
+  dateStyle: "long",
+});
+---
+
+<Layout bodyClass="blog-body">
+  <main class="blog-shell">
+    <nav class="blog-nav" aria-label="Blog navigace">
+      <a href="/blog">Blog</a>
+      <a href="/akce">Akce</a>
+      <a href="/">Domů</a>
+    </nav>
+
+    <article class="blog-article">
+      <header class="article-header">
+        <p class="kicker">Text</p>
+        <h1>{post.data.title}</h1>
+        <p>{post.data.description}</p>
+        <div class="article-meta">
+          <time datetime={post.data.publishedAt.toISOString()}>{formatter.format(post.data.publishedAt)}</time>
+          {
+            post.data.updatedAt && (
+              <span>Aktualizováno {formatter.format(post.data.updatedAt)}</span>
+            )
+          }
+        </div>
+        {
+          post.data.tags.length > 0 && (
+            <div class="tag-row" aria-label="Tagy">
+              {post.data.tags.map((tag) => <small>{tag}</small>)}
+            </div>
+          )
+        }
+      </header>
+
+      <div class="article-body">
+        <Content />
+      </div>
+    </article>
+  </main>
+</Layout>
+
+<style>
+  :global(body.blog-body) {
+    background: #c00;
+  }
+
+  .blog-shell {
+    position: relative;
+    min-height: 100svh;
+    padding: clamp(18px, 4vw, 42px);
+    color: #000;
+    box-sizing: border-box;
+  }
+
+  .blog-nav,
+  .blog-article {
+    position: relative;
+    z-index: 1;
+  }
+
+  .blog-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .blog-nav a {
+    border: 2px solid #000;
+    background: #fff6df;
+    color: #000;
+    padding: 9px 11px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+    font-weight: 900;
+  }
+
+  .blog-nav a:first-child {
+    background: #000;
+    color: #c00;
+  }
+
+  .blog-nav a:hover {
+    background: #c00;
+    color: #000;
+  }
+
+  .blog-article {
+    width: min(900px, 100%);
+    margin: clamp(42px, 7vw, 76px) auto 22px;
+    border: 3px solid #000;
+    background: rgba(255, 246, 223, 0.96);
+    box-shadow: 10px 10px 0 #000;
+    padding: clamp(16px, 4vw, 30px);
+    box-sizing: border-box;
+  }
+
+  .article-header {
+    display: grid;
+    gap: 12px;
+    padding-bottom: 18px;
+    border-bottom: 3px solid #000;
+  }
+
+  .kicker {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(3rem, 9vw, 7rem);
+    line-height: 0.86;
+    overflow-wrap: anywhere;
+  }
+
+  .article-header > p:not(.kicker) {
+    max-width: 720px;
+    line-height: 1.55;
+    font-weight: 700;
+  }
+
+  .article-meta,
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .article-meta time,
+  .article-meta span,
+  .tag-row small {
+    border: 2px solid #000;
+    padding: 5px 7px;
+    background: #fffef8;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.74rem;
+    font-weight: 900;
+  }
+
+  .article-body {
+    display: grid;
+    gap: 18px;
+    padding-top: 22px;
+    font-size: clamp(1.02rem, 2vw, 1.16rem);
+    line-height: 1.7;
+  }
+
+  .article-body :global(h2),
+  .article-body :global(h3) {
+    margin-top: 14px;
+    line-height: 0.98;
+  }
+
+  .article-body :global(h2) {
+    font-size: clamp(2rem, 5vw, 3.4rem);
+  }
+
+  .article-body :global(h3) {
+    font-size: clamp(1.45rem, 3vw, 2.2rem);
+  }
+
+  .article-body :global(p),
+  .article-body :global(ul),
+  .article-body :global(ol),
+  .article-body :global(blockquote),
+  .article-body :global(pre) {
+    max-width: 72ch;
+  }
+
+  .article-body :global(a) {
+    color: #000;
+    font-weight: 900;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+  }
+
+  .article-body :global(a:hover) {
+    background: #000;
+    color: #c00;
+  }
+
+  .article-body :global(blockquote) {
+    margin: 0;
+    border-left: 6px solid #000;
+    padding: 10px 0 10px 14px;
+    font-weight: 800;
+  }
+
+  .article-body :global(code) {
+    border: 1px solid #000;
+    background: #fffef8;
+    padding: 1px 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.92em;
+  }
+
+  .article-body :global(pre) {
+    overflow-x: auto;
+    border: 3px solid #000;
+    background: #111;
+    color: #fff6df;
+    padding: 14px;
+  }
+
+  .article-body :global(pre code) {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 0;
+  }
+
+  @media (max-width: 760px) {
+    .blog-shell {
+      padding: 14px;
+    }
+
+    .blog-nav {
+      justify-content: flex-start;
+    }
+
+    .blog-article {
+      box-shadow: 5px 5px 0 #000;
+    }
+  }
+</style>

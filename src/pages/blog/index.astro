@@ -1,0 +1,206 @@
+---
+export const prerender = true;
+
+import { getCollection } from "astro:content";
+import Layout from "../../layouts/Layout.astro";
+
+const posts = (await getCollection("blog", ({ data }) => !data.draft)).sort(
+  (left, right) => right.data.publishedAt.getTime() - left.data.publishedAt.getTime(),
+);
+
+const formatter = new Intl.DateTimeFormat("cs-CZ", {
+  dateStyle: "medium",
+});
+---
+
+<Layout bodyClass="blog-body">
+  <main class="blog-shell">
+    <nav class="blog-nav" aria-label="Blog navigace">
+      <a href="/akce">Akce</a>
+      <a href="/">Domů</a>
+    </nav>
+
+    <header class="blog-header">
+      <p class="kicker">Texty</p>
+      <h1>Blog</h1>
+      <p>Technické poznámky, provozní zápisky a delší filozofické texty kolem mapy, scény a infrastruktury.</p>
+    </header>
+
+    <section class="post-list" aria-label="Články">
+      {
+        posts.length === 0 ? (
+          <p class="empty-state">Zatím tu nejsou žádné publikované texty.</p>
+        ) : (
+          posts.map((post) => (
+            <a class="post-card" href={`/blog/${post.id}`}>
+              <div>
+                <span>{formatter.format(post.data.publishedAt)}</span>
+                <h2>{post.data.title}</h2>
+                <p>{post.data.description}</p>
+              </div>
+              {
+                post.data.tags.length > 0 && (
+                  <div class="tag-row" aria-label="Tagy">
+                    {post.data.tags.map((tag) => <small>{tag}</small>)}
+                  </div>
+                )
+              }
+            </a>
+          ))
+        )
+      }
+    </section>
+  </main>
+</Layout>
+
+<style>
+  :global(body.blog-body) {
+    background: #c00;
+  }
+
+  .blog-shell {
+    position: relative;
+    min-height: 100svh;
+    padding: clamp(18px, 4vw, 42px);
+    color: #000;
+    box-sizing: border-box;
+  }
+
+  .blog-nav,
+  .blog-header,
+  .post-list {
+    position: relative;
+    z-index: 1;
+  }
+
+  .blog-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .blog-nav a {
+    border: 2px solid #000;
+    background: #fff6df;
+    color: #000;
+    padding: 9px 11px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+    font-weight: 900;
+  }
+
+  .blog-nav a:last-child {
+    background: #000;
+    color: #c00;
+  }
+
+  .blog-nav a:hover,
+  .post-card:hover {
+    background: #000;
+    color: #c00;
+  }
+
+  .blog-header,
+  .post-list {
+    width: min(960px, 100%);
+    margin: 22px auto;
+  }
+
+  .blog-header {
+    margin-top: clamp(42px, 7vw, 76px);
+    border: 3px solid #000;
+    background: rgba(255, 246, 223, 0.96);
+    box-shadow: 10px 10px 0 #000;
+    padding: clamp(16px, 4vw, 28px);
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(3rem, 10vw, 8rem);
+    line-height: 0.86;
+  }
+
+  .blog-header p:last-child {
+    max-width: 720px;
+    margin-top: 14px;
+    line-height: 1.55;
+    font-weight: 650;
+  }
+
+  .post-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .post-card,
+  .empty-state {
+    border: 3px solid #000;
+    background: rgba(255, 246, 223, 0.96);
+    box-shadow: 8px 8px 0 #000;
+    padding: 16px;
+  }
+
+  .post-card {
+    display: grid;
+    gap: 14px;
+    color: #000;
+    text-decoration: none;
+  }
+
+  .post-card span {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .post-card h2 {
+    margin: 0;
+    font-size: clamp(1.8rem, 4vw, 3rem);
+    line-height: 0.95;
+    overflow-wrap: anywhere;
+  }
+
+  .post-card p,
+  .empty-state {
+    line-height: 1.5;
+    font-weight: 700;
+  }
+
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tag-row small {
+    border: 2px solid currentColor;
+    padding: 4px 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 900;
+  }
+
+  @media (max-width: 760px) {
+    .blog-shell {
+      padding: 14px;
+    }
+
+    .blog-nav {
+      justify-content: flex-start;
+    }
+  }
+</style>
